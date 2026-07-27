@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Channel, Gateway, InstanceInfo, Message, User, createChannel, getInstanceInfo, listMessages, uploadFile } from "./api";
 import { VoicePanel } from "./VoicePanel";
+import { useVoiceSession } from "./useVoiceSession";
 import { MessageItem } from "./MessageItem";
 import { Modal } from "./Modal";
 import { AddServerModal } from "./AddServerModal";
@@ -69,6 +70,12 @@ function App() {
   const typingTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const activeInstance = instances.find((i) => i.id === activeInstanceId) ?? null;
+
+  // Owns the LiveKit room for the whole app (not per-channel-view) so voice
+  // stays connected while browsing other channels, and so the user-panel's
+  // quick mute/deafen buttons have something to act on regardless of which
+  // channel is currently selected.
+  const voice = useVoiceSession(activeInstance?.baseUrl ?? "", session?.token ?? "");
 
   // Load the active instance's stored session whenever it changes.
   useEffect(() => {
@@ -203,6 +210,7 @@ function App() {
   }
 
   function switchInstance(id: string) {
+    voice.leave();
     localStorage.setItem("activeInstanceId", id);
     setActiveInstanceId(id);
     setSelectedChannelId(null);
@@ -309,7 +317,11 @@ function App() {
               title={instance.label}
               onClick={() => switchInstance(instance.id)}
             >
-              {initials(instance.label)}
+              {instance.id === activeInstanceId && instanceInfo?.iconUrl ? (
+                <img src={instanceInfo.iconUrl} alt="" />
+              ) : (
+                initials(instance.label)
+              )}
             </button>
           </div>
         ))}
@@ -401,6 +413,14 @@ function App() {
           {channelError && <p className="error">{channelError}</p>}
         </div>
 
+        {voice.connected && (
+          <div className="voice-status-bar">
+            <span>🔊 {voice.activeChannel?.name}</span>
+            <button className="text-btn" onClick={voice.leave}>
+              Disconnect
+            </button>
+          </div>
+        )}
         <div className="user-panel">
           {session.user.avatarUrl ? (
             <img className="avatar" src={session.user.avatarUrl} alt="" />
@@ -410,10 +430,25 @@ function App() {
           <div className="user-panel-info">
             <span className="user-panel-name">{session.user.username}</span>
           </div>
+          <button
+            className={`icon-btn ${voice.muted ? "active" : ""}`}
+            title={voice.muted ? "Unmute" : "Mute"}
+            onClick={voice.toggleMute}
+          >
+            {voice.muted ? "🔇" : "🎤"}
+          </button>
+          <button
+            className={`icon-btn ${voice.deafened ? "active" : ""}`}
+            title={voice.deafened ? "Undeafen" : "Deafen"}
+            onClick={voice.toggleDeafen}
+          >
+            {voice.deafened ? "🔕" : "🎧"}
+          </button>
           <button className="gear-btn" title="User Settings" onClick={() => setUserSettingsOpen(true)}>
             ⚙️
           </button>
         </div>
+        <div ref={voice.audioContainerRef} style={{ display: "none" }} />
       </aside>
 
       {userSettingsOpen && (
@@ -440,7 +475,7 @@ function App() {
 
       <main className="chat-pane">
         {selectedChannel && selectedChannel.type === "VOICE" ? (
-          <VoicePanel baseUrl={activeInstance.baseUrl} token={session.token} channel={selectedChannel} />
+          <VoicePanel channel={selectedChannel} session={voice} />
         ) : selectedChannel ? (
           <>
             <div className="chat-header">

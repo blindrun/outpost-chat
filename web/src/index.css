@@ -408,6 +408,31 @@ button, input, select {
 .avatar-lg { width: 48px; height: 48px; font-size: 1.2rem; }
 .user-panel-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .user-panel-name { font-size: 0.85rem; font-weight: 600; color: var(--header-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.icon-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: 0.3rem;
+  line-height: 1;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.icon-btn:hover { background: var(--interactive-hover); color: var(--text-normal); }
+.icon-btn.active { color: var(--red); }
+
+.voice-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  background: var(--bg-input);
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+  color: var(--text-normal);
+}
 .avatar-upload-label { font-size: 0.7rem; color: var(--text-muted); cursor: pointer; }
 .avatar-upload-label:hover { color: var(--text-normal); text-decoration: underline; }
 
@@ -592,6 +617,7 @@ button, input, select {
 .voice-participant-name { font-size: 0.8rem; color: var(--text-normal); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
 .voice-mic-status { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
 .voice-vad-meter { width: 200px; }
+.voice-status-note { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
 
 /* ---------- Settings modals (User + Instance) ---------- */
 
