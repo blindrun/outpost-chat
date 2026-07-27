@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: discord-clone-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=discord_clone
+      - POSTGRES_PASSWORD=devpassword
+      - POSTGRES_DB=discord_clone
+    ports:
+      - "5433:5432"
+    volumes:
+      - discord-clone-pgdata:/var/lib/postgresql/data
+
+volumes:
+  discord-clone-pgdata:

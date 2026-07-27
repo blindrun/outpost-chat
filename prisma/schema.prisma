@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  username     String   @unique
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  ownedServers Server[]     @relation("ServerOwner")
+  memberships  Membership[]
+}
+
+model Server {
+  id        String   @id @default(uuid())
+  name      String
+  ownerId   String
+  owner     User     @relation("ServerOwner", fields: [ownerId], references: [id])
+  createdAt DateTime @default(now())
+
+  channels    Channel[]
+  roles       Role[]
+  memberships Membership[]
+}
+
+enum ChannelType {
+  TEXT
+  VOICE
+}
+
+model Channel {
+  id        String      @id @default(uuid())
+  serverId  String
+  server    Server      @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  name      String
+  type      ChannelType @default(TEXT)
+  position  Int         @default(0)
+  createdAt DateTime    @default(now())
+
+  messages Message[]
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  channelId String
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  serverId    String
+  server      Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  name        String
+  permissions String[] @default([])
+  position    Int      @default(0)
+
+  memberRoles MemberRole[]
+}
+
+model Membership {
+  id       String   @id @default(uuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  serverId String
+  server   Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  joinedAt DateTime @default(now())
+
+  roles MemberRole[]
+
+  @@unique([userId, serverId])
+}
+
+model MemberRole {
+  membershipId String
+  membership   Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  roleId       String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([membershipId, roleId])
+}
