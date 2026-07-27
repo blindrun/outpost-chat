@@ -81,6 +81,9 @@ export function MessageItem({
           )}
         </span>
       </div>
+      {message.attachmentUrl && (
+        <img className="message-attachment" src={message.attachmentUrl} alt="attachment" />
+      )}
       {pickerOpen && (
         <div className="emoji-picker">
           {QUICK_EMOJIS.map((emoji) => (

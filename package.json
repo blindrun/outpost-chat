@@ -13,12 +13,14 @@
   "dependencies": {
     "@fastify/cors": "^11.3.0",
     "@fastify/jwt": "^10.2.1",
+    "@fastify/multipart": "^10.1.0",
     "@fastify/websocket": "^11.3.0",
     "@prisma/client": "^5.20.0",
     "bcryptjs": "^2.4.3",
     "dotenv": "^16.4.5",
     "fastify": "^5.10.0",
     "livekit-server-sdk": "^2.17.0",
+    "minio": "^8.0.7",
     "zod": "^3.23.8"
   },
   "devDependencies": {

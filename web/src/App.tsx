@@ -11,6 +11,8 @@ import {
   listServers,
   login,
   register,
+  setAvatar,
+  uploadFile,
 } from "./api";
 import { VoicePanel } from "./VoicePanel";
 import { MessageItem } from "./MessageItem";
@@ -84,6 +86,11 @@ function App() {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [channelError, setChannelError] = useState<string | null>(null);
   const [gatewayGeneration, setGatewayGeneration] = useState(0);
+  const [pendingAttachment, setPendingAttachment] = useState<{ url: string; name: string } | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
   const gatewayRef = useRef<Gateway | null>(null);
   const typingTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
@@ -229,13 +236,49 @@ function App() {
 
   function handleSend(e: React.FormEvent) {
     e.preventDefault();
-    if (!draft.trim() || !selectedChannelId || !gatewayRef.current) return;
-    gatewayRef.current.sendMessage(selectedChannelId, draft.trim());
+    if ((!draft.trim() && !pendingAttachment) || !selectedChannelId || !gatewayRef.current) return;
+    gatewayRef.current.sendMessage(selectedChannelId, draft.trim(), pendingAttachment?.url);
     setDraft("");
+    setPendingAttachment(null);
   }
 
   function handleTyping() {
     if (selectedChannelId) gatewayRef.current?.sendTyping(selectedChannelId);
+  }
+
+  async function handleAttachmentSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !session) return;
+    setUploadError(null);
+    setUploadingAttachment(true);
+    try {
+      const { url } = await uploadFile(session.token, file);
+      setPendingAttachment({ url, name: file.name });
+    } catch (err) {
+      setUploadError((err as Error).message);
+    } finally {
+      setUploadingAttachment(false);
+    }
+  }
+
+  async function handleAvatarSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !session) return;
+    setAvatarError(null);
+    setAvatarUploading(true);
+    try {
+      const { url } = await uploadFile(session.token, file);
+      const updatedUser = await setAvatar(session.token, url);
+      const updatedSession = { ...session, user: updatedUser };
+      setSession(updatedSession);
+      localStorage.setItem("session", JSON.stringify(updatedSession));
+    } catch (err) {
+      setAvatarError((err as Error).message);
+    } finally {
+      setAvatarUploading(false);
+    }
   }
 
   const channelMessages = selectedChannelId ? messages[selectedChannelId] ?? [] : [];
@@ -267,9 +310,21 @@ function App() {
           <button type="submit">Join</button>
         </form>
         {joinError && <p className="error">{joinError}</p>}
-        <p className="me">
-          Signed in as <strong>{session.user.username}</strong>
-        </p>
+        <div className="me">
+          {session.user.avatarUrl ? (
+            <img className="avatar" src={session.user.avatarUrl} alt="" />
+          ) : (
+            <span className="avatar avatar-placeholder">{session.user.username[0]?.toUpperCase()}</span>
+          )}
+          <span>
+            Signed in as <strong>{session.user.username}</strong>
+          </span>
+          <label className="avatar-upload-label">
+            {avatarUploading ? "uploading…" : "change avatar"}
+            <input type="file" accept="image/*" hidden onChange={handleAvatarSelect} disabled={avatarUploading} />
+          </label>
+          {avatarError && <p className="error">{avatarError}</p>}
+        </div>
       </aside>
 
       {selectedServer && (
@@ -325,7 +380,26 @@ function App() {
               ))}
             </div>
             {typingLabel && <p className="typing">{typingLabel} is typing…</p>}
+            {pendingAttachment && (
+              <div className="attachment-preview">
+                📎 {pendingAttachment.name}
+                <button type="button" onClick={() => setPendingAttachment(null)}>
+                  ✕
+                </button>
+              </div>
+            )}
+            {uploadError && <p className="error">{uploadError}</p>}
             <form onSubmit={handleSend} className="send-form">
+              <label className="icon-btn attach-label">
+                {uploadingAttachment ? "…" : "📎"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  onChange={handleAttachmentSelect}
+                  disabled={uploadingAttachment}
+                />
+              </label>
               <input
                 value={draft}
                 onChange={(e) => {

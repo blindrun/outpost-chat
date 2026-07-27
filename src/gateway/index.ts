@@ -20,7 +20,12 @@ async function onlineMemberIdsFor(serverIds: string[]): Promise<string[]> {
 }
 
 const clientMessageSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("MESSAGE_SEND"), channelId: z.string(), content: z.string().min(1).max(4000) }),
+  z.object({
+    type: z.literal("MESSAGE_SEND"),
+    channelId: z.string(),
+    content: z.string().max(4000),
+    attachmentUrl: z.string().url().optional(),
+  }),
   z.object({ type: z.literal("TYPING_START"), channelId: z.string() }),
   z.object({ type: z.literal("MESSAGE_EDIT"), messageId: z.string(), content: z.string().min(1).max(4000) }),
   z.object({ type: z.literal("MESSAGE_DELETE"), messageId: z.string() }),
@@ -96,8 +101,17 @@ export async function gatewayRoutes(app: FastifyInstance) {
             sendError("cannot send messages in a voice channel");
             return;
           }
+          if (!parsed.content.trim() && !parsed.attachmentUrl) {
+            sendError("message must have content or an attachment");
+            return;
+          }
           const message = await prisma.message.create({
-            data: { channelId: parsed.channelId, authorId: userId, content: parsed.content },
+            data: {
+              channelId: parsed.channelId,
+              authorId: userId,
+              content: parsed.content,
+              attachmentUrl: parsed.attachmentUrl,
+            },
           });
           broadcastToServer(channel.serverId, {
             type: "MESSAGE_CREATE",

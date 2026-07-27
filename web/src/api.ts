@@ -4,6 +4,7 @@ export interface User {
   id: string;
   username: string;
   email: string;
+  avatarUrl?: string | null;
 }
 
 export interface Channel {
@@ -36,6 +37,7 @@ export interface Message {
   authorId: string;
   authorUsername?: string;
   content: string;
+  attachmentUrl?: string | null;
   createdAt: string;
   editedAt?: string | null;
   reactions?: Reaction[];
@@ -100,6 +102,25 @@ export function getVoiceToken(token: string, channelId: string) {
   });
 }
 
+export async function uploadFile(token: string, file: File): Promise<{ url: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${BASE_URL}/uploads`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(body.error ?? `upload failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export function setAvatar(token: string, avatarUrl: string) {
+  return request<User>("/auth/me/avatar", token, { method: "PATCH", body: JSON.stringify({ avatarUrl }) });
+}
+
 type GatewayEvent =
   | { type: "READY"; servers: Server[]; onlineUserIds: string[] }
   | { type: "MESSAGE_CREATE"; message: Message }
@@ -128,8 +149,8 @@ export class Gateway {
     return () => this.listeners.delete(listener);
   }
 
-  sendMessage(channelId: string, content: string) {
-    this.ws.send(JSON.stringify({ type: "MESSAGE_SEND", channelId, content }));
+  sendMessage(channelId: string, content: string, attachmentUrl?: string) {
+    this.ws.send(JSON.stringify({ type: "MESSAGE_SEND", channelId, content, attachmentUrl }));
   }
 
   sendTyping(channelId: string) {

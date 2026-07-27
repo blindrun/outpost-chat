@@ -12,6 +12,7 @@ model User {
   username     String   @unique
   email        String   @unique
   passwordHash String
+  avatarUrl    String?
   createdAt    DateTime @default(now())
 
   ownedServers Server[]     @relation("ServerOwner")
@@ -49,13 +50,14 @@ model Channel {
 }
 
 model Message {
-  id        String    @id @default(uuid())
-  channelId String
-  channel   Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  authorId  String
-  content   String
-  createdAt DateTime  @default(now())
-  editedAt  DateTime?
+  id            String    @id @default(uuid())
+  channelId     String
+  channel       Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  authorId      String
+  content       String
+  attachmentUrl String?
+  createdAt     DateTime  @default(now())
+  editedAt      DateTime?
 
   reactions Reaction[]
 }
