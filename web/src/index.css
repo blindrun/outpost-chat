@@ -181,7 +181,7 @@ button, input, select {
   font-weight: 600;
 }
 .modal-tabs button.active { background: var(--brand); color: #fff; }
-.modal input {
+.modal input:not([type="checkbox"]) {
   width: 100%;
   background: var(--bg-input);
   border: 1px solid transparent;
@@ -471,3 +471,81 @@ button, input, select {
 .voice-participant { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; width: 88px; }
 .voice-participant .avatar { width: 64px; height: 64px; font-size: 1.4rem; }
 .voice-participant-name { font-size: 0.8rem; color: var(--text-normal); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
+
+/* ---------- Settings modals (User + Server) ---------- */
+
+.gear-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0.2rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.gear-btn:hover { color: var(--text-normal); }
+
+.modal h2 ~ .modal-tabs { margin-top: -0.25rem; }
+.settings-tabs button { flex: 1; }
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding-bottom: 0.9rem;
+  margin-bottom: 0.9rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.settings-section:last-of-type { border-bottom: none; }
+.settings-section label:not(.checkbox-label) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+.settings-section h3 { margin: 0; font-size: 0.9rem; color: var(--header-primary); }
+.settings-avatar-row { display: flex; align-items: center; gap: 1rem; }
+.success { color: var(--green); font-size: 0.8rem; margin: 0; }
+
+.role-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.role-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  background: var(--bg-input);
+  border-radius: 4px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+.permission-checkboxes { display: flex; flex-direction: column; gap: 0.3rem; }
+.checkbox-label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+  text-transform: none;
+  font-weight: 400;
+  font-size: 0.85rem;
+  color: var(--text-normal);
+}
+.checkbox-label input { margin: 0; }
+
+.member-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.4rem; max-height: 300px; overflow-y: auto; }
+.member-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--bg-input);
+  border-radius: 4px;
+  padding: 0.4rem 0.6rem;
+  flex-wrap: wrap;
+}
+.member-row .avatar { width: 28px; height: 28px; font-size: 0.8rem; }
+.member-username { font-weight: 600; color: var(--header-primary); font-size: 0.85rem; }
+.member-row select { background: var(--bg-sidebar); border: 1px solid var(--border-subtle); border-radius: 3px; color: var(--text-normal); font-size: 0.8rem; padding: 0.15rem 0.3rem; }

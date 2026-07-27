@@ -56,6 +56,24 @@ export interface Message {
   reactions?: Reaction[];
 }
 
+export type Permission = "MANAGE_CHANNELS" | "MANAGE_ROLES" | "SEND_MESSAGES";
+
+export interface Role {
+  id: string;
+  serverId: string;
+  name: string;
+  permissions: Permission[];
+  position: number;
+}
+
+export interface Member {
+  userId: string;
+  username: string;
+  avatarUrl: string | null;
+  joinedAt: string;
+  roles: { id: string; name: string }[];
+}
+
 async function request<T>(path: string, token: string | null, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...init,
@@ -148,6 +166,49 @@ export async function uploadFile(token: string, file: File): Promise<{ url: stri
 
 export function setAvatar(token: string, avatarUrl: string) {
   return request<User>("/auth/me/avatar", token, { method: "PATCH", body: JSON.stringify({ avatarUrl }) });
+}
+
+export function updateProfile(token: string, updates: { username?: string; email?: string }) {
+  return request<{ token: string; user: User }>("/auth/me", token, {
+    method: "PATCH",
+    body: JSON.stringify(updates),
+  });
+}
+
+export function updatePassword(token: string, currentPassword: string, newPassword: string) {
+  return request<void>("/auth/me/password", token, {
+    method: "PATCH",
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+}
+
+export function updateServerSettings(token: string, serverId: string, updates: { name?: string }) {
+  return request<Server>(`/servers/${serverId}/settings`, token, {
+    method: "PATCH",
+    body: JSON.stringify(updates),
+  });
+}
+
+export function listMembers(token: string, serverId: string) {
+  return request<Member[]>(`/servers/${serverId}/members`, token);
+}
+
+export function listRoles(token: string, serverId: string) {
+  return request<Role[]>(`/servers/${serverId}/roles`, token);
+}
+
+export function createRole(token: string, serverId: string, name: string, permissions: Permission[]) {
+  return request<Role>(`/servers/${serverId}/roles`, token, {
+    method: "POST",
+    body: JSON.stringify({ name, permissions }),
+  });
+}
+
+export function assignRole(token: string, serverId: string, userId: string, roleId: string) {
+  return request<void>(`/servers/${serverId}/members/${userId}/roles`, token, {
+    method: "POST",
+    body: JSON.stringify({ roleId }),
+  });
 }
 
 type GatewayEvent =

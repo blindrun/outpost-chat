@@ -14,16 +14,15 @@ export function InvitePanel({ token, serverId }: { token: string; serverId: stri
   const [maxUses, setMaxUses] = useState("");
   const [expiresMinutes, setExpiresMinutes] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
 
   function refresh() {
     listInvites(token, serverId).then(setInvites).catch((err) => setError(err.message));
   }
 
   useEffect(() => {
-    if (open) refresh();
+    refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, serverId]);
+  }, [serverId]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -50,19 +49,8 @@ export function InvitePanel({ token, serverId }: { token: string; serverId: stri
     }
   }
 
-  if (!open) {
-    return (
-      <button className="text-btn" onClick={() => setOpen(true)}>
-        Manage Invites
-      </button>
-    );
-  }
-
   return (
     <div className="invite-panel">
-      <button className="text-btn" onClick={() => setOpen(false)}>
-        Hide Invites
-      </button>
       <form onSubmit={handleCreate} className="invite-new-form">
         <input
           placeholder="max uses (blank = ∞)"

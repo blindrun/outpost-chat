@@ -11,13 +11,13 @@ import {
   listServers,
   login,
   register,
-  setAvatar,
   uploadFile,
 } from "./api";
 import { VoicePanel } from "./VoicePanel";
 import { MessageItem } from "./MessageItem";
-import { InvitePanel } from "./InvitePanel";
 import { Modal } from "./Modal";
+import { UserSettingsModal } from "./UserSettingsModal";
+import { ServerSettingsModal } from "./ServerSettingsModal";
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -106,10 +106,10 @@ function App() {
   const [pendingAttachment, setPendingAttachment] = useState<{ url: string; name: string } | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
-  const [avatarUploading, setAvatarUploading] = useState(false);
-  const [avatarError, setAvatarError] = useState<string | null>(null);
   const [serverModalOpen, setServerModalOpen] = useState(false);
   const [serverModalTab, setServerModalTab] = useState<"create" | "join">("create");
+  const [userSettingsOpen, setUserSettingsOpen] = useState(false);
+  const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
   const gatewayRef = useRef<Gateway | null>(null);
   const typingTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
@@ -283,23 +283,14 @@ function App() {
     }
   }
 
-  async function handleAvatarSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file || !session) return;
-    setAvatarError(null);
-    setAvatarUploading(true);
-    try {
-      const { url } = await uploadFile(session.token, file);
-      const updatedUser = await setAvatar(session.token, url);
-      const updatedSession = { ...session, user: updatedUser };
-      setSession(updatedSession);
-      localStorage.setItem("session", JSON.stringify(updatedSession));
-    } catch (err) {
-      setAvatarError((err as Error).message);
-    } finally {
-      setAvatarUploading(false);
-    }
+  function handleSessionUpdate(update: { token?: string; user: User }) {
+    if (!session) return;
+    const updatedSession = { token: update.token ?? session.token, user: update.user };
+    setSession(updatedSession);
+    localStorage.setItem("session", JSON.stringify(updatedSession));
+    // A new token (e.g. after a username change) means the gateway needs to
+    // reconnect — it only reads `username` from the JWT at connect time.
+    if (update.token) setGatewayGeneration((g) => g + 1);
   }
 
   const channelMessages = selectedChannelId ? messages[selectedChannelId] ?? [] : [];
@@ -390,14 +381,18 @@ function App() {
       <aside className="sidebar">
         {selectedServer ? (
           <>
-            <div className="sidebar-header">{selectedServer.name}</div>
+            <div className="sidebar-header">
+              <span>{selectedServer.name}</span>
+              {selectedServer.ownerId === session.user.id && (
+                <button className="gear-btn" title="Server Settings" onClick={() => setServerSettingsOpen(true)}>
+                  ⚙️
+                </button>
+              )}
+            </div>
             <div className="sidebar-scroll">
               <div className="invite-code-display">
                 Invite: <code>{selectedServer.inviteCode ?? "none active"}</code>
               </div>
-              {selectedServer.ownerId === session.user.id && (
-                <InvitePanel token={session.token} serverId={selectedServer.id} />
-              )}
 
               {textChannels.length > 0 && <div className="channel-category">Text Channels</div>}
               {textChannels.map((channel) => (
@@ -455,14 +450,29 @@ function App() {
           )}
           <div className="user-panel-info">
             <span className="user-panel-name">{session.user.username}</span>
-            <label className="avatar-upload-label">
-              {avatarUploading ? "uploading…" : "change avatar"}
-              <input type="file" accept="image/*" hidden onChange={handleAvatarSelect} disabled={avatarUploading} />
-            </label>
           </div>
+          <button className="gear-btn" title="User Settings" onClick={() => setUserSettingsOpen(true)}>
+            ⚙️
+          </button>
         </div>
-        {avatarError && <p className="error">{avatarError}</p>}
       </aside>
+
+      {userSettingsOpen && (
+        <UserSettingsModal
+          token={session.token}
+          user={session.user}
+          onClose={() => setUserSettingsOpen(false)}
+          onSessionUpdate={handleSessionUpdate}
+        />
+      )}
+      {serverSettingsOpen && selectedServer && (
+        <ServerSettingsModal
+          token={session.token}
+          server={selectedServer}
+          onClose={() => setServerSettingsOpen(false)}
+          onUpdated={(updated) => setServers((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))}
+        />
+      )}
 
       <main className="chat-pane">
         {selectedChannel && selectedChannel.type === "VOICE" ? (
