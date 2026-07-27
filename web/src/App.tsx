@@ -57,7 +57,7 @@ function App() {
   const [typingByChannel, setTypingByChannel] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState("");
   const [newChannelName, setNewChannelName] = useState("");
-  const [newChannelType, setNewChannelType] = useState<"TEXT" | "VOICE">("TEXT");
+  const [creatingChannelType, setCreatingChannelType] = useState<"TEXT" | "VOICE" | null>(null);
   const [channelError, setChannelError] = useState<string | null>(null);
   const [gatewayGeneration, setGatewayGeneration] = useState(0);
   const [pendingAttachment, setPendingAttachment] = useState<{ url: string; name: string } | null>(null);
@@ -235,15 +235,22 @@ function App() {
 
   async function handleCreateChannel(e: React.FormEvent) {
     e.preventDefault();
-    if (!newChannelName.trim() || !session || !activeInstance) return;
+    if (!newChannelName.trim() || !creatingChannelType || !session || !activeInstance) return;
     setChannelError(null);
     try {
-      const channel = await createChannel(activeInstance.baseUrl, session.token, newChannelName.trim(), newChannelType);
+      const channel = await createChannel(activeInstance.baseUrl, session.token, newChannelName.trim(), creatingChannelType);
       setChannels((prev) => [...prev, channel]);
       setNewChannelName("");
+      setCreatingChannelType(null);
     } catch (err) {
       setChannelError((err as Error).message);
     }
+  }
+
+  function toggleCreatingChannel(type: "TEXT" | "VOICE") {
+    setChannelError(null);
+    setNewChannelName("");
+    setCreatingChannelType((prev) => (prev === type ? null : type));
   }
 
   function handleSend(e: React.FormEvent) {
@@ -333,7 +340,23 @@ function App() {
           )}
         </div>
         <div className="sidebar-scroll">
-          {textChannels.length > 0 && <div className="channel-category">Text Channels</div>}
+          <div className="channel-category-row">
+            <span className="channel-category">Text Channels</span>
+            <button className="add-channel-btn" title="Add a text channel" onClick={() => toggleCreatingChannel("TEXT")}>
+              +
+            </button>
+          </div>
+          {creatingChannelType === "TEXT" && (
+            <form onSubmit={handleCreateChannel} className="new-channel-form">
+              <input
+                autoFocus
+                placeholder="channel name"
+                value={newChannelName}
+                onChange={(e) => setNewChannelName(e.target.value)}
+                onKeyDown={(e) => e.key === "Escape" && setCreatingChannelType(null)}
+              />
+            </form>
+          )}
           {textChannels.map((channel) => (
             <div className="channel-row" key={channel.id}>
               <button
@@ -346,7 +369,23 @@ function App() {
             </div>
           ))}
 
-          {voiceChannels.length > 0 && <div className="channel-category">Voice Channels</div>}
+          <div className="channel-category-row">
+            <span className="channel-category">Voice Channels</span>
+            <button className="add-channel-btn" title="Add a voice channel" onClick={() => toggleCreatingChannel("VOICE")}>
+              +
+            </button>
+          </div>
+          {creatingChannelType === "VOICE" && (
+            <form onSubmit={handleCreateChannel} className="new-channel-form">
+              <input
+                autoFocus
+                placeholder="channel name"
+                value={newChannelName}
+                onChange={(e) => setNewChannelName(e.target.value)}
+                onKeyDown={(e) => e.key === "Escape" && setCreatingChannelType(null)}
+              />
+            </form>
+          )}
           {voiceChannels.map((channel) => (
             <div className="channel-row" key={channel.id}>
               <button
@@ -359,17 +398,6 @@ function App() {
             </div>
           ))}
 
-          <div className="channel-category">New Channel</div>
-          <form onSubmit={handleCreateChannel} className="new-channel-form">
-            <input placeholder="channel name" value={newChannelName} onChange={(e) => setNewChannelName(e.target.value)} />
-            <select value={newChannelType} onChange={(e) => setNewChannelType(e.target.value as "TEXT" | "VOICE")}>
-              <option value="TEXT">Text</option>
-              <option value="VOICE">Voice</option>
-            </select>
-            <button type="submit" className="add-channel-btn">
-              +
-            </button>
-          </form>
           {channelError && <p className="error">{channelError}</p>}
         </div>
 

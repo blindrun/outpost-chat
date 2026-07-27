@@ -347,6 +347,9 @@ button, input, select {
 
 .channel-category { color: var(--text-muted); font-size: 0.7rem; font-weight: 700; text-transform: uppercase; padding: 0.9rem 0.5rem 0.2rem; letter-spacing: 0.02em; }
 
+.channel-category-row { display: flex; align-items: center; justify-content: space-between; }
+.channel-category-row .channel-category { padding-left: 0; }
+
 .channel-row { display: flex; align-items: center; }
 .channel-btn {
   flex: 1;
@@ -392,8 +395,6 @@ button, input, select {
   padding: 0.3rem 0.5rem;
   color: var(--text-normal);
 }
-.new-channel-form select { background: var(--bg-input); border: none; border-radius: 3px; color: var(--text-normal); }
-
 /* User panel (bottom of sidebar) */
 .user-panel {
   background: #232428;
