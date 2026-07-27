@@ -589,6 +589,8 @@ button, input, select {
 .voice-participant { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; width: 88px; }
 .voice-participant .avatar { width: 64px; height: 64px; font-size: 1.4rem; }
 .voice-participant-name { font-size: 0.8rem; color: var(--text-normal); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
+.voice-mic-status { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
+.voice-vad-meter { width: 200px; }
 
 /* ---------- Settings modals (User + Instance) ---------- */
 
@@ -667,3 +669,10 @@ button, input, select {
 .member-row .avatar { width: 28px; height: 28px; font-size: 0.8rem; }
 .member-username { font-weight: 600; color: var(--header-primary); font-size: 0.85rem; }
 .member-row select { background: var(--bg-sidebar); border: 1px solid var(--border-subtle); border-radius: 3px; color: var(--text-normal); font-size: 0.8rem; padding: 0.15rem 0.3rem; }
+
+.ptt-bind-row { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; font-size: 0.85rem; color: var(--text-normal); }
+.ptt-bind-row strong { color: var(--header-primary); }
+
+.mic-meter { position: relative; height: 10px; border-radius: 5px; background: var(--bg-input); overflow: hidden; }
+.mic-meter-fill { height: 100%; background: var(--green); transition: width 60ms linear; }
+.mic-meter-threshold { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text-muted); }
