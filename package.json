@@ -11,7 +11,9 @@
     "prisma:migrate": "prisma migrate dev"
   },
   "dependencies": {
+    "@fastify/cors": "^11.3.0",
     "@fastify/jwt": "^10.2.1",
+    "@fastify/websocket": "^11.3.0",
     "@prisma/client": "^5.20.0",
     "bcryptjs": "^2.4.3",
     "dotenv": "^16.4.5",
@@ -21,6 +23,7 @@
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.7.4",
+    "@types/ws": "^8.18.1",
     "prisma": "^5.20.0",
     "tsx": "^4.19.1",
     "typescript": "^5.6.2"

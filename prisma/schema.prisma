@@ -19,11 +19,12 @@ model User {
 }
 
 model Server {
-  id        String   @id @default(uuid())
-  name      String
-  ownerId   String
-  owner     User     @relation("ServerOwner", fields: [ownerId], references: [id])
-  createdAt DateTime @default(now())
+  id         String   @id @default(uuid())
+  name       String
+  ownerId    String
+  owner      User     @relation("ServerOwner", fields: [ownerId], references: [id])
+  inviteCode String   @unique
+  createdAt  DateTime @default(now())
 
   channels    Channel[]
   roles       Role[]

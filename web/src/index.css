@@ -1,0 +1,67 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #1e1f22;
+  color: #dbdee1;
+}
+
+.auth-form {
+  max-width: 320px;
+  margin: 10vh auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.auth-form form { display: flex; flex-direction: column; gap: 0.5rem; }
+.auth-form input, .auth-form button { padding: 0.5rem; }
+.auth-form .error { color: #f23f42; }
+.auth-form .link { background: none; border: none; color: #00a8fc; cursor: pointer; }
+
+.app {
+  display: grid;
+  grid-template-columns: 220px 220px 1fr;
+  height: 100vh;
+}
+
+.server-list, .channel-list {
+  background: #2b2d31;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow-y: auto;
+}
+
+.server-list ul, .channel-list ul { list-style: none; padding: 0; margin: 0; }
+.server-list button, .channel-list button {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: #dbdee1;
+  padding: 0.4rem;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.server-list button.active, .channel-list button.active { background: #404249; }
+
+.join-form { display: flex; gap: 0.25rem; }
+.join-form input { flex: 1; min-width: 0; }
+.invite-code { font-size: 0.75rem; color: #949ba4; user-select: all; }
+.me { margin-top: auto; font-size: 0.85rem; }
+
+.chat-pane {
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  min-width: 0;
+}
+.messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.4rem; }
+.message { display: flex; align-items: center; gap: 0.4rem; }
+.presence-dot { width: 8px; height: 8px; border-radius: 50%; background: #80848e; display: inline-block; }
+.presence-dot.online { background: #23a559; }
+.typing { font-size: 0.8rem; color: #949ba4; font-style: italic; }
+.send-form { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+.send-form input { flex: 1; padding: 0.5rem; }
+.voice-note { color: #949ba4; }
