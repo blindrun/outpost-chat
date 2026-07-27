@@ -23,6 +23,7 @@ model InstanceSettings {
   id                      String  @id @default("singleton")
   name                    String  @default("Harmony")
   description             String?
+  iconUrl                 String?
   theme                   String  @default("business")
   requireInviteToRegister Boolean @default(false)
 }

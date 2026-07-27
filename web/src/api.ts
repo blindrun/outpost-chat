@@ -18,6 +18,7 @@ export type Theme = "business" | "cyberpunk" | "hacker" | "esports";
 export interface InstanceInfo {
   name: string;
   description: string | null;
+  iconUrl: string | null;
   theme: Theme;
   requireInviteToRegister: boolean;
   hasOwner: boolean;
@@ -179,7 +180,13 @@ export function updatePassword(baseUrl: string, token: string, currentPassword: 
 export function updateInstanceSettings(
   baseUrl: string,
   token: string,
-  updates: { name?: string; description?: string; theme?: Theme; requireInviteToRegister?: boolean },
+  updates: {
+    name?: string;
+    description?: string;
+    iconUrl?: string | null;
+    theme?: Theme;
+    requireInviteToRegister?: boolean;
+  },
 ) {
   return request<InstanceInfo>(baseUrl, "/instance/settings", token, {
     method: "PATCH",

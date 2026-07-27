@@ -15,6 +15,7 @@ const createInviteSchema = z.object({
 const updateInstanceSettingsSchema = z.object({
   name: z.string().min(2).max(64).optional(),
   description: z.string().max(1000).optional(),
+  iconUrl: z.string().url().nullable().optional(),
   theme: z.enum(["business", "cyberpunk", "hacker", "esports"]).optional(),
   requireInviteToRegister: z.boolean().optional(),
 });
@@ -53,6 +54,7 @@ export async function instanceRoutes(app: FastifyInstance) {
     return {
       name: settings.name,
       description: settings.description,
+      iconUrl: settings.iconUrl,
       theme: settings.theme,
       requireInviteToRegister: settings.requireInviteToRegister,
       hasOwner,
@@ -72,12 +74,14 @@ export async function instanceRoutes(app: FastifyInstance) {
       create: {
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.description !== undefined ? { description: body.description } : {}),
+        ...(body.iconUrl !== undefined ? { iconUrl: body.iconUrl } : {}),
         ...(body.theme !== undefined ? { theme: body.theme } : {}),
         ...(body.requireInviteToRegister !== undefined ? { requireInviteToRegister: body.requireInviteToRegister } : {}),
       },
       update: {
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.description !== undefined ? { description: body.description } : {}),
+        ...(body.iconUrl !== undefined ? { iconUrl: body.iconUrl } : {}),
         ...(body.theme !== undefined ? { theme: body.theme } : {}),
         ...(body.requireInviteToRegister !== undefined ? { requireInviteToRegister: body.requireInviteToRegister } : {}),
       },

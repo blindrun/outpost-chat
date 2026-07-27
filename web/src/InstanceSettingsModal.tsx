@@ -9,6 +9,7 @@ import {
   listMembers,
   listRoles,
   updateInstanceSettings,
+  uploadFile,
 } from "./api";
 import { Modal } from "./Modal";
 import { InvitePanel } from "./InvitePanel";
@@ -35,6 +36,8 @@ function GeneralTab({
   const [requireInvite, setRequireInvite] = useState(instanceInfo.requireInviteToRegister);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [iconUploading, setIconUploading] = useState(false);
+  const [iconError, setIconError] = useState<string | null>(null);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -55,8 +58,37 @@ function GeneralTab({
     }
   }
 
+  async function handleIconSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setIconError(null);
+    setIconUploading(true);
+    try {
+      const { url } = await uploadFile(baseUrl, token, file);
+      const updated = await updateInstanceSettings(baseUrl, token, { iconUrl: url });
+      onUpdated(updated);
+    } catch (err) {
+      setIconError((err as Error).message);
+    } finally {
+      setIconUploading(false);
+    }
+  }
+
   return (
     <form className="settings-section" onSubmit={handleSave}>
+      <div className="settings-avatar-row">
+        {instanceInfo.iconUrl ? (
+          <img className="avatar avatar-lg" src={instanceInfo.iconUrl} alt="" />
+        ) : (
+          <span className="avatar avatar-lg avatar-placeholder">{instanceInfo.name[0]?.toUpperCase()}</span>
+        )}
+        <label className="btn secondary">
+          {iconUploading ? "Uploading…" : "Change Instance Icon"}
+          <input type="file" accept="image/*" hidden onChange={handleIconSelect} disabled={iconUploading} />
+        </label>
+      </div>
+      {iconError && <p className="error">{iconError}</p>}
       <label>
         Instance Name
         <input value={name} onChange={(e) => setName(e.target.value)} />
