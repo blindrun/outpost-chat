@@ -27,7 +27,7 @@ const updatePasswordSchema = z.object({
   newPassword: z.string().min(8),
 });
 
-function toPublicUser(user: { id: string; username: string; email: string; avatarUrl: string | null; isOwner: boolean }) {
+export function toPublicUser(user: { id: string; username: string; email: string; avatarUrl: string | null; isOwner: boolean }) {
   return { id: user.id, username: user.username, email: user.email, avatarUrl: user.avatarUrl, isOwner: user.isOwner };
 }
 

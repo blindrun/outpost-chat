@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { minioClient, BUCKET, PUBLIC_URL } from "../plugins/storage.js";
 import { prisma } from "../plugins/db.js";
+import { toPublicUser } from "./auth.js";
 
 const MAX_SIZE_BYTES = 8 * 1024 * 1024; // 8MB — plenty for avatars/chat images in dev
 const ALLOWED_MIME_PREFIXES = ["image/"];
@@ -39,6 +40,6 @@ export async function uploadRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: "avatarUrl must be a URL returned from /uploads" });
     }
     const user = await prisma.user.update({ where: { id: userId }, data: { avatarUrl } });
-    return { id: user.id, username: user.username, email: user.email, avatarUrl: user.avatarUrl };
+    return toPublicUser(user);
   });
 }

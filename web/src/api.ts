@@ -98,6 +98,10 @@ export function getInstanceInfo(baseUrl: string) {
   return request<InstanceInfo>(baseUrl, "/instance-info", null);
 }
 
+export function getCurrentUser(baseUrl: string, token: string) {
+  return request<User>(baseUrl, "/auth/me", token);
+}
+
 export function register(baseUrl: string, username: string, email: string, password: string, inviteCode?: string) {
   return request<{ token: string; user: User }>(baseUrl, "/auth/register", null, {
     method: "POST",

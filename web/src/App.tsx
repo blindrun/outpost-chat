@@ -1,5 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { Channel, Gateway, InstanceInfo, Message, User, createChannel, getInstanceInfo, listMessages, uploadFile } from "./api";
+import {
+  Channel,
+  Gateway,
+  InstanceInfo,
+  Message,
+  User,
+  createChannel,
+  getCurrentUser,
+  getInstanceInfo,
+  listMessages,
+  uploadFile,
+} from "./api";
 import { VoicePanel } from "./VoicePanel";
 import { useVoiceSession } from "./useVoiceSession";
 import { MessageItem } from "./MessageItem";
@@ -77,14 +88,29 @@ function App() {
   // channel is currently selected.
   const voice = useVoiceSession(activeInstance?.baseUrl ?? "", session?.token ?? "");
 
-  // Load the active instance's stored session whenever it changes.
+  // Load the active instance's stored session whenever it changes, then
+  // refresh the cached user object from the server — a stale/incomplete
+  // user object (e.g. from an endpoint that once forgot to return a field
+  // like isOwner) shouldn't stay wrong until the next full login.
   useEffect(() => {
     if (!activeInstanceId) {
       setSession(null);
       return;
     }
-    setSession(loadSession(activeInstanceId));
-  }, [activeInstanceId]);
+    const stored = loadSession(activeInstanceId);
+    setSession(stored);
+    if (!stored || !activeInstance) return;
+    getCurrentUser(activeInstance.baseUrl, stored.token)
+      .then((user) => {
+        const refreshed = { ...stored, user };
+        setSession(refreshed);
+        saveSession(activeInstanceId, refreshed);
+      })
+      .catch(() => {
+        // Stale/expired token — leave the cached session as-is; the next
+        // authenticated request will surface the real error.
+      });
+  }, [activeInstanceId, activeInstance?.baseUrl]);
 
   // Apply the active instance's theme to the whole document — this runs even
   // before login (from the unauthenticated /instance-info probe) so the
