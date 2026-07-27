@@ -19,6 +19,75 @@
   --border-subtle: rgba(255, 255, 255, 0.06);
 }
 
+/* ---------- Themes ---------- */
+/* "business" is the default palette above, unchanged. The other three
+   override the same variable set via [data-theme], applied to <html> by
+   the client based on the active instance's InstanceSettings.theme. */
+
+[data-theme="cyberpunk"] {
+  --bg-rail: #0d0221;
+  --bg-sidebar: #150829;
+  --bg-primary: #1a0933;
+  --bg-secondary: #150829;
+  --bg-modifier-hover: rgba(255, 0, 200, 0.12);
+  --bg-input: #10041f;
+  --bg-floating: #0a0118;
+  --brand: #ff2079;
+  --brand-hover: #d4005f;
+  --green: #00ffa3;
+  --red: #ff003c;
+  --header-primary: #00f0ff;
+  --text-normal: #e0d6ff;
+  --text-muted: #9c7fd6;
+  --text-faint: #6b4f9e;
+  --interactive-hover: #2a1147;
+  --interactive-active: #3a1861;
+  --border-subtle: rgba(0, 240, 255, 0.15);
+}
+
+[data-theme="hacker"] {
+  --bg-rail: #000000;
+  --bg-sidebar: #050805;
+  --bg-primary: #0a0f0a;
+  --bg-secondary: #050805;
+  --bg-modifier-hover: rgba(0, 255, 65, 0.1);
+  --bg-input: #000000;
+  --bg-floating: #000000;
+  --brand: #00ff41;
+  --brand-hover: #00cc34;
+  --green: #00ff41;
+  --red: #ff3131;
+  --header-primary: #00ff41;
+  --text-normal: #33ff66;
+  --text-muted: #1f9e40;
+  --text-faint: #146b2b;
+  --interactive-hover: #0f1f0f;
+  --interactive-active: #142a14;
+  --border-subtle: rgba(0, 255, 65, 0.2);
+}
+[data-theme="hacker"] body { font-family: "Courier New", ui-monospace, monospace; }
+
+[data-theme="esports"] {
+  --bg-rail: #0e0e10;
+  --bg-sidebar: #17171a;
+  --bg-primary: #1c1c1f;
+  --bg-secondary: #17171a;
+  --bg-modifier-hover: rgba(255, 107, 0, 0.15);
+  --bg-input: #101012;
+  --bg-floating: #0a0a0b;
+  --brand: #ff6b00;
+  --brand-hover: #e05e00;
+  --green: #3ddc84;
+  --red: #ff003c;
+  --header-primary: #ffffff;
+  --text-normal: #e8e8ea;
+  --text-muted: #9a9a9e;
+  --text-faint: #6e6e72;
+  --interactive-hover: #2a2a2e;
+  --interactive-active: #343438;
+  --border-subtle: rgba(255, 107, 0, 0.2);
+}
+
 * { box-sizing: border-box; }
 
 body {
@@ -80,6 +149,51 @@ button, input, select {
   margin-top: 0.25rem;
 }
 .auth-form button[type="submit"]:hover { background: var(--brand-hover); }
+
+/* ---------- Add a Server ---------- */
+
+.add-server-form { display: flex; flex-direction: column; gap: 1rem; }
+.add-server-form h2 { font-size: 1.5rem; text-align: center; margin: 0 0 0.25rem; color: var(--header-primary); }
+.add-server-form .subtitle { text-align: center; color: var(--text-muted); margin: -0.5rem 0 0.5rem; font-size: 0.9rem; }
+.add-server-form form { display: flex; flex-direction: column; gap: 1rem; }
+.add-server-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+.add-server-form input {
+  background: var(--bg-input);
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 0.6rem 0.7rem;
+  color: var(--text-normal);
+  outline: none;
+}
+.add-server-form input:focus { border-color: var(--brand); }
+
+.theme-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+.theme-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  background: var(--bg-input);
+  border: 2px solid transparent;
+  border-radius: 6px;
+  padding: 0.7rem;
+  cursor: pointer;
+  text-align: left;
+}
+.theme-card.active { border-color: var(--brand); }
+.theme-swatch { width: 100%; height: 24px; border-radius: 4px; }
+.theme-card-label { font-weight: 700; color: var(--header-primary); font-size: 0.85rem; }
+.theme-card-blurb { font-size: 0.7rem; color: var(--text-muted); }
+
 .error { color: var(--red); font-size: 0.8rem; margin: 0; }
 .link { background: none; border: none; color: #00a8fc; cursor: pointer; padding: 0; font-size: 0.85rem; text-align: left; }
 .link:hover { text-decoration: underline; }
@@ -181,15 +295,19 @@ button, input, select {
   font-weight: 600;
 }
 .modal-tabs button.active { background: var(--brand); color: #fff; }
-.modal input:not([type="checkbox"]) {
+.modal input:not([type="checkbox"]), .modal textarea {
   width: 100%;
   background: var(--bg-input);
   border: 1px solid transparent;
   border-radius: 3px;
   padding: 0.6rem 0.7rem;
   outline: none;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  resize: vertical;
 }
-.modal input:focus { border-color: var(--brand); }
+.modal input:focus, .modal textarea:focus { border-color: var(--brand); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
 .btn {
   background: var(--brand);
@@ -472,7 +590,7 @@ button, input, select {
 .voice-participant .avatar { width: 64px; height: 64px; font-size: 1.4rem; }
 .voice-participant-name { font-size: 0.8rem; color: var(--text-normal); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
 
-/* ---------- Settings modals (User + Server) ---------- */
+/* ---------- Settings modals (User + Instance) ---------- */
 
 .gear-btn {
   background: none;

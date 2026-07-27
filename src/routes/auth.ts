@@ -2,11 +2,14 @@ import type { FastifyInstance } from "fastify";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "../plugins/db.js";
+import { EVERYONE_ROLE_NAME, DEFAULT_EVERYONE_PERMISSIONS } from "../util/permissions.js";
+import { isInviteValid } from "../util/invites.js";
 
 const registerSchema = z.object({
   username: z.string().min(3).max(32),
   email: z.string().email(),
   password: z.string().min(8),
+  inviteCode: z.string().optional(),
 });
 
 const loginSchema = z.object({
@@ -24,11 +27,17 @@ const updatePasswordSchema = z.object({
   newPassword: z.string().min(8),
 });
 
-function toPublicUser(user: { id: string; username: string; email: string; avatarUrl: string | null }) {
-  return { id: user.id, username: user.username, email: user.email, avatarUrl: user.avatarUrl };
+function toPublicUser(user: { id: string; username: string; email: string; avatarUrl: string | null; isOwner: boolean }) {
+  return { id: user.id, username: user.username, email: user.email, avatarUrl: user.avatarUrl, isOwner: user.isOwner };
 }
 
 export async function authRoutes(app: FastifyInstance) {
+  // Registration. The very first user on a fresh instance becomes its owner
+  // and never needs an invite code — that same moment is also when we
+  // bootstrap the instance itself (InstanceSettings singleton row, a default
+  // "general" channel, the @everyone role). Every subsequent registrant is
+  // gated by InstanceSettings.requireInviteToRegister, same as any other
+  // self-hosted app's "invite-only" toggle.
   app.post("/auth/register", async (req, reply) => {
     const body = registerSchema.parse(req.body);
 
@@ -39,13 +48,62 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.status(409).send({ error: "username or email already taken" });
     }
 
-    const passwordHash = await bcrypt.hash(body.password, 12);
-    const user = await prisma.user.create({
-      data: { username: body.username, email: body.email, passwordHash },
-    });
+    try {
+      const user = await prisma.$transaction(async (tx) => {
+        const userCount = await tx.user.count();
+        const passwordHash = await bcrypt.hash(body.password, 12);
 
-    const token = app.jwt.sign({ sub: user.id, username: user.username });
-    return reply.status(201).send({ token, user: toPublicUser(user) });
+        if (userCount === 0) {
+          const created = await tx.user.create({
+            data: { username: body.username, email: body.email, passwordHash, isOwner: true },
+          });
+          await tx.instanceSettings.upsert({
+            where: { id: "singleton" },
+            create: {},
+            update: {},
+          });
+          await tx.channel.create({ data: { name: "general", type: "TEXT" } });
+          const everyoneRole = await tx.role.create({
+            data: { name: EVERYONE_ROLE_NAME, permissions: DEFAULT_EVERYONE_PERMISSIONS },
+          });
+          await tx.userRole.create({ data: { userId: created.id, roleId: everyoneRole.id } });
+          return created;
+        }
+
+        const settings = await tx.instanceSettings.upsert({
+          where: { id: "singleton" },
+          create: {},
+          update: {},
+        });
+        if (settings.requireInviteToRegister) {
+          if (!body.inviteCode) {
+            throw new Error("INVITE_REQUIRED");
+          }
+          const invite = await tx.invite.findUnique({ where: { code: body.inviteCode } });
+          if (!invite || !isInviteValid(invite)) {
+            throw new Error("INVITE_INVALID");
+          }
+          await tx.invite.update({ where: { id: invite.id }, data: { uses: { increment: 1 } } });
+        }
+
+        const created = await tx.user.create({
+          data: { username: body.username, email: body.email, passwordHash },
+        });
+        const everyoneRole = await tx.role.findFirst({ where: { name: EVERYONE_ROLE_NAME } });
+        if (everyoneRole) {
+          await tx.userRole.create({ data: { userId: created.id, roleId: everyoneRole.id } });
+        }
+        return created;
+      });
+
+      const token = app.jwt.sign({ sub: user.id, username: user.username });
+      return reply.status(201).send({ token, user: toPublicUser(user) });
+    } catch (err) {
+      if (err instanceof Error && (err.message === "INVITE_REQUIRED" || err.message === "INVITE_INVALID")) {
+        return reply.status(403).send({ error: "a valid invite code is required to register on this instance" });
+      }
+      throw err;
+    }
   });
 
   app.post("/auth/login", async (req, reply) => {

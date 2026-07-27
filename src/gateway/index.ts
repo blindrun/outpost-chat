@@ -4,21 +4,11 @@ import { prisma } from "../plugins/db.js";
 import {
   registerConnection,
   unregisterConnection,
-  broadcastToServer,
+  broadcastAll,
   isOnline,
+  allOnlineUserIds,
 } from "./rooms.js";
 import { PERMISSIONS, hasPermission } from "../util/permissions.js";
-import { withDefaultInviteCode } from "../util/invites.js";
-
-async function onlineMemberIdsFor(serverIds: string[]): Promise<string[]> {
-  if (serverIds.length === 0) return [];
-  const memberships = await prisma.membership.findMany({
-    where: { serverId: { in: serverIds } },
-    select: { userId: true },
-    distinct: ["userId"],
-  });
-  return memberships.map((m) => m.userId).filter((id) => isOnline(id));
-}
 
 const clientMessageSchema = z.discriminatedUnion("type", [
   z.object({
@@ -55,26 +45,18 @@ export async function gatewayRoutes(app: FastifyInstance) {
       return;
     }
 
-    const memberships = await prisma.membership.findMany({
-      where: { userId },
-      include: { server: { include: { channels: true, invites: true } } },
-    });
-    const serverIds = memberships.map((m) => m.serverId);
-
-    const wasOffline = registerConnection(socket, userId, username, serverIds);
+    const wasOffline = registerConnection(socket, userId, username);
 
     socket.send(
       JSON.stringify({
         type: "READY",
-        servers: memberships.map((m) => withDefaultInviteCode(m.server)),
-        onlineUserIds: await onlineMemberIdsFor(serverIds),
+        channels: await prisma.channel.findMany({ orderBy: { position: "asc" } }),
+        onlineUserIds: allOnlineUserIds(),
       }),
     );
 
     if (wasOffline) {
-      for (const serverId of serverIds) {
-        broadcastToServer(serverId, { type: "PRESENCE_UPDATE", userId, status: "online" }, socket);
-      }
+      broadcastAll({ type: "PRESENCE_UPDATE", userId, status: "online" }, socket);
     }
 
     function sendError(error: string) {
@@ -92,8 +74,8 @@ export async function gatewayRoutes(app: FastifyInstance) {
 
       if (parsed.type === "MESSAGE_SEND" || parsed.type === "TYPING_START") {
         const channel = await prisma.channel.findUnique({ where: { id: parsed.channelId } });
-        if (!channel || !serverIds.includes(channel.serverId)) {
-          sendError("not a member of this channel's server");
+        if (!channel) {
+          sendError("channel not found");
           return;
         }
 
@@ -117,13 +99,12 @@ export async function gatewayRoutes(app: FastifyInstance) {
             }),
             prisma.user.findUnique({ where: { id: userId }, select: { avatarUrl: true } }),
           ]);
-          broadcastToServer(channel.serverId, {
+          broadcastAll({
             type: "MESSAGE_CREATE",
             message: { ...message, authorUsername: username, authorAvatarUrl: author?.avatarUrl ?? null },
           });
         } else {
-          broadcastToServer(
-            channel.serverId,
+          broadcastAll(
             { type: "TYPING_START", channelId: parsed.channelId, userId, username },
             socket,
           );
@@ -136,7 +117,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
           where: { id: parsed.messageId },
           include: { channel: true },
         });
-        if (!message || !serverIds.includes(message.channel.serverId)) {
+        if (!message) {
           sendError("message not found");
           return;
         }
@@ -153,18 +134,18 @@ export async function gatewayRoutes(app: FastifyInstance) {
             }),
             prisma.user.findUnique({ where: { id: userId }, select: { avatarUrl: true } }),
           ]);
-          broadcastToServer(message.channel.serverId, {
+          broadcastAll({
             type: "MESSAGE_UPDATE",
             message: { ...updated, authorUsername: username, authorAvatarUrl: author?.avatarUrl ?? null },
           });
         } else {
-          const canModerate = await hasPermission(userId, message.channel.serverId, PERMISSIONS.MANAGE_CHANNELS);
+          const canModerate = await hasPermission(userId, PERMISSIONS.MANAGE_CHANNELS);
           if (message.authorId !== userId && !canModerate) {
             sendError("only the author or a moderator can delete this message");
             return;
           }
           await prisma.message.delete({ where: { id: message.id } });
-          broadcastToServer(message.channel.serverId, {
+          broadcastAll({
             type: "MESSAGE_DELETE",
             messageId: message.id,
             channelId: message.channelId,
@@ -178,7 +159,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
           where: { id: parsed.messageId },
           include: { channel: true },
         });
-        if (!message || !serverIds.includes(message.channel.serverId)) {
+        if (!message) {
           sendError("message not found");
           return;
         }
@@ -189,7 +170,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
             create: { messageId: message.id, userId, emoji: parsed.emoji },
             update: {},
           });
-          broadcastToServer(message.channel.serverId, {
+          broadcastAll({
             type: "REACTION_ADD",
             messageId: message.id,
             channelId: message.channelId,
@@ -201,7 +182,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
           await prisma.reaction.deleteMany({
             where: { messageId: message.id, userId, emoji: parsed.emoji },
           });
-          broadcastToServer(message.channel.serverId, {
+          broadcastAll({
             type: "REACTION_REMOVE",
             messageId: message.id,
             channelId: message.channelId,
@@ -215,9 +196,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
     socket.on("close", () => {
       const result = unregisterConnection(socket);
       if (result?.isNowOffline) {
-        for (const serverId of result.meta.serverIds) {
-          broadcastToServer(serverId, { type: "PRESENCE_UPDATE", userId: result.meta.userId, status: "offline" });
-        }
+        broadcastAll({ type: "PRESENCE_UPDATE", userId: result.meta.userId, status: "offline" });
       }
     });
   });

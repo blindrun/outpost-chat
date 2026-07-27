@@ -22,7 +22,7 @@ function toInfo(p: Participant): ParticipantInfo {
   return { identity: p.identity, name: p.name || p.identity, isLocal: p instanceof LocalParticipant };
 }
 
-export function VoicePanel({ token, channel }: { token: string; channel: Channel }) {
+export function VoicePanel({ baseUrl, token, channel }: { baseUrl: string; token: string; channel: Channel }) {
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [micEnabled, setMicEnabled] = useState(false);
@@ -48,7 +48,7 @@ export function VoicePanel({ token, channel }: { token: string; channel: Channel
     setError(null);
     setConnecting(true);
     try {
-      const { token: voiceToken, url } = await getVoiceToken(token, channel.id);
+      const { token: voiceToken, url } = await getVoiceToken(baseUrl, token, channel.id);
       const room = new Room();
       roomRef.current = room;
 

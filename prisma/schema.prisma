@@ -13,29 +13,22 @@ model User {
   email        String   @unique
   passwordHash String
   avatarUrl    String?
+  isOwner      Boolean  @default(false)
   createdAt    DateTime @default(now())
 
-  ownedServers Server[]     @relation("ServerOwner")
-  memberships  Membership[]
+  memberRoles UserRole[]
 }
 
-model Server {
-  id        String   @id @default(uuid())
-  name      String
-  ownerId   String
-  owner     User     @relation("ServerOwner", fields: [ownerId], references: [id])
-  createdAt DateTime @default(now())
-
-  channels    Channel[]
-  roles       Role[]
-  memberships Membership[]
-  invites     Invite[]
+model InstanceSettings {
+  id                      String  @id @default("singleton")
+  name                    String  @default("Harmony")
+  description             String?
+  theme                   String  @default("business")
+  requireInviteToRegister Boolean @default(false)
 }
 
 model Invite {
   id        String    @id @default(uuid())
-  serverId  String
-  server    Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
   code      String    @unique
   createdBy String
   maxUses   Int?
@@ -52,8 +45,6 @@ enum ChannelType {
 
 model Channel {
   id        String      @id @default(uuid())
-  serverId  String
-  server    Server      @relation(fields: [serverId], references: [id], onDelete: Cascade)
   name      String
   type      ChannelType @default(TEXT)
   position  Int         @default(0)
@@ -88,33 +79,18 @@ model Reaction {
 
 model Role {
   id          String   @id @default(uuid())
-  serverId    String
-  server      Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
   name        String
   permissions String[] @default([])
   position    Int      @default(0)
 
-  memberRoles MemberRole[]
+  memberRoles UserRole[]
 }
 
-model Membership {
-  id       String   @id @default(uuid())
-  userId   String
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  serverId String
-  server   Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
-  joinedAt DateTime @default(now())
+model UserRole {
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
-  roles MemberRole[]
-
-  @@unique([userId, serverId])
-}
-
-model MemberRole {
-  membershipId String
-  membership   Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
-  roleId       String
-  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-
-  @@id([membershipId, roleId])
+  @@id([userId, roleId])
 }

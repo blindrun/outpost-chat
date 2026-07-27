@@ -5,7 +5,7 @@ import fastifyWebsocket from "@fastify/websocket";
 import fastifyCors from "@fastify/cors";
 import fastifyMultipart from "@fastify/multipart";
 import { authRoutes } from "./routes/auth.js";
-import { serverRoutes } from "./routes/servers.js";
+import { instanceRoutes } from "./routes/instance.js";
 import { messageRoutes } from "./routes/messages.js";
 import { voiceRoutes } from "./routes/voice.js";
 import { uploadRoutes } from "./routes/uploads.js";
@@ -43,7 +43,7 @@ app.decorate("authenticate", async (req, reply) => {
 app.get("/health", async () => ({ ok: true }));
 
 app.register(authRoutes);
-app.register(serverRoutes);
+app.register(instanceRoutes);
 app.register(messageRoutes);
 app.register(voiceRoutes);
 app.register(uploadRoutes);

@@ -1,32 +1,38 @@
 import { useEffect, useState } from "react";
 import {
+  InstanceInfo,
   Member,
   Permission,
   Role,
-  Server,
   assignRole,
   createRole,
   listMembers,
   listRoles,
-  updateServerSettings,
+  updateInstanceSettings,
 } from "./api";
 import { Modal } from "./Modal";
 import { InvitePanel } from "./InvitePanel";
+import { ThemePicker } from "./ThemePicker";
 
 const ALL_PERMISSIONS: Permission[] = ["MANAGE_CHANNELS", "MANAGE_ROLES", "SEND_MESSAGES"];
 
 type Tab = "general" | "roles" | "members" | "invites";
 
 function GeneralTab({
+  baseUrl,
   token,
-  server,
+  instanceInfo,
   onUpdated,
 }: {
+  baseUrl: string;
   token: string;
-  server: Server;
-  onUpdated: (server: Server) => void;
+  instanceInfo: InstanceInfo;
+  onUpdated: (info: InstanceInfo) => void;
 }) {
-  const [name, setName] = useState(server.name);
+  const [name, setName] = useState(instanceInfo.name);
+  const [description, setDescription] = useState(instanceInfo.description ?? "");
+  const [theme, setTheme] = useState(instanceInfo.theme);
+  const [requireInvite, setRequireInvite] = useState(instanceInfo.requireInviteToRegister);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -35,7 +41,12 @@ function GeneralTab({
     setError(null);
     setSaving(true);
     try {
-      const updated = await updateServerSettings(token, server.id, { name });
+      const updated = await updateInstanceSettings(baseUrl, token, {
+        name,
+        description,
+        theme,
+        requireInviteToRegister: requireInvite,
+      });
       onUpdated(updated);
     } catch (err) {
       setError((err as Error).message);
@@ -47,9 +58,19 @@ function GeneralTab({
   return (
     <form className="settings-section" onSubmit={handleSave}>
       <label>
-        Server Name
+        Instance Name
         <input value={name} onChange={(e) => setName(e.target.value)} />
       </label>
+      <label>
+        Description
+        <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
+      </label>
+      <label className="checkbox-label">
+        <input type="checkbox" checked={requireInvite} onChange={(e) => setRequireInvite(e.target.checked)} />
+        Require an invite code to register
+      </label>
+      <h3>Theme</h3>
+      <ThemePicker value={theme} onChange={setTheme} />
       {error && <p className="error">{error}</p>}
       <div className="modal-actions">
         <button type="submit" className="btn" disabled={saving}>
@@ -60,17 +81,17 @@ function GeneralTab({
   );
 }
 
-function RolesTab({ token, serverId }: { token: string; serverId: string }) {
+function RolesTab({ baseUrl, token }: { baseUrl: string; token: string }) {
   const [roles, setRoles] = useState<Role[]>([]);
   const [name, setName] = useState("");
   const [permissions, setPermissions] = useState<Set<Permission>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
   function refresh() {
-    listRoles(token, serverId).then(setRoles).catch((err) => setError(err.message));
+    listRoles(baseUrl, token).then(setRoles).catch((err) => setError(err.message));
   }
 
-  useEffect(refresh, [token, serverId]);
+  useEffect(refresh, [baseUrl, token]);
 
   function togglePermission(perm: Permission) {
     setPermissions((prev) => {
@@ -86,7 +107,7 @@ function RolesTab({ token, serverId }: { token: string; serverId: string }) {
     if (!name.trim()) return;
     setError(null);
     try {
-      await createRole(token, serverId, name.trim(), [...permissions]);
+      await createRole(baseUrl, token, name.trim(), [...permissions]);
       setName("");
       setPermissions(new Set());
       refresh();
@@ -127,25 +148,25 @@ function RolesTab({ token, serverId }: { token: string; serverId: string }) {
   );
 }
 
-function MembersTab({ token, serverId }: { token: string; serverId: string }) {
+function MembersTab({ baseUrl, token }: { baseUrl: string; token: string }) {
   const [members, setMembers] = useState<Member[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [selectedRole, setSelectedRole] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
 
   function refresh() {
-    listMembers(token, serverId).then(setMembers).catch((err) => setError(err.message));
-    listRoles(token, serverId).then(setRoles).catch((err) => setError(err.message));
+    listMembers(baseUrl, token).then(setMembers).catch((err) => setError(err.message));
+    listRoles(baseUrl, token).then(setRoles).catch((err) => setError(err.message));
   }
 
-  useEffect(refresh, [token, serverId]);
+  useEffect(refresh, [baseUrl, token]);
 
   async function handleAssign(userId: string) {
     const roleId = selectedRole[userId];
     if (!roleId) return;
     setError(null);
     try {
-      await assignRole(token, serverId, userId, roleId);
+      await assignRole(baseUrl, token, userId, roleId);
       refresh();
     } catch (err) {
       setError((err as Error).message);
@@ -186,22 +207,24 @@ function MembersTab({ token, serverId }: { token: string; serverId: string }) {
   );
 }
 
-export function ServerSettingsModal({
+export function InstanceSettingsModal({
+  baseUrl,
   token,
-  server,
+  instanceInfo,
   onClose,
   onUpdated,
 }: {
+  baseUrl: string;
   token: string;
-  server: Server;
+  instanceInfo: InstanceInfo;
   onClose: () => void;
-  onUpdated: (server: Server) => void;
+  onUpdated: (info: InstanceInfo) => void;
 }) {
   const [tab, setTab] = useState<Tab>("general");
 
   return (
     <Modal onClose={onClose}>
-      <h2>Server Settings — {server.name}</h2>
+      <h2>Instance Settings — {instanceInfo.name}</h2>
       <div className="modal-tabs settings-tabs">
         <button className={tab === "general" ? "active" : ""} onClick={() => setTab("general")}>
           General
@@ -217,10 +240,12 @@ export function ServerSettingsModal({
         </button>
       </div>
 
-      {tab === "general" && <GeneralTab token={token} server={server} onUpdated={onUpdated} />}
-      {tab === "roles" && <RolesTab token={token} serverId={server.id} />}
-      {tab === "members" && <MembersTab token={token} serverId={server.id} />}
-      {tab === "invites" && <InvitePanel token={token} serverId={server.id} />}
+      {tab === "general" && (
+        <GeneralTab baseUrl={baseUrl} token={token} instanceInfo={instanceInfo} onUpdated={onUpdated} />
+      )}
+      {tab === "roles" && <RolesTab baseUrl={baseUrl} token={token} />}
+      {tab === "members" && <MembersTab baseUrl={baseUrl} token={token} />}
+      {tab === "invites" && <InvitePanel baseUrl={baseUrl} token={token} />}
 
       <div className="modal-actions">
         <button className="btn secondary" onClick={onClose}>

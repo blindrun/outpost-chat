@@ -3,11 +3,13 @@ import { User, updatePassword, updateProfile, uploadFile, setAvatar } from "./ap
 import { Modal } from "./Modal";
 
 export function UserSettingsModal({
+  baseUrl,
   token,
   user,
   onClose,
   onSessionUpdate,
 }: {
+  baseUrl: string;
   token: string;
   user: User;
   onClose: () => void;
@@ -36,7 +38,7 @@ export function UserSettingsModal({
       if (username !== user.username) updates.username = username;
       if (email !== user.email) updates.email = email;
       if (Object.keys(updates).length === 0) return;
-      const result = await updateProfile(token, updates);
+      const result = await updateProfile(baseUrl, token, updates);
       onSessionUpdate({ token: result.token, user: result.user });
     } catch (err) {
       setProfileError((err as Error).message);
@@ -51,7 +53,7 @@ export function UserSettingsModal({
     setPasswordSuccess(false);
     setPasswordSaving(true);
     try {
-      await updatePassword(token, currentPassword, newPassword);
+      await updatePassword(baseUrl, token, currentPassword, newPassword);
       setCurrentPassword("");
       setNewPassword("");
       setPasswordSuccess(true);
@@ -69,8 +71,8 @@ export function UserSettingsModal({
     setAvatarError(null);
     setAvatarUploading(true);
     try {
-      const { url } = await uploadFile(token, file);
-      const updatedUser = await setAvatar(token, url);
+      const { url } = await uploadFile(baseUrl, token, file);
+      const updatedUser = await setAvatar(baseUrl, token, url);
       onSessionUpdate({ user: updatedUser });
     } catch (err) {
       setAvatarError((err as Error).message);

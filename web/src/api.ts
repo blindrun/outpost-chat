@@ -1,31 +1,30 @@
-const BASE_URL = "http://localhost:8080";
-
 export interface User {
   id: string;
   username: string;
   email: string;
   avatarUrl?: string | null;
+  isOwner: boolean;
 }
 
 export interface Channel {
   id: string;
-  serverId: string;
   name: string;
   type: "TEXT" | "VOICE";
   position: number;
 }
 
-export interface Server {
-  id: string;
+export type Theme = "business" | "cyberpunk" | "hacker" | "esports";
+
+export interface InstanceInfo {
   name: string;
-  ownerId: string;
-  inviteCode: string | null;
-  channels: Channel[];
+  description: string | null;
+  theme: Theme;
+  requireInviteToRegister: boolean;
+  hasOwner: boolean;
 }
 
 export interface Invite {
   id: string;
-  serverId: string;
   code: string;
   createdBy: string;
   maxUses: number | null;
@@ -60,7 +59,6 @@ export type Permission = "MANAGE_CHANNELS" | "MANAGE_ROLES" | "SEND_MESSAGES";
 
 export interface Role {
   id: string;
-  serverId: string;
   name: string;
   permissions: Permission[];
   position: number;
@@ -74,8 +72,12 @@ export interface Member {
   roles: { id: string; name: string }[];
 }
 
-async function request<T>(path: string, token: string | null, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
+export function toWsUrl(baseUrl: string): string {
+  return baseUrl.replace(/^http/, "ws");
+}
+
+async function request<T>(baseUrl: string, path: string, token: string | null, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
@@ -91,68 +93,60 @@ async function request<T>(path: string, token: string | null, init?: RequestInit
   return res.json();
 }
 
-export function register(username: string, email: string, password: string) {
-  return request<{ token: string; user: User }>("/auth/register", null, {
+export function getInstanceInfo(baseUrl: string) {
+  return request<InstanceInfo>(baseUrl, "/instance-info", null);
+}
+
+export function register(baseUrl: string, username: string, email: string, password: string, inviteCode?: string) {
+  return request<{ token: string; user: User }>(baseUrl, "/auth/register", null, {
     method: "POST",
-    body: JSON.stringify({ username, email, password }),
+    body: JSON.stringify({ username, email, password, ...(inviteCode ? { inviteCode } : {}) }),
   });
 }
 
-export function login(email: string, password: string) {
-  return request<{ token: string; user: User }>("/auth/login", null, {
+export function login(baseUrl: string, email: string, password: string) {
+  return request<{ token: string; user: User }>(baseUrl, "/auth/login", null, {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
 }
 
-export function listServers(token: string) {
-  return request<Server[]>("/servers", token);
+export function listInvites(baseUrl: string, token: string) {
+  return request<Invite[]>(baseUrl, "/invites", token);
 }
 
-export function createServer(token: string, name: string) {
-  return request<Server>("/servers", token, { method: "POST", body: JSON.stringify({ name }) });
-}
-
-export function joinByInvite(token: string, code: string) {
-  return request<{ server: Server }>(`/invites/${code}/join`, token, { method: "POST" });
-}
-
-export function listInvites(token: string, serverId: string) {
-  return request<Invite[]>(`/servers/${serverId}/invites`, token);
-}
-
-export function createInvite(token: string, serverId: string, opts: { maxUses?: number; expiresInSeconds?: number }) {
-  return request<Invite>(`/servers/${serverId}/invites`, token, {
+export function createInvite(baseUrl: string, token: string, opts: { maxUses?: number; expiresInSeconds?: number }) {
+  return request<Invite>(baseUrl, "/invites", token, {
     method: "POST",
     body: JSON.stringify(opts),
   });
 }
 
-export function revokeInvite(token: string, serverId: string, inviteId: string) {
-  return request<void>(`/servers/${serverId}/invites/${inviteId}`, token, { method: "DELETE" });
+export function revokeInvite(baseUrl: string, token: string, inviteId: string) {
+  return request<void>(baseUrl, `/invites/${inviteId}`, token, { method: "DELETE" });
 }
 
-export function createChannel(token: string, serverId: string, name: string, type: "TEXT" | "VOICE") {
-  return request<Channel>(`/servers/${serverId}/channels`, token, {
+export function createChannel(baseUrl: string, token: string, name: string, type: "TEXT" | "VOICE") {
+  return request<Channel>(baseUrl, "/channels", token, {
     method: "POST",
     body: JSON.stringify({ name, type }),
   });
 }
 
-export function listMessages(token: string, channelId: string) {
-  return request<Message[]>(`/channels/${channelId}/messages`, token);
+export function listMessages(baseUrl: string, token: string, channelId: string) {
+  return request<Message[]>(baseUrl, `/channels/${channelId}/messages`, token);
 }
 
-export function getVoiceToken(token: string, channelId: string) {
-  return request<{ token: string; url: string }>(`/channels/${channelId}/voice-token`, token, {
+export function getVoiceToken(baseUrl: string, token: string, channelId: string) {
+  return request<{ token: string; url: string }>(baseUrl, `/channels/${channelId}/voice-token`, token, {
     method: "POST",
   });
 }
 
-export async function uploadFile(token: string, file: File): Promise<{ url: string }> {
+export async function uploadFile(baseUrl: string, token: string, file: File): Promise<{ url: string }> {
   const form = new FormData();
   form.append("file", file);
-  const res = await fetch(`${BASE_URL}/uploads`, {
+  const res = await fetch(`${baseUrl}/uploads`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: form,
@@ -164,55 +158,59 @@ export async function uploadFile(token: string, file: File): Promise<{ url: stri
   return res.json();
 }
 
-export function setAvatar(token: string, avatarUrl: string) {
-  return request<User>("/auth/me/avatar", token, { method: "PATCH", body: JSON.stringify({ avatarUrl }) });
+export function setAvatar(baseUrl: string, token: string, avatarUrl: string) {
+  return request<User>(baseUrl, "/auth/me/avatar", token, { method: "PATCH", body: JSON.stringify({ avatarUrl }) });
 }
 
-export function updateProfile(token: string, updates: { username?: string; email?: string }) {
-  return request<{ token: string; user: User }>("/auth/me", token, {
+export function updateProfile(baseUrl: string, token: string, updates: { username?: string; email?: string }) {
+  return request<{ token: string; user: User }>(baseUrl, "/auth/me", token, {
     method: "PATCH",
     body: JSON.stringify(updates),
   });
 }
 
-export function updatePassword(token: string, currentPassword: string, newPassword: string) {
-  return request<void>("/auth/me/password", token, {
+export function updatePassword(baseUrl: string, token: string, currentPassword: string, newPassword: string) {
+  return request<void>(baseUrl, "/auth/me/password", token, {
     method: "PATCH",
     body: JSON.stringify({ currentPassword, newPassword }),
   });
 }
 
-export function updateServerSettings(token: string, serverId: string, updates: { name?: string }) {
-  return request<Server>(`/servers/${serverId}/settings`, token, {
+export function updateInstanceSettings(
+  baseUrl: string,
+  token: string,
+  updates: { name?: string; description?: string; theme?: Theme; requireInviteToRegister?: boolean },
+) {
+  return request<InstanceInfo>(baseUrl, "/instance/settings", token, {
     method: "PATCH",
     body: JSON.stringify(updates),
   });
 }
 
-export function listMembers(token: string, serverId: string) {
-  return request<Member[]>(`/servers/${serverId}/members`, token);
+export function listMembers(baseUrl: string, token: string) {
+  return request<Member[]>(baseUrl, "/members", token);
 }
 
-export function listRoles(token: string, serverId: string) {
-  return request<Role[]>(`/servers/${serverId}/roles`, token);
+export function listRoles(baseUrl: string, token: string) {
+  return request<Role[]>(baseUrl, "/roles", token);
 }
 
-export function createRole(token: string, serverId: string, name: string, permissions: Permission[]) {
-  return request<Role>(`/servers/${serverId}/roles`, token, {
+export function createRole(baseUrl: string, token: string, name: string, permissions: Permission[]) {
+  return request<Role>(baseUrl, "/roles", token, {
     method: "POST",
     body: JSON.stringify({ name, permissions }),
   });
 }
 
-export function assignRole(token: string, serverId: string, userId: string, roleId: string) {
-  return request<void>(`/servers/${serverId}/members/${userId}/roles`, token, {
+export function assignRole(baseUrl: string, token: string, userId: string, roleId: string) {
+  return request<void>(baseUrl, `/members/${userId}/roles`, token, {
     method: "POST",
     body: JSON.stringify({ roleId }),
   });
 }
 
 type GatewayEvent =
-  | { type: "READY"; servers: Server[]; onlineUserIds: string[] }
+  | { type: "READY"; channels: Channel[]; onlineUserIds: string[] }
   | { type: "MESSAGE_CREATE"; message: Message }
   | { type: "MESSAGE_UPDATE"; message: Message }
   | { type: "MESSAGE_DELETE"; messageId: string; channelId: string }
@@ -226,8 +224,8 @@ export class Gateway {
   private ws: WebSocket;
   private listeners = new Set<(event: GatewayEvent) => void>();
 
-  constructor(token: string) {
-    this.ws = new WebSocket(`ws://localhost:8080/gateway?token=${token}`);
+  constructor(baseUrl: string, token: string) {
+    this.ws = new WebSocket(`${toWsUrl(baseUrl)}/gateway?token=${token}`);
     this.ws.onmessage = (raw) => {
       const event = JSON.parse(raw.data) as GatewayEvent;
       for (const listener of this.listeners) listener(event);

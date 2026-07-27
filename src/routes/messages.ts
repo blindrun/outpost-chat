@@ -12,16 +12,10 @@ export async function messageRoutes(app: FastifyInstance) {
 
   app.get("/channels/:channelId/messages", async (req, reply) => {
     const { channelId } = req.params as { channelId: string };
-    const { sub: userId } = req.user as { sub: string };
     const query = historyQuerySchema.parse(req.query);
 
     const channel = await prisma.channel.findUnique({ where: { id: channelId } });
     if (!channel) return reply.status(404).send({ error: "channel not found" });
-
-    const membership = await prisma.membership.findUnique({
-      where: { userId_serverId: { userId, serverId: channel.serverId } },
-    });
-    if (!membership) return reply.status(403).send({ error: "not a member of this server" });
 
     let beforeDate: Date | undefined;
     if (query.before) {

@@ -9,26 +9,26 @@ function isSpent(invite: Invite) {
   return invite.maxUses !== null && invite.uses >= invite.maxUses;
 }
 
-export function InvitePanel({ token, serverId }: { token: string; serverId: string }) {
+export function InvitePanel({ baseUrl, token }: { baseUrl: string; token: string }) {
   const [invites, setInvites] = useState<Invite[]>([]);
   const [maxUses, setMaxUses] = useState("");
   const [expiresMinutes, setExpiresMinutes] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   function refresh() {
-    listInvites(token, serverId).then(setInvites).catch((err) => setError(err.message));
+    listInvites(baseUrl, token).then(setInvites).catch((err) => setError(err.message));
   }
 
   useEffect(() => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverId]);
+  }, [baseUrl]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     try {
-      await createInvite(token, serverId, {
+      await createInvite(baseUrl, token, {
         maxUses: maxUses ? Number(maxUses) : undefined,
         expiresInSeconds: expiresMinutes ? Number(expiresMinutes) * 60 : undefined,
       });
@@ -42,7 +42,7 @@ export function InvitePanel({ token, serverId }: { token: string; serverId: stri
 
   async function handleRevoke(inviteId: string) {
     try {
-      await revokeInvite(token, serverId, inviteId);
+      await revokeInvite(baseUrl, token, inviteId);
       refresh();
     } catch (err) {
       setError((err as Error).message);
@@ -51,6 +51,7 @@ export function InvitePanel({ token, serverId }: { token: string; serverId: stri
 
   return (
     <div className="invite-panel">
+      <p className="subtitle">Invite codes let new people register an account on this instance.</p>
       <form onSubmit={handleCreate} className="invite-new-form">
         <input
           placeholder="max uses (blank = ∞)"
