@@ -13,6 +13,7 @@ import {
   register,
 } from "./api";
 import { VoicePanel } from "./VoicePanel";
+import { MessageItem } from "./MessageItem";
 
 interface Session {
   token: string;
@@ -108,6 +109,42 @@ function App() {
         setMessages((prev) => ({
           ...prev,
           [event.message.channelId]: [...(prev[event.message.channelId] ?? []), event.message],
+        }));
+      } else if (event.type === "MESSAGE_UPDATE") {
+        setMessages((prev) => ({
+          ...prev,
+          [event.message.channelId]: (prev[event.message.channelId] ?? []).map((m) =>
+            m.id === event.message.id ? event.message : m,
+          ),
+        }));
+      } else if (event.type === "MESSAGE_DELETE") {
+        setMessages((prev) => ({
+          ...prev,
+          [event.channelId]: (prev[event.channelId] ?? []).filter((m) => m.id !== event.messageId),
+        }));
+      } else if (event.type === "REACTION_ADD") {
+        setMessages((prev) => ({
+          ...prev,
+          [event.channelId]: (prev[event.channelId] ?? []).map((m) =>
+            m.id === event.messageId
+              ? {
+                  ...m,
+                  reactions: [
+                    ...(m.reactions ?? []),
+                    { id: `${event.messageId}-${event.userId}-${event.emoji}`, messageId: event.messageId, userId: event.userId, emoji: event.emoji, createdAt: new Date().toISOString() },
+                  ],
+                }
+              : m,
+          ),
+        }));
+      } else if (event.type === "REACTION_REMOVE") {
+        setMessages((prev) => ({
+          ...prev,
+          [event.channelId]: (prev[event.channelId] ?? []).map((m) =>
+            m.id === event.messageId
+              ? { ...m, reactions: (m.reactions ?? []).filter((r) => !(r.userId === event.userId && r.emoji === event.emoji)) }
+              : m,
+          ),
         }));
       } else if (event.type === "PRESENCE_UPDATE") {
         setOnlineUserIds((prev) => {
@@ -275,10 +312,16 @@ function App() {
             <h3>#{selectedChannel.name}</h3>
             <div className="messages">
               {channelMessages.map((m) => (
-                <div key={m.id} className="message">
-                  <span className={`presence-dot ${onlineUserIds.has(m.authorId) ? "online" : "offline"}`} />
-                  <strong>{m.authorUsername ?? m.authorId}</strong>: {m.content}
-                </div>
+                <MessageItem
+                  key={m.id}
+                  message={m}
+                  isOnline={onlineUserIds.has(m.authorId)}
+                  currentUserId={session.user.id}
+                  onEdit={(id, content) => gatewayRef.current?.editMessage(id, content)}
+                  onDelete={(id) => gatewayRef.current?.deleteMessage(id)}
+                  onReact={(id, emoji) => gatewayRef.current?.addReaction(id, emoji)}
+                  onUnreact={(id, emoji) => gatewayRef.current?.removeReaction(id, emoji)}
+                />
               ))}
             </div>
             {typingLabel && <p className="typing">{typingLabel} is typing…</p>}

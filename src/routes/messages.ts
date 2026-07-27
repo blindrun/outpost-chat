@@ -36,6 +36,7 @@ export async function messageRoutes(app: FastifyInstance) {
       },
       orderBy: { createdAt: "desc" },
       take: query.limit,
+      include: { reactions: true },
     });
 
     return messages.reverse();

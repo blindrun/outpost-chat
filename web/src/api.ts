@@ -22,6 +22,14 @@ export interface Server {
   channels: Channel[];
 }
 
+export interface Reaction {
+  id: string;
+  messageId: string;
+  userId: string;
+  emoji: string;
+  createdAt: string;
+}
+
 export interface Message {
   id: string;
   channelId: string;
@@ -29,6 +37,8 @@ export interface Message {
   authorUsername?: string;
   content: string;
   createdAt: string;
+  editedAt?: string | null;
+  reactions?: Reaction[];
 }
 
 async function request<T>(path: string, token: string | null, init?: RequestInit): Promise<T> {
@@ -93,6 +103,10 @@ export function getVoiceToken(token: string, channelId: string) {
 type GatewayEvent =
   | { type: "READY"; servers: Server[]; onlineUserIds: string[] }
   | { type: "MESSAGE_CREATE"; message: Message }
+  | { type: "MESSAGE_UPDATE"; message: Message }
+  | { type: "MESSAGE_DELETE"; messageId: string; channelId: string }
+  | { type: "REACTION_ADD"; messageId: string; channelId: string; userId: string; username: string; emoji: string }
+  | { type: "REACTION_REMOVE"; messageId: string; channelId: string; userId: string; emoji: string }
   | { type: "PRESENCE_UPDATE"; userId: string; status: "online" | "offline" }
   | { type: "TYPING_START"; channelId: string; userId: string; username: string }
   | { type: "ERROR"; error: string };
@@ -120,6 +134,22 @@ export class Gateway {
 
   sendTyping(channelId: string) {
     this.ws.send(JSON.stringify({ type: "TYPING_START", channelId }));
+  }
+
+  editMessage(messageId: string, content: string) {
+    this.ws.send(JSON.stringify({ type: "MESSAGE_EDIT", messageId, content }));
+  }
+
+  deleteMessage(messageId: string) {
+    this.ws.send(JSON.stringify({ type: "MESSAGE_DELETE", messageId }));
+  }
+
+  addReaction(messageId: string, emoji: string) {
+    this.ws.send(JSON.stringify({ type: "REACTION_ADD", messageId, emoji }));
+  }
+
+  removeReaction(messageId: string, emoji: string) {
+    this.ws.send(JSON.stringify({ type: "REACTION_REMOVE", messageId, emoji }));
   }
 
   close() {

@@ -58,7 +58,19 @@ body {
   min-width: 0;
 }
 .messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.4rem; }
-.message { display: flex; align-items: center; gap: 0.4rem; }
+.message { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.15rem 0; }
+.message-line { display: flex; align-items: center; gap: 0.4rem; }
+.message-actions { margin-left: auto; display: flex; gap: 0.4rem; }
+.icon-btn { background: none; border: none; color: #949ba4; font-size: 0.75rem; cursor: pointer; padding: 0; }
+.icon-btn:hover { color: #dbdee1; text-decoration: underline; }
+.edited-tag { font-size: 0.7rem; color: #80848e; }
+.edit-form { display: inline-flex; gap: 0.3rem; flex: 1; }
+.edit-form input { flex: 1; padding: 0.2rem; }
+.emoji-picker { display: flex; gap: 0.3rem; }
+.emoji-picker button { background: #2b2d31; border: 1px solid #404249; border-radius: 4px; cursor: pointer; }
+.reactions { display: flex; gap: 0.3rem; margin-left: 1.2rem; }
+.reaction-pill { background: #2b2d31; border: 1px solid #404249; border-radius: 10px; padding: 0.1rem 0.5rem; font-size: 0.8rem; cursor: pointer; color: #dbdee1; }
+.reaction-pill.mine { border-color: #00a8fc; background: #1a3a4a; }
 .presence-dot { width: 8px; height: 8px; border-radius: 50%; background: #80848e; display: inline-block; }
 .presence-dot.online { background: #23a559; }
 .typing { font-size: 0.8rem; color: #949ba4; font-style: italic; }

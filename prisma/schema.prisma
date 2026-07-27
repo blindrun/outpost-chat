@@ -49,12 +49,26 @@ model Channel {
 }
 
 model Message {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   channelId String
-  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  channel   Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
   authorId  String
   content   String
+  createdAt DateTime  @default(now())
+  editedAt  DateTime?
+
+  reactions Reaction[]
+}
+
+model Reaction {
+  id        String   @id @default(uuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  emoji     String
   createdAt DateTime @default(now())
+
+  @@unique([messageId, userId, emoji])
 }
 
 model Role {
