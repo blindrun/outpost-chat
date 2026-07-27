@@ -3,6 +3,18 @@ import { Message } from "./api";
 
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🎉"];
 
+function formatTimestamp(iso: string): string {
+  const date = new Date(iso);
+  const today = new Date();
+  const isToday = date.toDateString() === today.toDateString();
+  const time = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return isToday ? `Today at ${time}` : `${date.toLocaleDateString()} ${time}`;
+}
+
+function initials(name: string): string {
+  return name.slice(0, 2).toUpperCase();
+}
+
 export function MessageItem({
   message,
   isOnline,
@@ -24,6 +36,7 @@ export function MessageItem({
   const [draft, setDraft] = useState(message.content);
   const [pickerOpen, setPickerOpen] = useState(false);
   const isOwn = message.authorId === currentUserId;
+  const authorName = message.authorUsername ?? message.authorId;
 
   const reactionCounts = new Map<string, { count: number; reactedByMe: boolean }>();
   for (const r of message.reactions ?? []) {
@@ -48,9 +61,18 @@ export function MessageItem({
 
   return (
     <div className="message">
-      <div className="message-line">
-        <span className={`presence-dot ${isOnline ? "online" : "offline"}`} />
-        <strong>{message.authorUsername ?? message.authorId}</strong>:{" "}
+      {message.authorAvatarUrl ? (
+        <img className="avatar" src={message.authorAvatarUrl} alt="" />
+      ) : (
+        <span className="avatar avatar-placeholder">{initials(authorName)}</span>
+      )}
+      <div className="message-body">
+        <div className="message-header">
+          <span className={`presence-dot ${isOnline ? "online" : "offline"}`} />
+          <span className="message-author">{authorName}</span>
+          <span className="message-timestamp">{formatTimestamp(message.createdAt)}</span>
+        </div>
+
         {editing ? (
           <form onSubmit={submitEdit} className="edit-form">
             <input value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus />
@@ -60,52 +82,58 @@ export function MessageItem({
             </button>
           </form>
         ) : (
+          message.content && (
+            <div className="message-content">
+              {message.content}
+              {message.editedAt && <span className="edited-tag"> (edited)</span>}
+            </div>
+          )
+        )}
+
+        {message.attachmentUrl && (
+          <img className="message-attachment" src={message.attachmentUrl} alt="attachment" />
+        )}
+
+        {pickerOpen && (
+          <div className="emoji-picker">
+            {QUICK_EMOJIS.map((emoji) => (
+              <button key={emoji} onClick={() => toggleReaction(emoji)}>
+                {emoji}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {reactionCounts.size > 0 && (
+          <div className="reactions">
+            {[...reactionCounts.entries()].map(([emoji, { count, reactedByMe }]) => (
+              <button
+                key={emoji}
+                className={`reaction-pill ${reactedByMe ? "mine" : ""}`}
+                onClick={() => toggleReaction(emoji)}
+              >
+                {emoji} {count}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="message-toolbar">
+        <button className="toolbar-btn" title="React" onClick={() => setPickerOpen((v) => !v)}>
+          😀
+        </button>
+        {isOwn && !editing && (
           <>
-            {message.content}
-            {message.editedAt && <span className="edited-tag"> (edited)</span>}
+            <button className="toolbar-btn" title="Edit" onClick={() => setEditing(true)}>
+              ✏️
+            </button>
+            <button className="toolbar-btn" title="Delete" onClick={() => onDelete(message.id)}>
+              🗑️
+            </button>
           </>
         )}
-        <span className="message-actions">
-          <button className="icon-btn" onClick={() => setPickerOpen((v) => !v)}>
-            react
-          </button>
-          {isOwn && !editing && (
-            <>
-              <button className="icon-btn" onClick={() => setEditing(true)}>
-                edit
-              </button>
-              <button className="icon-btn" onClick={() => onDelete(message.id)}>
-                delete
-              </button>
-            </>
-          )}
-        </span>
       </div>
-      {message.attachmentUrl && (
-        <img className="message-attachment" src={message.attachmentUrl} alt="attachment" />
-      )}
-      {pickerOpen && (
-        <div className="emoji-picker">
-          {QUICK_EMOJIS.map((emoji) => (
-            <button key={emoji} onClick={() => toggleReaction(emoji)}>
-              {emoji}
-            </button>
-          ))}
-        </div>
-      )}
-      {reactionCounts.size > 0 && (
-        <div className="reactions">
-          {[...reactionCounts.entries()].map(([emoji, { count, reactedByMe }]) => (
-            <button
-              key={emoji}
-              className={`reaction-pill ${reactedByMe ? "mine" : ""}`}
-              onClick={() => toggleReaction(emoji)}
-            >
-              {emoji} {count}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

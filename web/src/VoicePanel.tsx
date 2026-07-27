@@ -129,24 +129,38 @@ export function VoicePanel({ token, channel }: { token: string; channel: Channel
   return (
     <div className="voice-panel">
       <h3>🔊 {channel.name}</h3>
-      {!connected ? (
-        <button onClick={handleJoin} disabled={connecting}>
-          {connecting ? "Joining…" : "Join Voice"}
-        </button>
-      ) : (
-        <>
-          <button onClick={handleLeave}>Leave Voice</button>
-          <button onClick={toggleMic}>{micEnabled ? "Mute" : "Unmute"}</button>
-        </>
+
+      {participants.length > 0 && (
+        <ul className="voice-participants">
+          {participants.map((p) => (
+            <li key={p.identity} className="voice-participant">
+              <span className="avatar avatar-placeholder">{p.name.slice(0, 2).toUpperCase()}</span>
+              <span className="voice-participant-name">
+                {p.name}
+                {p.isLocal && " (you)"}
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
+
+      <div className="voice-controls">
+        {!connected ? (
+          <button className="btn" onClick={handleJoin} disabled={connecting}>
+            {connecting ? "Joining…" : "Join Voice"}
+          </button>
+        ) : (
+          <>
+            <button className="btn secondary" onClick={handleLeave}>
+              Leave Voice
+            </button>
+            <button className="btn" onClick={toggleMic}>
+              {micEnabled ? "Mute" : "Unmute"}
+            </button>
+          </>
+        )}
+      </div>
       {error && <p className="error">{error}</p>}
-      <ul className="voice-participants">
-        {participants.map((p) => (
-          <li key={p.identity}>
-            {p.name} {p.isLocal && "(you)"}
-          </li>
-        ))}
-      </ul>
       <div ref={audioContainerRef} style={{ display: "none" }} />
     </div>
   );

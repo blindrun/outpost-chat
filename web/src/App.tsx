@@ -17,6 +17,13 @@ import {
 import { VoicePanel } from "./VoicePanel";
 import { MessageItem } from "./MessageItem";
 import { InvitePanel } from "./InvitePanel";
+import { Modal } from "./Modal";
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
 
 interface Session {
   token: string;
@@ -48,25 +55,34 @@ function AuthForm({ onAuthed }: { onAuthed: (session: Session) => void }) {
   }
 
   return (
-    <div className="auth-form">
-      <h1>Discord Clone (dev)</h1>
-      <form onSubmit={submit}>
-        {mode === "register" && (
-          <input placeholder="username" value={username} onChange={(e) => setUsername(e.target.value)} />
-        )}
-        <input placeholder="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <input
-          placeholder="password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        <button type="submit">{mode === "login" ? "Log in" : "Register"}</button>
-      </form>
-      {error && <p className="error">{error}</p>}
-      <button className="link" onClick={() => setMode(mode === "login" ? "register" : "login")}>
-        {mode === "login" ? "Need an account? Register" : "Have an account? Log in"}
-      </button>
+    <div className="auth-screen">
+      <div className="auth-form">
+        <h1>{mode === "login" ? "Welcome back!" : "Create an account"}</h1>
+        <p className="subtitle">
+          {mode === "login" ? "We're so excited to see you again!" : "Discord Clone (dev)"}
+        </p>
+        <form onSubmit={submit}>
+          {mode === "register" && (
+            <label>
+              Username
+              <input value={username} onChange={(e) => setUsername(e.target.value)} />
+            </label>
+          )}
+          <label>
+            Email
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          </label>
+          <label>
+            Password
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </label>
+          {error && <p className="error">{error}</p>}
+          <button type="submit">{mode === "login" ? "Log In" : "Register"}</button>
+        </form>
+        <button className="link" onClick={() => setMode(mode === "login" ? "register" : "login")}>
+          {mode === "login" ? "Need an account? Register" : "Have an account? Log in"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -92,6 +108,8 @@ function App() {
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [serverModalOpen, setServerModalOpen] = useState(false);
+  const [serverModalTab, setServerModalTab] = useState<"create" | "join">("create");
   const gatewayRef = useRef<Gateway | null>(null);
   const typingTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
@@ -203,6 +221,7 @@ function App() {
     setServers((prev) => [...prev, server]);
     setNewServerName("");
     setGatewayGeneration((g) => g + 1);
+    setServerModalOpen(false);
   }
 
   async function handleJoinInvite(e: React.FormEvent) {
@@ -215,6 +234,7 @@ function App() {
       setServers(updated);
       setInviteInput("");
       setGatewayGeneration((g) => g + 1);
+      setServerModalOpen(false);
     } catch (err) {
       setJoinError((err as Error).message);
     }
@@ -285,90 +305,174 @@ function App() {
   const channelMessages = selectedChannelId ? messages[selectedChannelId] ?? [] : [];
   const typingLabel = selectedChannelId ? typingByChannel[selectedChannelId] : null;
 
+  const textChannels = selectedServer?.channels.filter((c) => c.type === "TEXT") ?? [];
+  const voiceChannels = selectedServer?.channels.filter((c) => c.type === "VOICE") ?? [];
+
   return (
     <div className="app">
-      <aside className="server-list">
-        <h2>Servers</h2>
-        <ul>
-          {servers.map((server) => (
-            <li key={server.id}>
-              <button className={server.id === selectedServerId ? "active" : ""} onClick={() => setSelectedServerId(server.id)}>
-                {server.name}
-              </button>
-            </li>
-          ))}
-        </ul>
-        <form onSubmit={handleCreateServer} className="join-form">
-          <input
-            placeholder="new server name"
-            value={newServerName}
-            onChange={(e) => setNewServerName(e.target.value)}
-          />
-          <button type="submit">Create</button>
-        </form>
-        <form onSubmit={handleJoinInvite} className="join-form">
-          <input placeholder="invite code" value={inviteInput} onChange={(e) => setInviteInput(e.target.value)} />
-          <button type="submit">Join</button>
-        </form>
-        {joinError && <p className="error">{joinError}</p>}
-        <div className="me">
+      <nav className="server-rail">
+        {servers.map((server) => (
+          <div key={server.id} className={`server-icon-wrapper ${server.id === selectedServerId ? "active" : ""}`}>
+            <div className="server-icon-pill" />
+            <button
+              className={`server-icon ${server.id === selectedServerId ? "active" : ""}`}
+              title={server.name}
+              onClick={() => setSelectedServerId(server.id)}
+            >
+              {initials(server.name)}
+            </button>
+          </div>
+        ))}
+        <div className="rail-divider" />
+        <button
+          className="server-icon action"
+          title="Add a server"
+          onClick={() => {
+            setServerModalTab("create");
+            setServerModalOpen(true);
+          }}
+        >
+          +
+        </button>
+      </nav>
+
+      {serverModalOpen && (
+        <Modal onClose={() => setServerModalOpen(false)}>
+          <div className="modal-tabs">
+            <button className={serverModalTab === "create" ? "active" : ""} onClick={() => setServerModalTab("create")}>
+              Create a Server
+            </button>
+            <button className={serverModalTab === "join" ? "active" : ""} onClick={() => setServerModalTab("join")}>
+              Join a Server
+            </button>
+          </div>
+          {serverModalTab === "create" ? (
+            <form onSubmit={handleCreateServer}>
+              <h2>Create your server</h2>
+              <input
+                placeholder="Server name"
+                value={newServerName}
+                onChange={(e) => setNewServerName(e.target.value)}
+                autoFocus
+              />
+              <div className="modal-actions">
+                <button type="button" className="btn secondary" onClick={() => setServerModalOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn">
+                  Create
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleJoinInvite}>
+              <h2>Join a server</h2>
+              <input
+                placeholder="Invite code"
+                value={inviteInput}
+                onChange={(e) => setInviteInput(e.target.value)}
+                autoFocus
+              />
+              {joinError && <p className="error">{joinError}</p>}
+              <div className="modal-actions">
+                <button type="button" className="btn secondary" onClick={() => setServerModalOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn">
+                  Join
+                </button>
+              </div>
+            </form>
+          )}
+        </Modal>
+      )}
+
+      <aside className="sidebar">
+        {selectedServer ? (
+          <>
+            <div className="sidebar-header">{selectedServer.name}</div>
+            <div className="sidebar-scroll">
+              <div className="invite-code-display">
+                Invite: <code>{selectedServer.inviteCode ?? "none active"}</code>
+              </div>
+              {selectedServer.ownerId === session.user.id && (
+                <InvitePanel token={session.token} serverId={selectedServer.id} />
+              )}
+
+              {textChannels.length > 0 && <div className="channel-category">Text Channels</div>}
+              {textChannels.map((channel) => (
+                <div className="channel-row" key={channel.id}>
+                  <button
+                    className={`channel-btn ${channel.id === selectedChannelId ? "active" : ""}`}
+                    onClick={() => setSelectedChannelId(channel.id)}
+                  >
+                    <span className="channel-icon">#</span>
+                    <span>{channel.name}</span>
+                  </button>
+                </div>
+              ))}
+
+              {voiceChannels.length > 0 && <div className="channel-category">Voice Channels</div>}
+              {voiceChannels.map((channel) => (
+                <div className="channel-row" key={channel.id}>
+                  <button
+                    className={`channel-btn ${channel.id === selectedChannelId ? "active" : ""}`}
+                    onClick={() => setSelectedChannelId(channel.id)}
+                  >
+                    <span className="channel-icon">🔊</span>
+                    <span>{channel.name}</span>
+                  </button>
+                </div>
+              ))}
+
+              <div className="channel-category">New Channel</div>
+              <form onSubmit={handleCreateChannel} className="new-channel-form">
+                <input
+                  placeholder="channel name"
+                  value={newChannelName}
+                  onChange={(e) => setNewChannelName(e.target.value)}
+                />
+                <select value={newChannelType} onChange={(e) => setNewChannelType(e.target.value as "TEXT" | "VOICE")}>
+                  <option value="TEXT">Text</option>
+                  <option value="VOICE">Voice</option>
+                </select>
+                <button type="submit" className="add-channel-btn">
+                  +
+                </button>
+              </form>
+              {channelError && <p className="error">{channelError}</p>}
+            </div>
+          </>
+        ) : (
+          <div className="sidebar-empty">Select or create a server to get started</div>
+        )}
+
+        <div className="user-panel">
           {session.user.avatarUrl ? (
             <img className="avatar" src={session.user.avatarUrl} alt="" />
           ) : (
             <span className="avatar avatar-placeholder">{session.user.username[0]?.toUpperCase()}</span>
           )}
-          <span>
-            Signed in as <strong>{session.user.username}</strong>
-          </span>
-          <label className="avatar-upload-label">
-            {avatarUploading ? "uploading…" : "change avatar"}
-            <input type="file" accept="image/*" hidden onChange={handleAvatarSelect} disabled={avatarUploading} />
-          </label>
-          {avatarError && <p className="error">{avatarError}</p>}
+          <div className="user-panel-info">
+            <span className="user-panel-name">{session.user.username}</span>
+            <label className="avatar-upload-label">
+              {avatarUploading ? "uploading…" : "change avatar"}
+              <input type="file" accept="image/*" hidden onChange={handleAvatarSelect} disabled={avatarUploading} />
+            </label>
+          </div>
         </div>
+        {avatarError && <p className="error">{avatarError}</p>}
       </aside>
-
-      {selectedServer && (
-        <aside className="channel-list">
-          <h3>{selectedServer.name}</h3>
-          <p className="invite-code">Invite code: {selectedServer.inviteCode ?? "none active"}</p>
-          {selectedServer.ownerId === session.user.id && (
-            <InvitePanel token={session.token} serverId={selectedServer.id} />
-          )}
-          <ul>
-            {selectedServer.channels.map((channel) => (
-              <li key={channel.id}>
-                <button
-                  className={channel.id === selectedChannelId ? "active" : ""}
-                  onClick={() => setSelectedChannelId(channel.id)}
-                >
-                  {channel.type === "VOICE" ? "🔊" : "#"} {channel.name}
-                </button>
-              </li>
-            ))}
-          </ul>
-          <form onSubmit={handleCreateChannel} className="join-form">
-            <input
-              placeholder="new channel"
-              value={newChannelName}
-              onChange={(e) => setNewChannelName(e.target.value)}
-            />
-            <select value={newChannelType} onChange={(e) => setNewChannelType(e.target.value as "TEXT" | "VOICE")}>
-              <option value="TEXT">Text</option>
-              <option value="VOICE">Voice</option>
-            </select>
-            <button type="submit">+</button>
-          </form>
-          {channelError && <p className="error">{channelError}</p>}
-        </aside>
-      )}
 
       <main className="chat-pane">
         {selectedChannel && selectedChannel.type === "VOICE" ? (
           <VoicePanel token={session.token} channel={selectedChannel} />
         ) : selectedChannel ? (
           <>
-            <h3>#{selectedChannel.name}</h3>
+            <div className="chat-header">
+              <span className="channel-icon">#</span>
+              {selectedChannel.name}
+            </div>
             <div className="messages">
               {channelMessages.map((m) => (
                 <MessageItem
@@ -383,40 +487,42 @@ function App() {
                 />
               ))}
             </div>
-            {typingLabel && <p className="typing">{typingLabel} is typing…</p>}
-            {pendingAttachment && (
-              <div className="attachment-preview">
-                📎 {pendingAttachment.name}
-                <button type="button" onClick={() => setPendingAttachment(null)}>
-                  ✕
-                </button>
-              </div>
-            )}
-            {uploadError && <p className="error">{uploadError}</p>}
-            <form onSubmit={handleSend} className="send-form">
-              <label className="icon-btn attach-label">
-                {uploadingAttachment ? "…" : "📎"}
+            <p className="typing">{typingLabel && `${typingLabel} is typing…`}</p>
+            <div className="composer-area">
+              {pendingAttachment && (
+                <div className="attachment-preview">
+                  📎 {pendingAttachment.name}
+                  <button type="button" onClick={() => setPendingAttachment(null)}>
+                    ✕
+                  </button>
+                </div>
+              )}
+              {uploadError && <p className="error">{uploadError}</p>}
+              <form onSubmit={handleSend} className="send-form">
+                <label className="attach-label">
+                  {uploadingAttachment ? "…" : "📎"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    hidden
+                    onChange={handleAttachmentSelect}
+                    disabled={uploadingAttachment}
+                  />
+                </label>
                 <input
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  onChange={handleAttachmentSelect}
-                  disabled={uploadingAttachment}
+                  value={draft}
+                  onChange={(e) => {
+                    setDraft(e.target.value);
+                    handleTyping();
+                  }}
+                  placeholder={`Message #${selectedChannel.name}`}
                 />
-              </label>
-              <input
-                value={draft}
-                onChange={(e) => {
-                  setDraft(e.target.value);
-                  handleTyping();
-                }}
-                placeholder={`Message #${selectedChannel.name}`}
-              />
-              <button type="submit">Send</button>
-            </form>
+                <button type="submit">Send</button>
+              </form>
+            </div>
           </>
         ) : (
-          <p>Select a channel</p>
+          <div className="chat-placeholder">Select a channel</div>
         )}
       </main>
     </div>

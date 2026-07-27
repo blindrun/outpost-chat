@@ -48,6 +48,7 @@ export interface Message {
   channelId: string;
   authorId: string;
   authorUsername?: string;
+  authorAvatarUrl?: string | null;
   content: string;
   attachmentUrl?: string | null;
   createdAt: string;

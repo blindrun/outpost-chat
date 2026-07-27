@@ -39,6 +39,22 @@ export async function messageRoutes(app: FastifyInstance) {
       include: { reactions: true },
     });
 
-    return messages.reverse();
+    // Message has no FK relation to User (authorId is a plain string), so
+    // author display info (username, avatar) is joined manually here rather
+    // than via Prisma's `include`. Without this, history-loaded messages
+    // showed the raw author UUID instead of a username — only live
+    // MESSAGE_CREATE broadcasts carried it, from the sender's own JWT.
+    const authorIds = [...new Set(messages.map((m) => m.authorId))];
+    const authors = await prisma.user.findMany({
+      where: { id: { in: authorIds } },
+      select: { id: true, username: true, avatarUrl: true },
+    });
+    const authorById = new Map(authors.map((a) => [a.id, a]));
+
+    return messages.reverse().map((m) => ({
+      ...m,
+      authorUsername: authorById.get(m.authorId)?.username,
+      authorAvatarUrl: authorById.get(m.authorId)?.avatarUrl,
+    }));
   });
 }

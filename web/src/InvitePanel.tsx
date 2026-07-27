@@ -52,18 +52,18 @@ export function InvitePanel({ token, serverId }: { token: string; serverId: stri
 
   if (!open) {
     return (
-      <button className="icon-btn" onClick={() => setOpen(true)}>
-        manage invites
+      <button className="text-btn" onClick={() => setOpen(true)}>
+        Manage Invites
       </button>
     );
   }
 
   return (
     <div className="invite-panel">
-      <button className="icon-btn" onClick={() => setOpen(false)}>
-        hide invites
+      <button className="text-btn" onClick={() => setOpen(false)}>
+        Hide Invites
       </button>
-      <form onSubmit={handleCreate} className="join-form">
+      <form onSubmit={handleCreate} className="invite-new-form">
         <input
           placeholder="max uses (blank = ∞)"
           type="number"
@@ -96,7 +96,7 @@ export function InvitePanel({ token, serverId }: { token: string; serverId: stri
                 {inv.revoked ? " · revoked" : expired ? " · expired" : spent ? " · spent" : ""}
               </span>
               {!dead && (
-                <button className="icon-btn" onClick={() => handleRevoke(inv.id)}>
+                <button className="text-btn" onClick={() => handleRevoke(inv.id)}>
                   revoke
                 </button>
               )}

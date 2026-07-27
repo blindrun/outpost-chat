@@ -106,17 +106,20 @@ export async function gatewayRoutes(app: FastifyInstance) {
             sendError("message must have content or an attachment");
             return;
           }
-          const message = await prisma.message.create({
-            data: {
-              channelId: parsed.channelId,
-              authorId: userId,
-              content: parsed.content,
-              attachmentUrl: parsed.attachmentUrl,
-            },
-          });
+          const [message, author] = await Promise.all([
+            prisma.message.create({
+              data: {
+                channelId: parsed.channelId,
+                authorId: userId,
+                content: parsed.content,
+                attachmentUrl: parsed.attachmentUrl,
+              },
+            }),
+            prisma.user.findUnique({ where: { id: userId }, select: { avatarUrl: true } }),
+          ]);
           broadcastToServer(channel.serverId, {
             type: "MESSAGE_CREATE",
-            message: { ...message, authorUsername: username },
+            message: { ...message, authorUsername: username, authorAvatarUrl: author?.avatarUrl ?? null },
           });
         } else {
           broadcastToServer(
@@ -143,13 +146,16 @@ export async function gatewayRoutes(app: FastifyInstance) {
             sendError("only the author can edit this message");
             return;
           }
-          const updated = await prisma.message.update({
-            where: { id: message.id },
-            data: { content: parsed.content, editedAt: new Date() },
-          });
+          const [updated, author] = await Promise.all([
+            prisma.message.update({
+              where: { id: message.id },
+              data: { content: parsed.content, editedAt: new Date() },
+            }),
+            prisma.user.findUnique({ where: { id: userId }, select: { avatarUrl: true } }),
+          ]);
           broadcastToServer(message.channel.serverId, {
             type: "MESSAGE_UPDATE",
-            message: { ...updated, authorUsername: username },
+            message: { ...updated, authorUsername: username, authorAvatarUrl: author?.avatarUrl ?? null },
           });
         } else {
           const canModerate = await hasPermission(userId, message.channel.serverId, PERMISSIONS.MANAGE_CHANNELS);
