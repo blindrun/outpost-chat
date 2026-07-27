@@ -161,16 +161,28 @@ function VoiceTab() {
     let cancelled = false;
     async function refreshDevices() {
       try {
-        let devices = await navigator.mediaDevices.enumerateDevices();
-        const needsLabels = devices.some((d) => d.kind === "audioinput" && !d.label);
-        if (needsLabels) {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          stream.getTracks().forEach((t) => t.stop());
-          devices = await navigator.mediaDevices.enumerateDevices();
-        }
+        const devices = await navigator.mediaDevices.enumerateDevices();
         if (cancelled) return;
+        // Populate with whatever enumerateDevices() gives us first — even
+        // generically-labeled entries are still selectable. Only attempt the
+        // label-unlock as a best-effort enhancement afterward, since a denied
+        // permission prompt here shouldn't wipe out the list we already have.
         setInputs(devices.filter((d) => d.kind === "audioinput"));
         setOutputs(devices.filter((d) => d.kind === "audiooutput"));
+
+        const needsLabels = devices.some((d) => d.kind === "audioinput" && !d.label);
+        if (needsLabels) {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream.getTracks().forEach((t) => t.stop());
+            const relabeled = await navigator.mediaDevices.enumerateDevices();
+            if (cancelled) return;
+            setInputs(relabeled.filter((d) => d.kind === "audioinput"));
+            setOutputs(relabeled.filter((d) => d.kind === "audiooutput"));
+          } catch (permErr) {
+            if (!cancelled) setDevicesError((permErr as Error).message);
+          }
+        }
       } catch (err) {
         if (!cancelled) setDevicesError((err as Error).message);
       }
