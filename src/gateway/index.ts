@@ -8,6 +8,7 @@ import {
   isOnline,
 } from "./rooms.js";
 import { PERMISSIONS, hasPermission } from "../util/permissions.js";
+import { withDefaultInviteCode } from "../util/invites.js";
 
 async function onlineMemberIdsFor(serverIds: string[]): Promise<string[]> {
   if (serverIds.length === 0) return [];
@@ -56,7 +57,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
 
     const memberships = await prisma.membership.findMany({
       where: { userId },
-      include: { server: { include: { channels: true } } },
+      include: { server: { include: { channels: true, invites: true } } },
     });
     const serverIds = memberships.map((m) => m.serverId);
 
@@ -65,7 +66,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
     socket.send(
       JSON.stringify({
         type: "READY",
-        servers: memberships.map((m) => m.server),
+        servers: memberships.map((m) => withDefaultInviteCode(m.server)),
         onlineUserIds: await onlineMemberIdsFor(serverIds),
       }),
     );

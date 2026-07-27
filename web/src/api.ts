@@ -19,8 +19,20 @@ export interface Server {
   id: string;
   name: string;
   ownerId: string;
-  inviteCode: string;
+  inviteCode: string | null;
   channels: Channel[];
+}
+
+export interface Invite {
+  id: string;
+  serverId: string;
+  code: string;
+  createdBy: string;
+  maxUses: number | null;
+  uses: number;
+  expiresAt: string | null;
+  revoked: boolean;
+  createdAt: string;
 }
 
 export interface Reaction {
@@ -56,6 +68,7 @@ async function request<T>(path: string, token: string | null, init?: RequestInit
     const body = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(body.error ?? `request failed: ${res.status}`);
   }
+  if (res.status === 204) return undefined as T;
   return res.json();
 }
 
@@ -83,6 +96,21 @@ export function createServer(token: string, name: string) {
 
 export function joinByInvite(token: string, code: string) {
   return request<{ server: Server }>(`/invites/${code}/join`, token, { method: "POST" });
+}
+
+export function listInvites(token: string, serverId: string) {
+  return request<Invite[]>(`/servers/${serverId}/invites`, token);
+}
+
+export function createInvite(token: string, serverId: string, opts: { maxUses?: number; expiresInSeconds?: number }) {
+  return request<Invite>(`/servers/${serverId}/invites`, token, {
+    method: "POST",
+    body: JSON.stringify(opts),
+  });
+}
+
+export function revokeInvite(token: string, serverId: string, inviteId: string) {
+  return request<void>(`/servers/${serverId}/invites/${inviteId}`, token, { method: "DELETE" });
 }
 
 export function createChannel(token: string, serverId: string, name: string, type: "TEXT" | "VOICE") {

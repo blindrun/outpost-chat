@@ -16,6 +16,7 @@ import {
 } from "./api";
 import { VoicePanel } from "./VoicePanel";
 import { MessageItem } from "./MessageItem";
+import { InvitePanel } from "./InvitePanel";
 
 interface Session {
   token: string;
@@ -330,7 +331,10 @@ function App() {
       {selectedServer && (
         <aside className="channel-list">
           <h3>{selectedServer.name}</h3>
-          <p className="invite-code">Invite code: {selectedServer.inviteCode}</p>
+          <p className="invite-code">Invite code: {selectedServer.inviteCode ?? "none active"}</p>
+          {selectedServer.ownerId === session.user.id && (
+            <InvitePanel token={session.token} serverId={selectedServer.id} />
+          )}
           <ul>
             {selectedServer.channels.map((channel) => (
               <li key={channel.id}>

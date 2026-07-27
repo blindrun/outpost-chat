@@ -20,16 +20,29 @@ model User {
 }
 
 model Server {
-  id         String   @id @default(uuid())
-  name       String
-  ownerId    String
-  owner      User     @relation("ServerOwner", fields: [ownerId], references: [id])
-  inviteCode String   @unique
-  createdAt  DateTime @default(now())
+  id        String   @id @default(uuid())
+  name      String
+  ownerId   String
+  owner     User     @relation("ServerOwner", fields: [ownerId], references: [id])
+  createdAt DateTime @default(now())
 
   channels    Channel[]
   roles       Role[]
   memberships Membership[]
+  invites     Invite[]
+}
+
+model Invite {
+  id        String    @id @default(uuid())
+  serverId  String
+  server    Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  code      String    @unique
+  createdBy String
+  maxUses   Int?
+  uses      Int       @default(0)
+  expiresAt DateTime?
+  revoked   Boolean   @default(false)
+  createdAt DateTime  @default(now())
 }
 
 enum ChannelType {

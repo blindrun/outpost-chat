@@ -8,15 +8,21 @@ import {
   PERMISSIONS,
   hasPermission,
 } from "../util/permissions.js";
+import { isInviteValid, withDefaultInviteCode } from "../util/invites.js";
 
 const createServerSchema = z.object({
   name: z.string().min(2).max(64),
 });
 
+const createInviteSchema = z.object({
+  maxUses: z.number().int().min(1).max(1000).optional(),
+  expiresInSeconds: z.number().int().min(60).max(60 * 60 * 24 * 30).optional(),
+});
+
 async function createUniqueInviteCode(): Promise<string> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = generateInviteCode();
-    const existing = await prisma.server.findUnique({ where: { inviteCode: code } });
+    const existing = await prisma.invite.findUnique({ where: { code } });
     if (!existing) return code;
   }
   throw new Error("failed to generate a unique invite code after 5 attempts");
@@ -40,8 +46,9 @@ export async function serverRoutes(app: FastifyInstance) {
   app.addHook("onRequest", app.authenticate);
 
   // Create a server. Owner is auto-joined and gets a default "general" text channel,
-  // a default "@everyone" role (base permissions every member gets), and a shareable
-  // invite code (no separate invite-management system yet — one permanent code per server).
+  // a default "@everyone" role (base permissions every member gets), and one
+  // default unlimited/non-expiring invite (see the Invite model + endpoints
+  // below for real invite management: multiple codes, max uses, expiry, revoke).
   app.post("/servers", async (req, reply) => {
     const body = createServerSchema.parse(req.body);
     const { sub: userId } = req.user as { sub: string };
@@ -52,11 +59,11 @@ export async function serverRoutes(app: FastifyInstance) {
         data: {
           name: body.name,
           ownerId: userId,
-          inviteCode,
           channels: { create: { name: "general", type: "TEXT" } },
           roles: { create: { name: EVERYONE_ROLE_NAME, permissions: DEFAULT_EVERYONE_PERMISSIONS } },
+          invites: { create: { code: inviteCode, createdBy: userId } },
         },
-        include: { channels: true, roles: true },
+        include: { channels: true, roles: true, invites: true },
       });
       const everyoneRole = created.roles.find((r) => r.name === EVERYONE_ROLE_NAME)!;
       await tx.membership.create({
@@ -65,7 +72,7 @@ export async function serverRoutes(app: FastifyInstance) {
       return created;
     });
 
-    return reply.status(201).send(server);
+    return reply.status(201).send(withDefaultInviteCode(server));
   });
 
   // List servers the current user belongs to.
@@ -73,40 +80,99 @@ export async function serverRoutes(app: FastifyInstance) {
     const { sub: userId } = req.user as { sub: string };
     const memberships = await prisma.membership.findMany({
       where: { userId },
-      include: { server: { include: { channels: true } } },
+      include: { server: { include: { channels: true, invites: true } } },
     });
-    return memberships.map((m) => m.server);
+    return memberships.map((m) => withDefaultInviteCode(m.server));
   });
 
-  // Join a server via its shareable invite code — the only join mechanism;
-  // no separate raw-server-id join, since a non-member has no other way to
-  // discover the server id in the first place. New joins get the @everyone
-  // role automatically; rejoining an existing membership is a no-op.
+  // Join a server via a shareable invite code — the only join mechanism; no
+  // separate raw-server-id join, since a non-member has no other way to
+  // discover the server id in the first place. Enforces expiry/max-uses/
+  // revocation. New joins get the @everyone role automatically; rejoining an
+  // existing membership is a no-op (doesn't consume a use).
   app.post("/invites/:code/join", async (req, reply) => {
     const { code } = req.params as { code: string };
     const { sub: userId } = req.user as { sub: string };
 
-    const server = await prisma.server.findUnique({ where: { inviteCode: code } });
-    if (!server) return reply.status(404).send({ error: "invalid invite code" });
+    const invite = await prisma.invite.findUnique({ where: { code } });
+    if (!invite || !isInviteValid(invite)) {
+      return reply.status(404).send({ error: "invalid or expired invite code" });
+    }
 
     const existing = await prisma.membership.findUnique({
-      where: { userId_serverId: { userId, serverId: server.id } },
+      where: { userId_serverId: { userId, serverId: invite.serverId } },
     });
     if (existing) return existing;
 
     const everyoneRole = await prisma.role.findFirst({
-      where: { serverId: server.id, name: EVERYONE_ROLE_NAME },
+      where: { serverId: invite.serverId, name: EVERYONE_ROLE_NAME },
     });
 
-    const membership = await prisma.membership.create({
-      data: {
-        userId,
-        serverId: server.id,
-        ...(everyoneRole ? { roles: { create: { roleId: everyoneRole.id } } } : {}),
-      },
-      include: { server: { include: { channels: true } } },
-    });
+    const [membership] = await prisma.$transaction([
+      prisma.membership.create({
+        data: {
+          userId,
+          serverId: invite.serverId,
+          ...(everyoneRole ? { roles: { create: { roleId: everyoneRole.id } } } : {}),
+        },
+        include: { server: { include: { channels: true } } },
+      }),
+      prisma.invite.update({ where: { id: invite.id }, data: { uses: { increment: 1 } } }),
+    ]);
     return membership;
+  });
+
+  // Invite management — owner-only, since these are server-settings-level
+  // operations rather than anything covered by the granular role/permission
+  // system. Create additional invites with an optional max-use count and/or
+  // expiry, list all of a server's invites (including spent/expired/revoked
+  // ones, so the owner can see history), and revoke one.
+  app.post("/servers/:serverId/invites", async (req, reply) => {
+    const { serverId } = req.params as { serverId: string };
+    const { sub: userId } = req.user as { sub: string };
+    const body = createInviteSchema.parse(req.body ?? {});
+
+    const server = await prisma.server.findUnique({ where: { id: serverId } });
+    if (!server) return reply.status(404).send({ error: "server not found" });
+    if (server.ownerId !== userId) return reply.status(403).send({ error: "only the server owner can manage invites" });
+
+    const code = await createUniqueInviteCode();
+    const invite = await prisma.invite.create({
+      data: {
+        serverId,
+        code,
+        createdBy: userId,
+        maxUses: body.maxUses,
+        expiresAt: body.expiresInSeconds ? new Date(Date.now() + body.expiresInSeconds * 1000) : null,
+      },
+    });
+    return reply.status(201).send(invite);
+  });
+
+  app.get("/servers/:serverId/invites", async (req, reply) => {
+    const { serverId } = req.params as { serverId: string };
+    const { sub: userId } = req.user as { sub: string };
+
+    const server = await prisma.server.findUnique({ where: { id: serverId } });
+    if (!server) return reply.status(404).send({ error: "server not found" });
+    if (server.ownerId !== userId) return reply.status(403).send({ error: "only the server owner can view invites" });
+
+    return prisma.invite.findMany({ where: { serverId }, orderBy: { createdAt: "desc" } });
+  });
+
+  app.delete("/servers/:serverId/invites/:inviteId", async (req, reply) => {
+    const { serverId, inviteId } = req.params as { serverId: string; inviteId: string };
+    const { sub: userId } = req.user as { sub: string };
+
+    const server = await prisma.server.findUnique({ where: { id: serverId } });
+    if (!server) return reply.status(404).send({ error: "server not found" });
+    if (server.ownerId !== userId) return reply.status(403).send({ error: "only the server owner can revoke invites" });
+
+    const invite = await prisma.invite.findUnique({ where: { id: inviteId } });
+    if (!invite || invite.serverId !== serverId) return reply.status(404).send({ error: "invite not found" });
+
+    await prisma.invite.update({ where: { id: inviteId }, data: { revoked: true } });
+    return reply.status(204).send();
   });
 
   // Create a channel — requires MANAGE_CHANNELS (owner always has it; @everyone

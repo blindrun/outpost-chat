@@ -49,6 +49,12 @@ body {
 .join-form { display: flex; gap: 0.25rem; }
 .join-form input { flex: 1; min-width: 0; }
 .invite-code { font-size: 0.75rem; color: #949ba4; user-select: all; }
+.invite-panel { display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.8rem; }
+.invite-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.invite-list li { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.invite-list code { user-select: all; background: #1e1f22; padding: 0.1rem 0.3rem; border-radius: 3px; }
+.invite-meta { color: #949ba4; font-size: 0.7rem; }
+.invite-dead { opacity: 0.5; }
 .me { margin-top: auto; font-size: 0.85rem; display: flex; flex-direction: column; align-items: flex-start; gap: 0.3rem; }
 .avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
 .avatar-placeholder { display: inline-flex; align-items: center; justify-content: center; background: #5865f2; color: #fff; font-weight: bold; }
