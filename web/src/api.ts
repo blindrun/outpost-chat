@@ -73,8 +73,21 @@ export function joinByInvite(token: string, code: string) {
   return request<{ server: Server }>(`/invites/${code}/join`, token, { method: "POST" });
 }
 
+export function createChannel(token: string, serverId: string, name: string, type: "TEXT" | "VOICE") {
+  return request<Channel>(`/servers/${serverId}/channels`, token, {
+    method: "POST",
+    body: JSON.stringify({ name, type }),
+  });
+}
+
 export function listMessages(token: string, channelId: string) {
   return request<Message[]>(`/channels/${channelId}/messages`, token);
+}
+
+export function getVoiceToken(token: string, channelId: string) {
+  return request<{ token: string; url: string }>(`/channels/${channelId}/voice-token`, token, {
+    method: "POST",
+  });
 }
 
 type GatewayEvent =

@@ -4,6 +4,7 @@ import {
   Message,
   Server,
   User,
+  createChannel,
   createServer,
   joinByInvite,
   listMessages,
@@ -11,6 +12,7 @@ import {
   login,
   register,
 } from "./api";
+import { VoicePanel } from "./VoicePanel";
 
 interface Session {
   token: string;
@@ -76,7 +78,10 @@ function App() {
   const [draft, setDraft] = useState("");
   const [inviteInput, setInviteInput] = useState("");
   const [newServerName, setNewServerName] = useState("");
+  const [newChannelName, setNewChannelName] = useState("");
+  const [newChannelType, setNewChannelType] = useState<"TEXT" | "VOICE">("TEXT");
   const [joinError, setJoinError] = useState<string | null>(null);
+  const [channelError, setChannelError] = useState<string | null>(null);
   const [gatewayGeneration, setGatewayGeneration] = useState(0);
   const gatewayRef = useRef<Gateway | null>(null);
   const typingTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -170,6 +175,21 @@ function App() {
     }
   }
 
+  async function handleCreateChannel(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newChannelName.trim() || !selectedServerId || !session) return;
+    setChannelError(null);
+    try {
+      const channel = await createChannel(session.token, selectedServerId, newChannelName.trim(), newChannelType);
+      setServers((prev) =>
+        prev.map((s) => (s.id === selectedServerId ? { ...s, channels: [...s.channels, channel] } : s)),
+      );
+      setNewChannelName("");
+    } catch (err) {
+      setChannelError((err as Error).message);
+    }
+  }
+
   function handleSend(e: React.FormEvent) {
     e.preventDefault();
     if (!draft.trim() || !selectedChannelId || !gatewayRef.current) return;
@@ -231,11 +251,26 @@ function App() {
               </li>
             ))}
           </ul>
+          <form onSubmit={handleCreateChannel} className="join-form">
+            <input
+              placeholder="new channel"
+              value={newChannelName}
+              onChange={(e) => setNewChannelName(e.target.value)}
+            />
+            <select value={newChannelType} onChange={(e) => setNewChannelType(e.target.value as "TEXT" | "VOICE")}>
+              <option value="TEXT">Text</option>
+              <option value="VOICE">Voice</option>
+            </select>
+            <button type="submit">+</button>
+          </form>
+          {channelError && <p className="error">{channelError}</p>}
         </aside>
       )}
 
       <main className="chat-pane">
-        {selectedChannel ? (
+        {selectedChannel && selectedChannel.type === "VOICE" ? (
+          <VoicePanel token={session.token} channel={selectedChannel} />
+        ) : selectedChannel ? (
           <>
             <h3>#{selectedChannel.name}</h3>
             <div className="messages">
@@ -247,21 +282,17 @@ function App() {
               ))}
             </div>
             {typingLabel && <p className="typing">{typingLabel} is typing…</p>}
-            {selectedChannel.type === "TEXT" ? (
-              <form onSubmit={handleSend} className="send-form">
-                <input
-                  value={draft}
-                  onChange={(e) => {
-                    setDraft(e.target.value);
-                    handleTyping();
-                  }}
-                  placeholder={`Message #${selectedChannel.name}`}
-                />
-                <button type="submit">Send</button>
-              </form>
-            ) : (
-              <p className="voice-note">Voice channels aren't wired up yet (LiveKit integration is a later piece).</p>
-            )}
+            <form onSubmit={handleSend} className="send-form">
+              <input
+                value={draft}
+                onChange={(e) => {
+                  setDraft(e.target.value);
+                  handleTyping();
+                }}
+                placeholder={`Message #${selectedChannel.name}`}
+              />
+              <button type="submit">Send</button>
+            </form>
           </>
         ) : (
           <p>Select a channel</p>

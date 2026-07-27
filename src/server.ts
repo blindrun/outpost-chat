@@ -6,6 +6,7 @@ import fastifyCors from "@fastify/cors";
 import { authRoutes } from "./routes/auth.js";
 import { serverRoutes } from "./routes/servers.js";
 import { messageRoutes } from "./routes/messages.js";
+import { voiceRoutes } from "./routes/voice.js";
 import { gatewayRoutes } from "./gateway/index.js";
 
 declare module "fastify" {
@@ -33,6 +34,7 @@ app.get("/health", async () => ({ ok: true }));
 app.register(authRoutes);
 app.register(serverRoutes);
 app.register(messageRoutes);
+app.register(voiceRoutes);
 app.register(gatewayRoutes);
 
 const port = Number(process.env.PORT ?? 8080);

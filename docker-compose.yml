@@ -12,5 +12,12 @@ services:
     volumes:
       - discord-clone-pgdata:/var/lib/postgresql/data
 
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: discord-clone-livekit
+    restart: unless-stopped
+    network_mode: host
+    command: --dev
+
 volumes:
   discord-clone-pgdata:
