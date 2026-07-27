@@ -1,14 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../plugins/db.js";
-import { generateInviteCode } from "../util/invite-code.js";
 import {
   DEFAULT_EVERYONE_PERMISSIONS,
   EVERYONE_ROLE_NAME,
   PERMISSIONS,
   hasPermission,
 } from "../util/permissions.js";
-import { isInviteValid, withDefaultInviteCode } from "../util/invites.js";
+import { createUniqueInviteCode, isInviteValid, withDefaultInviteCode } from "../util/invites.js";
 
 const createServerSchema = z.object({
   name: z.string().min(2).max(64),
@@ -19,14 +18,9 @@ const createInviteSchema = z.object({
   expiresInSeconds: z.number().int().min(60).max(60 * 60 * 24 * 30).optional(),
 });
 
-async function createUniqueInviteCode(): Promise<string> {
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const code = generateInviteCode();
-    const existing = await prisma.invite.findUnique({ where: { code } });
-    if (!existing) return code;
-  }
-  throw new Error("failed to generate a unique invite code after 5 attempts");
-}
+const updateServerSettingsSchema = z.object({
+  name: z.string().min(2).max(64).optional(),
+});
 
 const createChannelSchema = z.object({
   name: z.string().min(2).max(64),
@@ -120,6 +114,51 @@ export async function serverRoutes(app: FastifyInstance) {
       prisma.invite.update({ where: { id: invite.id }, data: { uses: { increment: 1 } } }),
     ]);
     return membership;
+  });
+
+  // Server settings — owner-only. Currently just rename; a natural place to
+  // add more server-level settings later.
+  app.patch("/servers/:serverId/settings", async (req, reply) => {
+    const { serverId } = req.params as { serverId: string };
+    const { sub: userId } = req.user as { sub: string };
+    const body = updateServerSettingsSchema.parse(req.body ?? {});
+
+    const server = await prisma.server.findUnique({ where: { id: serverId } });
+    if (!server) return reply.status(404).send({ error: "server not found" });
+    if (server.ownerId !== userId) return reply.status(403).send({ error: "only the server owner can change settings" });
+
+    const updated = await prisma.server.update({
+      where: { id: serverId },
+      data: { ...(body.name ? { name: body.name } : {}) },
+      include: { invites: true },
+    });
+    return withDefaultInviteCode(updated);
+  });
+
+  // Member list — any member can see who else is here, and what roles they
+  // hold (needed for the role-assignment UI; assigning is still gated behind
+  // MANAGE_ROLES on the endpoint below).
+  app.get("/servers/:serverId/members", async (req, reply) => {
+    const { serverId } = req.params as { serverId: string };
+    const { sub: userId } = req.user as { sub: string };
+
+    const membership = await prisma.membership.findUnique({
+      where: { userId_serverId: { userId, serverId } },
+    });
+    if (!membership) return reply.status(403).send({ error: "not a member of this server" });
+
+    const members = await prisma.membership.findMany({
+      where: { serverId },
+      include: { user: { select: { id: true, username: true, avatarUrl: true } }, roles: { include: { role: true } } },
+      orderBy: { joinedAt: "asc" },
+    });
+    return members.map((m) => ({
+      userId: m.user.id,
+      username: m.user.username,
+      avatarUrl: m.user.avatarUrl,
+      joinedAt: m.joinedAt,
+      roles: m.roles.map((r) => ({ id: r.role.id, name: r.role.name })),
+    }));
   });
 
   // Invite management — owner-only, since these are server-settings-level
