@@ -1,6 +1,6 @@
-# Harmony
+# Outpost
 
-A self-hosted Discord alternative. Each Harmony deployment is one
+A self-hosted Discord alternative. Each Outpost deployment is one
 self-hosted community — accounts, text/voice channels, roles, invites, file
 uploads — reachable from a web browser or the native desktop app.
 
@@ -30,8 +30,8 @@ The whole backend (API + web client, Postgres, LiveKit, MinIO) runs via
 Docker Compose:
 
 ```bash
-git clone https://github.com/blindrun/harmony-chat.git
-cd harmony-chat/deploy
+git clone https://github.com/blindrun/outpost-chat.git
+cd outpost-chat/deploy
 ./install.sh
 ```
 
@@ -41,10 +41,10 @@ updating, backups, and port requirements.
 ## Desktop client
 
 Download the latest installer for Windows/macOS/Linux from the
-[Releases page](https://github.com/blindrun/harmony-chat/releases). The
+[Releases page](https://github.com/blindrun/outpost-chat/releases). The
 desktop app is just the web client packaged with Electron — on first
 launch, use "Add a Server" to connect to your own (or anyone else's)
-Harmony instance by address.
+Outpost instance by address.
 
 Installers are unsigned (no paid code-signing certificate for a personal
 project), so Windows SmartScreen / macOS Gatekeeper will warn on first

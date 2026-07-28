@@ -1,6 +1,6 @@
-# Self-hosting Harmony
+# Self-hosting Outpost
 
-This is the "one-click" way to run your own Harmony instance. It brings up
+This is the "one-click" way to run your own Outpost instance. It brings up
 four containers: the app (API + web client), Postgres, LiveKit (voice/video),
 and MinIO (file storage).
 
@@ -18,8 +18,8 @@ and MinIO (file storage).
 ## Quick install
 
 ```bash
-git clone https://github.com/blindrun/harmony-chat.git
-cd harmony-chat/deploy
+git clone https://github.com/blindrun/outpost-chat.git
+cd outpost-chat/deploy
 ./install.sh
 ```
 
@@ -53,8 +53,8 @@ If you don't want to depend on a pre-built `ghcr.io` image (or are testing an
 unreleased change):
 
 ```bash
-docker build -t harmony-chat:local -f ../Dockerfile ..
-APP_IMAGE=harmony-chat:local docker compose up -d
+docker build -t outpost-chat:local -f ../Dockerfile ..
+APP_IMAGE=outpost-chat:local docker compose up -d
 ```
 
 ## Updating
@@ -68,8 +68,8 @@ Database migrations run automatically on container start.
 
 ## Backing up
 
-Everything that matters lives in two named volumes: `harmony-pgdata`
-(Postgres — accounts, messages, channels, roles) and `harmony-minio`
+Everything that matters lives in two named volumes: `outpost-pgdata`
+(Postgres — accounts, messages, channels, roles) and `outpost-minio`
 (uploaded avatars/attachments). Back up both.
 
 ## Known limitation

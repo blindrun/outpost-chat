@@ -101,11 +101,11 @@ export function AddServerModal({
     return (
       <form onSubmit={handleProbe} className="add-server-form">
         <h2>Add a Server</h2>
-        <p className="subtitle">Connect to a self-hosted Harmony instance by address.</p>
+        <p className="subtitle">Connect to a self-hosted Outpost instance by address.</p>
         <label>
           Server Address
           <input
-            placeholder="e.g. harmony.example.com or 192.168.1.50:8080"
+            placeholder="e.g. outpost.example.com or 192.168.1.50:8080"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             autoFocus

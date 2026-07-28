@@ -1,28 +1,29 @@
 :root {
-  --bg-rail: #1e1f22;
-  --bg-sidebar: #2b2d31;
-  --bg-primary: #313338;
-  --bg-secondary: #2b2d31;
-  --bg-modifier-hover: rgba(78, 80, 88, 0.4);
-  --bg-input: #1e1f22;
-  --bg-floating: #111214;
-  --brand: #5865f2;
-  --brand-hover: #4752c4;
-  --green: #23a55a;
-  --red: #f23f42;
-  --header-primary: #f2f3f5;
-  --text-normal: #dbdee1;
-  --text-muted: #949ba4;
-  --text-faint: #80848e;
-  --interactive-hover: #35373c;
-  --interactive-active: #3f4248;
-  --border-subtle: rgba(255, 255, 255, 0.06);
+  --bg-rail: #1a140f;
+  --bg-sidebar: #211a16;
+  --bg-primary: #291f19;
+  --bg-secondary: #211a16;
+  --bg-modifier-hover: rgba(255, 138, 82, 0.1);
+  --bg-input: #1a140f;
+  --bg-floating: #14100c;
+  --brand: #ff8a52;
+  --brand-hover: #c65d3b;
+  --green: #5fa85e;
+  --red: #e6483f;
+  --header-primary: #f7ecd9;
+  --text-normal: #e8dbc8;
+  --text-muted: #ab9884;
+  --text-faint: #7d6c5b;
+  --interactive-hover: #362920;
+  --interactive-active: #43332a;
+  --border-subtle: rgba(242, 230, 216, 0.07);
 }
 
 /* ---------- Themes ---------- */
-/* "business" is the default palette above, unchanged. The other three
-   override the same variable set via [data-theme], applied to <html> by
-   the client based on the active instance's InstanceSettings.theme. */
+/* "business" is the default palette above (Signal Fire — warm ember on
+   deep slate, Outpost's actual brand). The other three override the same
+   variable set via [data-theme], applied to <html> by the client based on
+   the active instance's InstanceSettings.theme. */
 
 [data-theme="cyberpunk"] {
   --bg-rail: #0d0221;

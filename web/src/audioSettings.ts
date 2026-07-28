@@ -8,7 +8,7 @@ export interface AudioSettings {
   vadThreshold: number;
 }
 
-const STORAGE_KEY = "harmony-audio-settings";
+const STORAGE_KEY = "outpost-audio-settings";
 
 const DEFAULT_SETTINGS: AudioSettings = {
   inputDeviceId: null,

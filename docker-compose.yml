@@ -1,38 +1,38 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: discord-clone-postgres
+    container_name: outpost-postgres
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=discord_clone
+      - POSTGRES_USER=outpost_dev
       - POSTGRES_PASSWORD=devpassword
-      - POSTGRES_DB=discord_clone
+      - POSTGRES_DB=outpost_dev
     ports:
       - "5433:5432"
     volumes:
-      - discord-clone-pgdata:/var/lib/postgresql/data
+      - outpost-pgdata:/var/lib/postgresql/data
 
   livekit:
     image: livekit/livekit-server:latest
-    container_name: discord-clone-livekit
+    container_name: outpost-livekit
     restart: unless-stopped
     network_mode: host
     command: --dev
 
   minio:
     image: minio/minio:latest
-    container_name: discord-clone-minio
+    container_name: outpost-minio
     restart: unless-stopped
     environment:
-      - MINIO_ROOT_USER=discord_clone
+      - MINIO_ROOT_USER=outpost_dev
       - MINIO_ROOT_PASSWORD=devpassword123
     ports:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - discord-clone-minio:/data
+      - outpost-minio:/data
     command: server /data --console-address ":9001"
 
 volumes:
-  discord-clone-pgdata:
-  discord-clone-minio:
+  outpost-pgdata:
+  outpost-minio:

@@ -21,7 +21,7 @@ model User {
 
 model InstanceSettings {
   id                      String  @id @default("singleton")
-  name                    String  @default("Harmony")
+  name                    String  @default("Outpost")
   description             String?
   iconUrl                 String?
   theme                   String  @default("business")

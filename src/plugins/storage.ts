@@ -8,7 +8,7 @@ export const minioClient = new Client({
   secretKey: process.env.MINIO_SECRET_KEY ?? "",
 });
 
-export const BUCKET = process.env.MINIO_BUCKET ?? "discord-clone-uploads";
+export const BUCKET = process.env.MINIO_BUCKET ?? "outpost-uploads";
 export const PUBLIC_URL = process.env.MINIO_PUBLIC_URL ?? `http://localhost:9000/${BUCKET}`;
 
 const publicReadPolicy = JSON.stringify({

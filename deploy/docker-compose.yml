@@ -1,13 +1,13 @@
 services:
   app:
-    image: ${APP_IMAGE:-ghcr.io/blindrun/harmony-chat:latest}
+    image: ${APP_IMAGE:-ghcr.io/blindrun/outpost-chat:latest}
     restart: unless-stopped
     depends_on:
       - postgres
       - minio
       - livekit
     environment:
-      - DATABASE_URL=postgresql://harmony:${POSTGRES_PASSWORD}@postgres:5432/harmony
+      - DATABASE_URL=postgresql://outpost:${POSTGRES_PASSWORD}@postgres:5432/outpost
       - JWT_SECRET=${JWT_SECRET}
       - LIVEKIT_URL=${LIVEKIT_URL}
       - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
@@ -16,7 +16,7 @@ services:
       - MINIO_PORT=9000
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
-      - MINIO_BUCKET=harmony-uploads
+      - MINIO_BUCKET=outpost-uploads
       - MINIO_PUBLIC_URL=${MINIO_PUBLIC_URL}
       - CORS_ORIGIN=${CORS_ORIGIN:-}
       - PORT=8080
@@ -27,11 +27,11 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=harmony
+      - POSTGRES_USER=outpost
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=harmony
+      - POSTGRES_DB=outpost
     volumes:
-      - harmony-pgdata:/var/lib/postgresql/data
+      - outpost-pgdata:/var/lib/postgresql/data
 
   livekit:
     image: livekit/livekit-server:latest
@@ -64,12 +64,12 @@ services:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER}
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     volumes:
-      - harmony-minio:/data
+      - outpost-minio:/data
     command: server /data --console-address ":9001"
     ports:
       - "${MINIO_PORT:-9000}:9000"
       - "${MINIO_CONSOLE_PORT:-9001}:9001"
 
 volumes:
-  harmony-pgdata:
-  harmony-minio:
+  outpost-pgdata:
+  outpost-minio:
