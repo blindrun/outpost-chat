@@ -1,0 +1,51 @@
+{
+  "name": "harmony-desktop",
+  "productName": "Harmony",
+  "version": "0.1.0",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "build-web": "node scripts/build-web.js",
+    "dev": "npm run build-web && electron .",
+    "dist": "npm run build-web && electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.harmony-chat.desktop",
+    "productName": "Harmony",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "web-dist/**/*"
+    ],
+    "mac": {
+      "icon": "build/icon.png",
+      "category": "public.app-category.social-networking",
+      "target": [
+        "dmg"
+      ]
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Network",
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    }
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
+  }
+}
