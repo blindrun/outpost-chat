@@ -1,0 +1,54 @@
+name: Desktop client
+
+# Only real way to produce genuine Windows/macOS installers for this
+# project — the dev workstation this repo is built on is Linux-only, and
+# macOS builds in particular need real Apple hardware/toolchain.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install web client deps
+        working-directory: web
+        run: npm ci
+
+      - name: Install Electron deps
+        working-directory: electron
+        run: npm ci
+
+      - name: Build
+        working-directory: electron
+        run: npm run dist
+        env:
+          # No code-signing certs configured — installers are unsigned.
+          # Windows SmartScreen / macOS Gatekeeper will warn on first run;
+          # that's a real limitation of not paying for a signing cert, not
+          # a build error. CSC_IDENTITY_AUTO_DISCOVERY=false stops
+          # electron-builder from failing when it can't find one.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Upload release artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            electron/release/*.dmg
+            electron/release/*.exe
+            electron/release/*.AppImage
+            electron/release/*.deb
+          fail_on_unmatched_files: false
