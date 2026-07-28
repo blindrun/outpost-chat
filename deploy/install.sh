@@ -17,7 +17,8 @@ if [ -z "$PUBLIC_HOST" ]; then
   exit 1
 fi
 
-read -rp "GitHub owner for the harmony-chat image (e.g. your GitHub username) [skip to build locally instead]: " IMAGE_OWNER
+read -rp "GitHub owner of the image to pull [blindrun, i.e. the official image — override only if you forked/built your own]: " IMAGE_OWNER
+IMAGE_OWNER="${IMAGE_OWNER:-blindrun}"
 
 rand() { openssl rand -hex 32; }
 
@@ -38,21 +39,13 @@ sedi "s|^LIVEKIT_API_KEY=.*|LIVEKIT_API_KEY=${LIVEKIT_API_KEY}|"
 sedi "s|^LIVEKIT_API_SECRET=.*|LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}|"
 sedi "s|^LIVEKIT_URL=.*|LIVEKIT_URL=ws://${PUBLIC_HOST}:7880|"
 sedi "s|^MINIO_PUBLIC_URL=.*|MINIO_PUBLIC_URL=http://${PUBLIC_HOST}:9000/harmony-uploads|"
-if [ -n "$IMAGE_OWNER" ]; then
-  sedi "s|^APP_IMAGE=.*|APP_IMAGE=ghcr.io/${IMAGE_OWNER}/harmony-chat:latest|"
-fi
+sedi "s|^APP_IMAGE=.*|APP_IMAGE=ghcr.io/${IMAGE_OWNER}/harmony-chat:latest|"
 
 sed -e "s|__LIVEKIT_API_KEY__|${LIVEKIT_API_KEY}|" -e "s|__LIVEKIT_API_SECRET__|${LIVEKIT_API_SECRET}|" \
   livekit.yaml.template > livekit.yaml
 
 echo
 echo "Generated .env and livekit.yaml."
-if [ -z "$IMAGE_OWNER" ]; then
-  echo "No image owner given — build the image locally first:"
-  echo "  docker build -t harmony-chat:local -f ../Dockerfile .. && APP_IMAGE=harmony-chat:local docker compose up -d"
-  exit 0
-fi
-
 echo "Starting Harmony..."
 docker compose up -d
 

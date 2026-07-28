@@ -18,7 +18,7 @@ and MinIO (file storage).
 ## Quick install
 
 ```bash
-git clone https://github.com/OWNER/harmony-chat.git
+git clone https://github.com/blindrun/harmony-chat.git
 cd harmony-chat/deploy
 ./install.sh
 ```

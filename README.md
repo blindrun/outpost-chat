@@ -30,7 +30,7 @@ The whole backend (API + web client, Postgres, LiveKit, MinIO) runs via
 Docker Compose:
 
 ```bash
-git clone https://github.com/OWNER/harmony-chat.git
+git clone https://github.com/blindrun/harmony-chat.git
 cd harmony-chat/deploy
 ./install.sh
 ```
@@ -41,7 +41,7 @@ updating, backups, and port requirements.
 ## Desktop client
 
 Download the latest installer for Windows/macOS/Linux from the
-[Releases page](https://github.com/OWNER/harmony-chat/releases). The
+[Releases page](https://github.com/blindrun/harmony-chat/releases). The
 desktop app is just the web client packaged with Electron — on first
 launch, use "Add a Server" to connect to your own (or anyone else's)
 Harmony instance by address.

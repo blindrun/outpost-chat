@@ -1,6 +1,6 @@
 services:
   app:
-    image: ${APP_IMAGE:-ghcr.io/OWNER/harmony-chat:latest}
+    image: ${APP_IMAGE:-ghcr.io/blindrun/harmony-chat:latest}
     restart: unless-stopped
     depends_on:
       - postgres
