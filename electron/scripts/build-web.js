@@ -13,11 +13,16 @@ const outDir = path.join(__dirname, "..", "web-dist");
 
 rmSync(outDir, { recursive: true, force: true });
 
+// On Windows, npx resolves to npx.cmd, a batch file that CreateProcess
+// can't launch directly (execFileSync throws EINVAL) — it has to go
+// through a shell.
 const npxCmd = process.platform === "win32" ? "npx.cmd" : "npx";
-execFileSync(npxCmd, ["tsc", "-b"], { cwd: webDir, stdio: "inherit" });
+const shell = process.platform === "win32";
+execFileSync(npxCmd, ["tsc", "-b"], { cwd: webDir, stdio: "inherit", shell });
 execFileSync(npxCmd, ["vite", "build", "--base", "./", "--outDir", outDir, "--emptyOutDir"], {
   cwd: webDir,
   stdio: "inherit",
+  shell,
 });
 
 console.log(`Built web client for Electron -> ${outDir}`);
