@@ -1,0 +1,75 @@
+services:
+  app:
+    image: ${APP_IMAGE:-ghcr.io/OWNER/harmony-chat:latest}
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - minio
+      - livekit
+    environment:
+      - DATABASE_URL=postgresql://harmony:${POSTGRES_PASSWORD}@postgres:5432/harmony
+      - JWT_SECRET=${JWT_SECRET}
+      - LIVEKIT_URL=${LIVEKIT_URL}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+      - MINIO_ENDPOINT=minio
+      - MINIO_PORT=9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - MINIO_BUCKET=harmony-uploads
+      - MINIO_PUBLIC_URL=${MINIO_PUBLIC_URL}
+      - CORS_ORIGIN=${CORS_ORIGIN:-}
+      - PORT=8080
+    ports:
+      - "${APP_PORT:-8080}:8080"
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=harmony
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=harmony
+    volumes:
+      - harmony-pgdata:/var/lib/postgresql/data
+
+  livekit:
+    image: livekit/livekit-server:latest
+    restart: unless-stopped
+    command: --config /etc/livekit.yaml
+    # Host networking, not published ports: LiveKit's media port range
+    # (50000-60000 UDP by default) is 10,000+ ports, and publishing that many
+    # individually through Docker's iptables-based port mapping is extremely
+    # slow — practically hangs `docker compose up`. Host networking sidesteps
+    # that entirely and is also LiveKit's own recommended deployment mode for
+    # real-time media (lowest possible latency/NAT overhead). Matches the
+    # dev docker-compose.yml in the repo root.
+    network_mode: host
+    # LiveKit needs to resolve stun1.l.google.com to auto-detect its public
+    # IP (use_external_ip in livekit.yaml). Many hosts point resolv.conf at
+    # a systemd-resolved loopback stub (127.0.0.53) that only works when
+    # resolving on the host directly — with host networking this container
+    # shares the host's resolv.conf, so this is usually moot, but pin real
+    # public resolvers anyway in case the host's own DNS setup is broken.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    volumes:
+      - harmony-minio:/data
+    command: server /data --console-address ":9001"
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+
+volumes:
+  harmony-pgdata:
+  harmony-minio:

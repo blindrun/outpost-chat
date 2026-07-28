@@ -1,0 +1,12 @@
+port: 7880
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 60000
+  # Auto-detects this host's public IP for ICE candidates so clients behind
+  # NAT (i.e. basically everyone) can actually connect — without this,
+  # voice/video will silently fail to establish for anyone not on the same
+  # LAN as the server.
+  use_external_ip: true
+keys:
+  __LIVEKIT_API_KEY__: __LIVEKIT_API_SECRET__
