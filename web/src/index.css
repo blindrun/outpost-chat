@@ -454,6 +454,8 @@ button, input, select {
 .invite-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.35rem; max-height: 160px; overflow-y: auto; }
 .invite-list li { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; background: var(--bg-input); border-radius: 4px; padding: 0.3rem 0.5rem; }
 .invite-list code { user-select: all; color: var(--header-primary); }
+.invite-row { display: flex; align-items: center; gap: 0.4rem; width: 100%; }
+.invite-link { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.75rem; }
 .invite-meta { color: var(--text-faint); font-size: 0.7rem; }
 .invite-dead { opacity: 0.45; }
 .invite-new-form { display: flex; gap: 0.3rem; }

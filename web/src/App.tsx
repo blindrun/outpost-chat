@@ -54,6 +54,10 @@ function saveSession(instanceId: string, session: Session) {
   localStorage.setItem(`session:${instanceId}`, JSON.stringify(session));
 }
 
+function getInviteCodeFromUrl(): string | null {
+  return new URLSearchParams(window.location.search).get("invite");
+}
+
 function App() {
   const [instances, setInstances] = useState<Instance[]>(loadInstances);
   const [activeInstanceId, setActiveInstanceId] = useState<string | null>(
@@ -61,7 +65,23 @@ function App() {
   );
   const [session, setSession] = useState<Session | null>(null);
   const [instanceInfo, setInstanceInfo] = useState<InstanceInfo | null>(null);
-  const [addServerOpen, setAddServerOpen] = useState(false);
+  // A shared invite link (`https://<instance>/?invite=CODE`) always points
+  // back at the instance that issued it, so the address is just this page's
+  // own origin — the recipient never has to know or type it. Must be read
+  // via lazy useState initializers (not a useEffect) so it's already correct
+  // on AddServerModal's very first mount — an effect runs one render too
+  // late, after the child has already locked in its initial "address" step.
+  const [addServerOpen, setAddServerOpen] = useState(() => !!getInviteCodeFromUrl());
+  const [deepLinkInvite, setDeepLinkInvite] = useState<string | null>(getInviteCodeFromUrl);
+
+  // Strip the query param once mounted so reloading/bookmarking afterward
+  // doesn't re-trigger the same flow.
+  useEffect(() => {
+    if (deepLinkInvite) {
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Record<string, Message[]>>({});
@@ -249,7 +269,12 @@ function App() {
     return (
       <div className="auth-screen">
         <div className="auth-form">
-          <AddServerModal embedded onConnected={handleConnected} />
+          <AddServerModal
+            embedded
+            initialBaseUrl={deepLinkInvite ? window.location.origin : undefined}
+            initialInviteCode={deepLinkInvite ?? undefined}
+            onConnected={handleConnected}
+          />
         </div>
       </div>
     );
@@ -358,10 +383,25 @@ function App() {
       </nav>
 
       {addServerOpen && (
-        <Modal onClose={() => setAddServerOpen(false)}>
-          <AddServerModal onConnected={handleConnected} />
+        <Modal
+          onClose={() => {
+            setAddServerOpen(false);
+            setDeepLinkInvite(null);
+          }}
+        >
+          <AddServerModal
+            initialBaseUrl={deepLinkInvite ? window.location.origin : undefined}
+            initialInviteCode={deepLinkInvite ?? undefined}
+            onConnected={handleConnected}
+          />
           <div className="modal-actions">
-            <button className="btn secondary" onClick={() => setAddServerOpen(false)}>
+            <button
+              className="btn secondary"
+              onClick={() => {
+                setAddServerOpen(false);
+                setDeepLinkInvite(null);
+              }}
+            >
               Close
             </button>
           </div>

@@ -13,7 +13,9 @@ and MinIO (file storage).
 - Open/forwarded ports: `8080` (app, configurable via `APP_PORT`), `7880` +
   `7881` TCP (LiveKit signaling), `50000-60000` UDP (LiveKit media) — the
   LiveKit ports are fixed, not configurable, since LiveKit runs with Docker
-  host networking (see the compose file comments for why)
+  host networking (see the compose file comments for why). Add `80` + `443`
+  too if you're setting up HTTPS (see below) — recommended, required for
+  voice chat.
 
 ## Quick install
 
@@ -23,11 +25,49 @@ cd outpost-chat/deploy
 ./install.sh
 ```
 
-It'll ask for your server's public hostname/IP and a GitHub owner (to pull
-the pre-built image from `ghcr.io`), generate every secret, and start
-everything with `docker compose up -d`.
+It'll ask for your server's public hostname/IP, a GitHub owner (to pull the
+pre-built image from `ghcr.io`), and whether to set up HTTPS — say yes unless
+this is purely LAN/local testing (see [TLS](#tls--reverse-proxy-required-for-voice)
+below for why). It generates every secret and starts everything with
+`docker compose up -d`.
 
 The first account anyone registers on a fresh instance becomes the owner.
+
+## TLS / reverse proxy (required for voice)
+
+Browsers only allow microphone access (`getUserMedia`) on a secure (HTTPS)
+page, so voice chat needs this instance behind HTTPS. That has a
+non-obvious consequence: avatars/attachments (served by MinIO) and voice
+signaling (served by LiveKit) both need to be reachable from the **same**
+HTTPS origin as the app — pointing them at a bare `http://host:9000` or
+`ws://host:7880` instead breaks silently. Browsers auto-upgrade insecure
+`<img>` requests to HTTPS and just fail if nothing's listening there
+(broken avatar/icon images, no visible error); they flatly refuse to even
+attempt an insecure WebSocket from a secure page (voice never connects,
+`DOMException: The operation is insecure` in the console).
+
+If you said yes to the HTTPS prompt, `install.sh` already generated a
+ready-to-use `Caddyfile` in this directory that proxies both
+`/outpost-uploads/*` (MinIO) and `/rtc/*` (LiveKit signaling) through the
+same site as the app, and set `LIVEKIT_URL`/`MINIO_PUBLIC_URL` in `.env` to
+the matching `wss://`/`https://` addresses. To actually put it in effect:
+
+```bash
+# Install Caddy if it isn't already: https://caddyserver.com/docs/install
+sudo cp Caddyfile /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+```
+
+Make sure your domain's DNS already points at this server before reloading
+— Caddy fetches a real Let's Encrypt certificate automatically on first
+request, no manual cert setup needed. Using a different reverse proxy
+(nginx, Traefik, etc.) instead of Caddy is fine too — just replicate the
+same three routes (app, `/outpost-uploads/*` → MinIO, `/rtc/*` → LiveKit)
+under one HTTPS site.
+
+If you're testing on a LAN with no domain/TLS, you can skip this — voice
+chat just won't work until you add it later (re-run `install.sh` after
+deleting `.env` to add TLS to an existing install).
 
 ## Manual install
 
@@ -37,8 +77,8 @@ If you'd rather not run the script:
 cp .env.example .env
 # edit .env: fill in JWT_SECRET, POSTGRES_PASSWORD, MINIO_ROOT_PASSWORD,
 # LIVEKIT_API_KEY, LIVEKIT_API_SECRET (random strings — `openssl rand -hex 32`
-# works well), and set LIVEKIT_URL / MINIO_PUBLIC_URL to your real
-# public host.
+# works well), and set LIVEKIT_URL / MINIO_PUBLIC_URL to your real public
+# host — see the TLS section below for which scheme/URL shape to use.
 
 sed -e "s|__LIVEKIT_API_KEY__|<the key you just picked>|" \
     -e "s|__LIVEKIT_API_SECRET__|<the secret you just picked>|" \

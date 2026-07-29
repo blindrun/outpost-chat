@@ -1,25 +1,35 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Instance, Session } from "./App";
 import { InstanceInfo, Theme, getInstanceInfo, login, register, updateInstanceSettings } from "./api";
 import { ThemePicker } from "./ThemePicker";
 
-type Step = "address" | "auth" | "theme";
+type Step = "address" | "connecting" | "auth" | "theme";
 
-function normalizeBaseUrl(input: string): string {
+// A bare address (no scheme) needs a guess. HTTPS is the right default —
+// any real self-hosted instance behind a reverse proxy needs it (voice
+// requires a secure context), and a page loaded over HTTPS can't even
+// attempt a plain http:// fetch at all (mixed content is blocked outright,
+// not just redirected) — so guessing http first would break the common
+// case with a confusing "couldn't reach that address" instead of a fast,
+// automatic fallback. If an explicit scheme is given, that's respected
+// exactly as typed.
+function candidateBaseUrls(input: string): string[] {
   const trimmed = input.trim().replace(/\/+$/, "");
-  if (/^https?:\/\//.test(trimmed)) return trimmed;
-  return `http://${trimmed}`;
+  if (/^https?:\/\//.test(trimmed)) return [trimmed];
+  return [`https://${trimmed}`, `http://${trimmed}`];
 }
 
 export function AddServerModal({
   initialBaseUrl,
+  initialInviteCode,
   onConnected,
 }: {
   embedded?: boolean;
   initialBaseUrl?: string;
+  initialInviteCode?: string;
   onConnected: (instance: Instance, session: Session) => void;
 }) {
-  const [step, setStep] = useState<Step>("address");
+  const [step, setStep] = useState<Step>(initialBaseUrl && initialInviteCode ? "connecting" : "address");
   const [address, setAddress] = useState(initialBaseUrl ?? "");
   const [label, setLabel] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
@@ -31,7 +41,7 @@ export function AddServerModal({
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [inviteCode, setInviteCode] = useState("");
+  const [inviteCode, setInviteCode] = useState(initialInviteCode ?? "");
   const [authError, setAuthError] = useState<string | null>(null);
   const [authing, setAuthing] = useState(false);
 
@@ -39,24 +49,51 @@ export function AddServerModal({
   const [pendingInstance, setPendingInstance] = useState<Instance | null>(null);
   const [theme, setTheme] = useState<Theme>("business");
 
-  async function handleProbe(e: React.FormEvent) {
-    e.preventDefault();
+  async function probeAddress(rawAddress: string) {
     setProbeError(null);
     setProbing(true);
-    try {
-      const normalized = normalizeBaseUrl(address);
-      const instanceInfo = await getInstanceInfo(normalized);
-      setBaseUrl(normalized);
-      setInfo(instanceInfo);
-      setAuthMode(instanceInfo.hasOwner ? "login" : "register");
-      setStep("auth");
-    } catch (err) {
-      setProbeError("Couldn't reach that address — check it's correct and the instance is running.");
-      console.error(err);
-    } finally {
-      setProbing(false);
+    let lastErr: unknown;
+    for (const candidate of candidateBaseUrls(rawAddress)) {
+      try {
+        const instanceInfo = await getInstanceInfo(candidate);
+        setBaseUrl(candidate);
+        setInfo(instanceInfo);
+        // An invite link always means "join via invite" — even though a
+        // pre-existing instance normally defaults to the Log In tab.
+        setAuthMode(instanceInfo.hasOwner && !initialInviteCode ? "login" : "register");
+        setStep("auth");
+        setProbing(false);
+        return;
+      } catch (err) {
+        lastErr = err;
+      }
     }
+    // Fall back to the manual address form so there's always a way
+    // forward, even if the auto-connect (invite link) attempt failed.
+    setStep("address");
+    setProbeError("Couldn't reach that address — check it's correct and the instance is running.");
+    console.error(lastErr);
+    setProbing(false);
   }
+
+  function handleProbe(e: React.FormEvent) {
+    e.preventDefault();
+    probeAddress(address);
+  }
+
+  // Invite links (`?invite=CODE`) arrive with both the address and the code
+  // already known — skip the manual "Connect" click and go straight to the
+  // auth step so the recipient doesn't have to figure out where to type
+  // anything.
+  const autoProbedRef = useRef(false);
+  useEffect(() => {
+    if (autoProbedRef.current) return;
+    if (initialBaseUrl && initialInviteCode) {
+      autoProbedRef.current = true;
+      probeAddress(initialBaseUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleAuth(e: React.FormEvent) {
     e.preventDefault();
@@ -95,6 +132,15 @@ export function AddServerModal({
       console.error(err);
     }
     onConnected(pendingInstance, pendingSession);
+  }
+
+  if (step === "connecting") {
+    return (
+      <div className="add-server-form">
+        <h2>Joining…</h2>
+        <p className="subtitle">Connecting to your invite.</p>
+      </div>
+    );
   }
 
   if (step === "address") {

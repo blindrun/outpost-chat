@@ -9,11 +9,26 @@ function isSpent(invite: Invite) {
   return invite.maxUses !== null && invite.uses >= invite.maxUses;
 }
 
+function inviteLink(baseUrl: string, code: string): string {
+  return `${baseUrl.replace(/\/+$/, "")}/?invite=${code}`;
+}
+
 export function InvitePanel({ baseUrl, token }: { baseUrl: string; token: string }) {
   const [invites, setInvites] = useState<Invite[]>([]);
   const [maxUses, setMaxUses] = useState("");
   const [expiresMinutes, setExpiresMinutes] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  async function handleCopy(inv: Invite) {
+    try {
+      await navigator.clipboard.writeText(inviteLink(baseUrl, inv.code));
+      setCopiedId(inv.id);
+      setTimeout(() => setCopiedId((id) => (id === inv.id ? null : id)), 1500);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
 
   function refresh() {
     listInvites(baseUrl, token).then(setInvites).catch((err) => setError(err.message));
@@ -77,7 +92,14 @@ export function InvitePanel({ baseUrl, token }: { baseUrl: string; token: string
           const dead = inv.revoked || expired || spent;
           return (
             <li key={inv.id} className={dead ? "invite-dead" : ""}>
-              <code>{inv.code}</code>
+              <div className="invite-row">
+                <code className="invite-link">{inviteLink(baseUrl, inv.code)}</code>
+                {!dead && (
+                  <button type="button" className="text-btn" onClick={() => handleCopy(inv)}>
+                    {copiedId === inv.id ? "copied!" : "copy link"}
+                  </button>
+                )}
+              </div>
               <span className="invite-meta">
                 {inv.uses}
                 {inv.maxUses !== null ? `/${inv.maxUses}` : ""} uses
