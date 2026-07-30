@@ -174,10 +174,23 @@ export function getCurrentUser(baseUrl: string, token: string) {
   return request<User>(baseUrl, "/auth/me", token);
 }
 
-export function register(baseUrl: string, username: string, email: string, password: string, inviteCode?: string) {
+export function register(
+  baseUrl: string,
+  username: string,
+  email: string,
+  password: string,
+  inviteCode?: string,
+  claimCode?: string,
+) {
   return request<{ token: string; user: User }>(baseUrl, "/auth/register", null, {
     method: "POST",
-    body: JSON.stringify({ username, email, password, ...(inviteCode ? { inviteCode } : {}) }),
+    body: JSON.stringify({
+      username,
+      email,
+      password,
+      ...(inviteCode ? { inviteCode } : {}),
+      ...(claimCode ? { claimCode } : {}),
+    }),
   });
 }
 

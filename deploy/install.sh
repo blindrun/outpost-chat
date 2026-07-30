@@ -73,6 +73,23 @@ echo "Starting Outpost..."
 docker compose up -d
 
 echo
+echo "Waiting for the claim code (a fresh instance needs this to register its"
+echo "owner account, printed once at startup)..."
+CLAIM_CODE=""
+for _ in $(seq 1 30); do
+  CLAIM_CODE=$(docker compose logs app 2>/dev/null | grep -oE '[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}' | tail -1 || true)
+  [[ -n "$CLAIM_CODE" ]] && break
+  sleep 1
+done
+if [[ -n "$CLAIM_CODE" ]]; then
+  echo "Claim code: ${CLAIM_CODE}"
+  echo "(also printed anytime in 'docker compose logs app' until it's used)"
+else
+  echo "Didn't see it yet — check 'docker compose logs app' once the app"
+  echo "container is up."
+fi
+
+echo
 if [[ "$USE_TLS" =~ ^[Yy] ]]; then
   echo "Generated ./Caddyfile — install Caddy (https://caddyserver.com/docs/install)"
   echo "on this host if it isn't already, then:"
@@ -96,4 +113,5 @@ else
   echo "            ${PUBLIC_HOST}:${APP_PORT}"
 fi
 echo
-echo "The first account you register becomes the instance owner."
+echo "The client shows a \"Claim This Server\" prompt for a fresh instance —"
+echo "enter the claim code above there to register the owner account."

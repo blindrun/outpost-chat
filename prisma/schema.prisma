@@ -29,6 +29,16 @@ model InstanceSettings {
   defaultChannelId        String?
 }
 
+// One-time code an admin reads off the server console (like TeamSpeak's
+// ServerAdmin privilege key) and enters in the client to claim ownership
+// of a fresh instance — replaces "whoever registers first becomes owner"
+// with an explicit, out-of-band-verified handoff. Deleted once consumed.
+model ClaimCode {
+  id        String   @id @default("singleton")
+  code      String
+  createdAt DateTime @default(now())
+}
+
 model Invite {
   id        String    @id @default(uuid())
   code      String    @unique
