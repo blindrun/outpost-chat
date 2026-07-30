@@ -208,6 +208,7 @@ button, input, select {
   grid-template-columns: 72px 240px 1fr 240px;
   height: 100vh;
 }
+.app.member-list-collapsed { grid-template-columns: 72px 240px 1fr; }
 
 /* ---------- Server rail ---------- */
 
@@ -526,6 +527,7 @@ button, input, select {
   border-radius: 4px;
 }
 .chat-header-icon-btn:hover { opacity: 1; background: var(--interactive-hover); }
+.chat-header-icon-btn.active { opacity: 1; background: var(--interactive-hover); color: var(--brand); }
 .chat-placeholder { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
 
 .search-results { display: flex; flex-direction: column; gap: 0.3rem; max-height: 50vh; overflow-y: auto; margin-top: 0.6rem; }
