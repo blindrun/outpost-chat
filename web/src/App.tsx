@@ -125,6 +125,10 @@ function App() {
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [openPicker, setOpenPicker] = useState<"emoji" | "gif" | null>(null);
   const [voiceDetailsOpen, setVoiceDetailsOpen] = useState(false);
+  const [memberListOpen, setMemberListOpen] = useState(() => localStorage.getItem("memberListOpen") !== "false");
+  useEffect(() => {
+    localStorage.setItem("memberListOpen", String(memberListOpen));
+  }, [memberListOpen]);
   const draftInputRef = useRef<HTMLInputElement | null>(null);
   const [userSettingsOpen, setUserSettingsOpen] = useState(false);
   const [instanceSettingsOpen, setInstanceSettingsOpen] = useState(false);
@@ -471,7 +475,7 @@ function App() {
   const voiceChannels = channels.filter((c) => c.type === "VOICE");
 
   return (
-    <div className="app">
+    <div className={`app ${memberListOpen ? "" : "member-list-collapsed"}`}>
       <nav className="server-rail">
         {instances.map((instance) => (
           <div key={instance.id} className={`server-icon-wrapper ${instance.id === activeInstanceId ? "active" : ""}`}>
@@ -729,6 +733,14 @@ function App() {
               <button type="button" className="chat-header-icon-btn" title="Search" onClick={() => setSearchOpen(true)}>
                 🔍
               </button>
+              <button
+                type="button"
+                className={`chat-header-icon-btn ${memberListOpen ? "active" : ""}`}
+                title={memberListOpen ? "Hide Member List" : "Show Member List"}
+                onClick={() => setMemberListOpen((v) => !v)}
+              >
+                👥
+              </button>
             </div>
             <div className="messages">
               {channelMessages.map((m) => (
@@ -844,7 +856,9 @@ function App() {
           <div className="chat-placeholder">Select a channel</div>
         )}
       </main>
-      <MemberList baseUrl={activeInstance.baseUrl} token={session.token} onlineUserIds={onlineUserIds} />
+      {memberListOpen && (
+        <MemberList baseUrl={activeInstance.baseUrl} token={session.token} onlineUserIds={onlineUserIds} />
+      )}
     </div>
   );
 }
