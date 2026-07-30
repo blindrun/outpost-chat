@@ -14,7 +14,13 @@ import {
 } from "./rooms.js";
 import { PERMISSIONS, hasPermission } from "../util/permissions.js";
 import { hydrateAuthors, hydrateReplyPreviews } from "../routes/messages.js";
-import { isAutomodBlocked, handlePostMessageBotHooks, handleReactionRoleToggle } from "../util/bot.js";
+import {
+  isAutomodBlocked,
+  handlePostMessageBotHooks,
+  handleReactionRoleToggle,
+  isUserMuted,
+  recordWarning,
+} from "../util/bot.js";
 
 const clientMessageSchema = z.discriminatedUnion("type", [
   z.object({
@@ -101,8 +107,18 @@ export async function gatewayRoutes(app: FastifyInstance) {
             return;
           }
 
+          if (await isUserMuted(userId)) {
+            sendError("you are muted and cannot send messages right now");
+            return;
+          }
+
           if (parsed.content.trim() && (await isAutomodBlocked(parsed.content))) {
-            sendError("message blocked: contains a banned word");
+            const result = await recordWarning(userId, "message blocked by automod (banned word)", "automod");
+            sendError(
+              result.muted
+                ? `message blocked: contains a banned word. You've been muted for repeated violations (warning ${result.count}/${result.threshold}).`
+                : `message blocked: contains a banned word (warning ${result.count}/${result.threshold}).`,
+            );
             return;
           }
 

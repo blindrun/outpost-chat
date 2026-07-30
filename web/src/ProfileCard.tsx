@@ -1,5 +1,14 @@
 import { useEffect, useState } from "react";
-import { Member, Role, assignRole, getMemberProfile, unassignRole } from "./api";
+import {
+  Member,
+  Role,
+  assignRole,
+  getMemberProfile,
+  muteMember,
+  unassignRole,
+  unmuteMember,
+  warnMember,
+} from "./api";
 
 export function ProfileCard({
   baseUrl,
@@ -8,6 +17,7 @@ export function ProfileCard({
   currentUserId,
   isOnline,
   canManageRoles,
+  canModerate,
   roles,
   onClose,
   onEditProfile,
@@ -18,12 +28,15 @@ export function ProfileCard({
   currentUserId: string;
   isOnline: boolean;
   canManageRoles: boolean;
+  canModerate: boolean;
   roles: Role[];
   onClose: () => void;
   onEditProfile: () => void;
 }) {
   const [profile, setProfile] = useState<Member | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [modNotice, setModNotice] = useState<string | null>(null);
+  const [warnReason, setWarnReason] = useState("");
 
   function refresh() {
     getMemberProfile(baseUrl, token, userId)
@@ -40,6 +53,45 @@ export function ProfileCard({
     try {
       if (has) await unassignRole(baseUrl, token, userId, roleId);
       else await assignRole(baseUrl, token, userId, roleId);
+      refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function handleWarn() {
+    if (!warnReason.trim()) return;
+    setError(null);
+    try {
+      const result = await warnMember(baseUrl, token, userId, warnReason.trim());
+      setWarnReason("");
+      setModNotice(
+        result.muted
+          ? `Warned (${result.count}/${result.threshold}) — auto-muted for repeated violations.`
+          : `Warned (${result.count}/${result.threshold}).`,
+      );
+      refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function handleMute(minutes: number) {
+    setError(null);
+    try {
+      await muteMember(baseUrl, token, userId, minutes);
+      setModNotice(`Muted for ${minutes} minutes.`);
+      refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function handleUnmute() {
+    setError(null);
+    try {
+      await unmuteMember(baseUrl, token, userId);
+      setModNotice("Unmuted.");
       refresh();
     } catch (err) {
       setError((err as Error).message);
@@ -75,21 +127,53 @@ export function ProfileCard({
                 Edit Profile
               </button>
             ) : (
-              canManageRoles && (
-                <>
-                  <h4>Roles</h4>
-                  {roles.map((r) => {
-                    const has = profile.roles.some((mr) => mr.id === r.id);
-                    return (
-                      <label key={r.id} className="checkbox-label">
-                        <input type="checkbox" checked={has} onChange={() => toggleRole(r.id, has)} />
-                        {r.name}
-                      </label>
-                    );
-                  })}
-                  {roles.length === 0 && <p className="picker-empty">No roles created yet.</p>}
-                </>
-              )
+              <>
+                {canManageRoles && (
+                  <>
+                    <h4>Roles</h4>
+                    {roles.map((r) => {
+                      const has = profile.roles.some((mr) => mr.id === r.id);
+                      return (
+                        <label key={r.id} className="checkbox-label">
+                          <input type="checkbox" checked={has} onChange={() => toggleRole(r.id, has)} />
+                          {r.name}
+                        </label>
+                      );
+                    })}
+                    {roles.length === 0 && <p className="picker-empty">No roles created yet.</p>}
+                  </>
+                )}
+                {canModerate && (
+                  <>
+                    <h4>Moderation</h4>
+                    {profile.mutedUntil && new Date(profile.mutedUntil) > new Date() && (
+                      <p className="invite-meta">Muted until {new Date(profile.mutedUntil).toLocaleString()}</p>
+                    )}
+                    {modNotice && <p className="invite-meta">{modNotice}</p>}
+                    <div className="mod-warn-row">
+                      <input
+                        value={warnReason}
+                        onChange={(e) => setWarnReason(e.target.value)}
+                        placeholder="Warning reason"
+                      />
+                      <button type="button" className="btn secondary" onClick={handleWarn} disabled={!warnReason.trim()}>
+                        Warn
+                      </button>
+                    </div>
+                    <div className="mod-actions-row">
+                      <button type="button" className="btn secondary" onClick={() => handleMute(10)}>
+                        Mute 10m
+                      </button>
+                      <button type="button" className="btn secondary" onClick={() => handleMute(60)}>
+                        Mute 1h
+                      </button>
+                      <button type="button" className="btn secondary" onClick={handleUnmute}>
+                        Unmute
+                      </button>
+                    </div>
+                  </>
+                )}
+              </>
             )}
             <button type="button" className="btn secondary" onClick={onClose}>
               Close

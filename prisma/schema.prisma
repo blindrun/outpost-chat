@@ -19,8 +19,28 @@ model User {
   bio          String?
   isOwner      Boolean  @default(false)
   createdAt    DateTime @default(now())
+  // Timed moderation mute — blocks MESSAGE_SEND entirely (unlike automod's
+  // per-message banned-word block) until this timestamp passes. Set either
+  // manually via POST /moderation/mute or automatically once a user's
+  // rolling warning count crosses BotSettings.automodWarnThreshold.
+  mutedUntil   DateTime?
 
   memberRoles UserRole[]
+  warnings    Warning[]
+}
+
+// One row per warning (automod-triggered or a moderator's manual !-style
+// action via POST /moderation/warn). Kept indefinitely as a history log;
+// escalation only counts warnings inside a rolling window (see
+// recordWarning in util/bot.ts), not the lifetime total.
+model Warning {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reason      String
+  source      String // "automod" | "manual"
+  moderatorId String? // null for automod-issued warnings
+  createdAt   DateTime @default(now())
 }
 
 model InstanceSettings {
@@ -164,6 +184,10 @@ model BotSettings {
 
   automodEnabled     Boolean  @default(false)
   automodBannedWords String[] @default([])
+  // Escalation beyond delete-on-match: automodWarnThreshold warnings inside
+  // a rolling 24h window auto-mutes the user for automodMuteMinutes.
+  automodWarnThreshold Int @default(3)
+  automodMuteMinutes   Int @default(10)
 }
 
 model CustomCommand {

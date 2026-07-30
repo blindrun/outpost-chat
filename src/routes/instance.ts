@@ -28,7 +28,7 @@ const createChannelSchema = z.object({
 
 const createRoleSchema = z.object({
   name: z.string().min(1).max(32),
-  permissions: z.array(z.enum(["MANAGE_CHANNELS", "MANAGE_ROLES", "SEND_MESSAGES"])).default([]),
+  permissions: z.array(z.enum(["MANAGE_CHANNELS", "MANAGE_ROLES", "SEND_MESSAGES", "MODERATE_MEMBERS"])).default([]),
 });
 
 const assignRoleSchema = z.object({
@@ -117,6 +117,7 @@ export async function instanceRoutes(app: FastifyInstance) {
       avatarUrl: u.avatarUrl,
       bio: u.bio,
       joinedAt: u.createdAt,
+      mutedUntil: u.mutedUntil,
       roles: u.memberRoles.map((mr) => ({ id: mr.role.id, name: mr.role.name })),
     }));
   });
@@ -138,6 +139,7 @@ export async function instanceRoutes(app: FastifyInstance) {
       avatarUrl: user.avatarUrl,
       bio: user.bio,
       joinedAt: user.createdAt,
+      mutedUntil: user.mutedUntil,
       roles: user.memberRoles.map((mr) => ({ id: mr.role.id, name: mr.role.name })),
     };
   });

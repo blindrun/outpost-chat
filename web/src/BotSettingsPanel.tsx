@@ -209,6 +209,8 @@ export function BotSettingsPanel({ baseUrl, token, channels }: { baseUrl: string
   const [levelUpMessage, setLevelUpMessage] = useState("");
   const [automodEnabled, setAutomodEnabled] = useState(false);
   const [automodWords, setAutomodWords] = useState("");
+  const [automodWarnThreshold, setAutomodWarnThreshold] = useState(3);
+  const [automodMuteMinutes, setAutomodMuteMinutes] = useState(10);
 
   function refresh() {
     Promise.all([getBotConfig(baseUrl, token), listRoles(baseUrl, token)])
@@ -228,6 +230,8 @@ export function BotSettingsPanel({ baseUrl, token, channels }: { baseUrl: string
         setLevelUpMessage(c.settings.levelUpMessage);
         setAutomodEnabled(c.settings.automodEnabled);
         setAutomodWords(c.settings.automodBannedWords.join(", "));
+        setAutomodWarnThreshold(c.settings.automodWarnThreshold);
+        setAutomodMuteMinutes(c.settings.automodMuteMinutes);
       })
       .catch((err) => setError(err.message));
   }
@@ -256,6 +260,8 @@ export function BotSettingsPanel({ baseUrl, token, channels }: { baseUrl: string
           .split(",")
           .map((w) => w.trim())
           .filter(Boolean),
+        automodWarnThreshold,
+        automodMuteMinutes,
       });
       refresh();
     } catch (err) {
@@ -393,10 +399,32 @@ export function BotSettingsPanel({ baseUrl, token, channels }: { baseUrl: string
           Block messages containing banned words
         </label>
         {automodEnabled && (
-          <label>
-            Banned words (comma-separated)
-            <input value={automodWords} onChange={(e) => setAutomodWords(e.target.value)} placeholder="word1, word2, word3" />
-          </label>
+          <>
+            <label>
+              Banned words (comma-separated)
+              <input value={automodWords} onChange={(e) => setAutomodWords(e.target.value)} placeholder="word1, word2, word3" />
+            </label>
+            <label>
+              Warnings before auto-mute (rolling 24h window)
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={automodWarnThreshold}
+                onChange={(e) => setAutomodWarnThreshold(Number(e.target.value))}
+              />
+            </label>
+            <label>
+              Auto-mute duration (minutes)
+              <input
+                type="number"
+                min={1}
+                max={10080}
+                value={automodMuteMinutes}
+                onChange={(e) => setAutomodMuteMinutes(Number(e.target.value))}
+              />
+            </label>
+          </>
         )}
 
         {error && <p className="error">{error}</p>}

@@ -129,6 +129,7 @@ function App() {
   const [gatewayGeneration, setGatewayGeneration] = useState(0);
   const [pendingAttachment, setPendingAttachment] = useState<{ url: string; name: string } | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [composerNotice, setComposerNotice] = useState<string | null>(null);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [openPicker, setOpenPicker] = useState<"emoji" | "gif" | null>(null);
   const [voiceDetailsOpen, setVoiceDetailsOpen] = useState(false);
@@ -284,6 +285,12 @@ function App() {
           else next.delete(event.userId);
           return next;
         });
+      } else if (event.type === "ERROR") {
+        // Surfaces gateway-level rejections a user needs to see, chiefly
+        // automod's own "banned word (warning N/M)" / mute messages — these
+        // otherwise fail silently since the composer just doesn't get a new
+        // message back.
+        setComposerNotice(event.error);
       } else if (event.type === "TYPING_START") {
         setTypingByChannel((prev) => ({ ...prev, [event.channelId]: event.username }));
         clearTimeout(typingTimeouts.current[event.channelId]);
@@ -402,6 +409,7 @@ function App() {
   function handleSend(e: React.FormEvent) {
     e.preventDefault();
     if ((!draft.trim() && !pendingAttachment) || !selectedChannelId || !gatewayRef.current) return;
+    setComposerNotice(null);
     gatewayRef.current.sendMessage(selectedChannelId, draft.trim(), pendingAttachment?.url, replyTarget?.id);
     setDraft("");
     setPendingAttachment(null);
@@ -500,6 +508,9 @@ function App() {
   const canManageRoles =
     session.user.isOwner ||
     (currentMember?.roles.some((r) => roles.find((role) => role.id === r.id)?.permissions.includes("MANAGE_ROLES")) ?? false);
+  const canModerate =
+    session.user.isOwner ||
+    (currentMember?.roles.some((r) => roles.find((role) => role.id === r.id)?.permissions.includes("MODERATE_MEMBERS")) ?? false);
   const mentionMatches =
     mentionQuery !== null
       ? members.filter((m) => m.username.toLowerCase().startsWith(mentionQuery.toLowerCase())).slice(0, 8)
@@ -730,6 +741,7 @@ function App() {
           currentUserId={session.user.id}
           isOnline={onlineUserIds.has(viewingProfileUserId)}
           canManageRoles={canManageRoles}
+          canModerate={canModerate}
           roles={roles}
           onClose={() => setViewingProfileUserId(null)}
           onEditProfile={() => {
@@ -855,6 +867,14 @@ function App() {
                 </div>
               )}
               {uploadError && <p className="error">{uploadError}</p>}
+              {composerNotice && (
+                <p className="error composer-notice">
+                  {composerNotice}
+                  <button type="button" onClick={() => setComposerNotice(null)}>
+                    ✕
+                  </button>
+                </p>
+              )}
               {openPicker && (
                 <div className="picker-popover">
                   {openPicker === "emoji" ? (

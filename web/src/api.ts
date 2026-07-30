@@ -93,7 +93,7 @@ export interface SearchResult extends Message {
   channelName: string;
 }
 
-export type Permission = "MANAGE_CHANNELS" | "MANAGE_ROLES" | "SEND_MESSAGES";
+export type Permission = "MANAGE_CHANNELS" | "MANAGE_ROLES" | "SEND_MESSAGES" | "MODERATE_MEMBERS";
 
 export interface Role {
   id: string;
@@ -108,6 +108,7 @@ export interface Member {
   avatarUrl: string | null;
   bio: string | null;
   joinedAt: string;
+  mutedUntil: string | null;
   roles: { id: string; name: string }[];
 }
 
@@ -126,6 +127,8 @@ export interface BotSettings {
   levelUpMessage: string;
   automodEnabled: boolean;
   automodBannedWords: string[];
+  automodWarnThreshold: number;
+  automodMuteMinutes: number;
 }
 
 export interface CustomCommand {
@@ -399,6 +402,39 @@ export interface LeaderboardEntry {
 
 export function getLeaderboard(baseUrl: string, token: string) {
   return request<LeaderboardEntry[]>(baseUrl, "/bot/leaderboard", token);
+}
+
+export interface Warning {
+  id: string;
+  userId: string;
+  reason: string;
+  source: "automod" | "manual";
+  moderatorId: string | null;
+  createdAt: string;
+}
+
+export function getWarnings(baseUrl: string, token: string, userId: string) {
+  return request<Warning[]>(baseUrl, `/moderation/warnings/${userId}`, token);
+}
+
+export function warnMember(baseUrl: string, token: string, userId: string, reason: string) {
+  return request<{ count: number; threshold: number; muted: boolean; mutedUntil: string | null }>(
+    baseUrl,
+    `/moderation/${userId}/warn`,
+    token,
+    { method: "POST", body: JSON.stringify({ reason }) },
+  );
+}
+
+export function muteMember(baseUrl: string, token: string, userId: string, minutes: number, reason?: string) {
+  return request<{ mutedUntil: string }>(baseUrl, `/moderation/${userId}/mute`, token, {
+    method: "POST",
+    body: JSON.stringify({ minutes, reason }),
+  });
+}
+
+export function unmuteMember(baseUrl: string, token: string, userId: string) {
+  return request<void>(baseUrl, `/moderation/${userId}/unmute`, token, { method: "POST" });
 }
 
 type GatewayEvent =
