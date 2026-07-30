@@ -86,6 +86,14 @@ function getInviteCodeFromUrl(): string | null {
   return new URLSearchParams(window.location.search).get("invite");
 }
 
+// The official public instance, run by the Outpost project itself — offered
+// as the default "Add a Server" address on a fresh install (no servers
+// configured yet, no invite link) so a first-time user has something real
+// to connect to instead of a blank address field. Purely a client-side
+// default; nothing stops someone from typing a different address instead,
+// and it's just as leave-able as any other added server.
+const PRIMARY_SERVER_URL = "https://outpost.sonofatech.com";
+
 function App() {
   const [instances, setInstances] = useState<Instance[]>(loadInstances);
   const [activeInstanceId, setActiveInstanceId] = useState<string | null>(
@@ -100,6 +108,12 @@ function App() {
   // on AddServerModal's very first mount — an effect runs one render too
   // late, after the child has already locked in its initial "address" step.
   const [addServerOpen, setAddServerOpen] = useState(() => !!getInviteCodeFromUrl());
+  const [contextMenuInstanceId, setContextMenuInstanceId] = useState<string | null>(null);
+  // Captured at click time and rendered via `position: fixed` — the server
+  // rail has `overflow-y: auto`, which per the CSS spec implicitly clips the
+  // x-axis too, so a menu positioned `absolute` relative to the icon (inside
+  // the rail) gets silently clipped away instead of showing next to it.
+  const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [deepLinkInvite, setDeepLinkInvite] = useState<string | null>(getInviteCodeFromUrl);
 
   // Strip the query param once mounted so reloading/bookmarking afterward
@@ -376,13 +390,40 @@ function App() {
     setGatewayGeneration((g) => g + 1);
   }
 
+  // Only removes this client's local record of the server (its bookmark +
+  // stored session) — nothing server-side changes, so it's just as
+  // reversible as adding it again via the same address. If it was the
+  // active instance, falls back to whichever server is left, or back to
+  // the "Add a Server" screen if none are.
+  function leaveInstance(id: string) {
+    localStorage.removeItem(`session:${id}`);
+    setInstances((prev) => {
+      const next = prev.filter((i) => i.id !== id);
+      saveInstances(next);
+      if (id === activeInstanceId) {
+        const fallback = next[0]?.id ?? null;
+        if (fallback) localStorage.setItem("activeInstanceId", fallback);
+        else localStorage.removeItem("activeInstanceId");
+        voice.leave();
+        setActiveInstanceId(fallback);
+        setSession(null);
+        setSelectedChannelId(null);
+        setChannels([]);
+        setMessages({});
+        setGatewayGeneration((g) => g + 1);
+      }
+      return next;
+    });
+    setContextMenuInstanceId(null);
+  }
+
   if (instances.length === 0 || !activeInstance) {
     return (
       <div className="auth-screen">
         <div className="auth-form">
           <AddServerModal
             embedded
-            initialBaseUrl={deepLinkInvite ? window.location.origin : undefined}
+            initialBaseUrl={deepLinkInvite ? window.location.origin : PRIMARY_SERVER_URL}
             initialInviteCode={deepLinkInvite ?? undefined}
             onConnected={handleConnected}
           />
@@ -563,6 +604,12 @@ function App() {
               className={`server-icon ${instance.id === activeInstanceId ? "active" : ""}`}
               title={instance.label}
               onClick={() => switchInstance(instance.id)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                const rect = e.currentTarget.getBoundingClientRect();
+                setContextMenuPos({ x: rect.right + 8, y: rect.top });
+                setContextMenuInstanceId(instance.id);
+              }}
             >
               {instance.id === activeInstanceId && instanceInfo?.iconUrl ? (
                 <img src={instanceInfo.iconUrl} alt="" />
@@ -570,6 +617,17 @@ function App() {
                 initials(instance.label)
               )}
             </button>
+            {contextMenuInstanceId === instance.id && contextMenuPos && (
+              <>
+                <div className="server-context-backdrop" onClick={() => setContextMenuInstanceId(null)} />
+                <div className="server-context-menu" style={{ left: contextMenuPos.x, top: contextMenuPos.y }}>
+                  <div className="server-context-label">{instance.label}</div>
+                  <button type="button" className="server-context-item danger" onClick={() => leaveInstance(instance.id)}>
+                    Leave Server
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         ))}
         <div className="rail-divider" />
