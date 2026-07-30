@@ -149,4 +149,25 @@ export async function botRoutes(app: FastifyInstance) {
     await refreshReactionRoleMenu();
     return reply.status(204).send();
   });
+
+  // Leaderboard — any authenticated member can view it (same reasoning as
+  // the !leaderboard chat command it mirrors: leveling is a whole-instance
+  // feature, not an admin-only view). Real UI equivalent of that text
+  // command, not owner-gated like the rest of this file.
+  app.get("/bot/leaderboard", { onRequest: [app.authenticate] }, async () => {
+    const top = await prisma.userLevel.findMany({ orderBy: { xp: "desc" }, take: 50 });
+    const users = await prisma.user.findMany({
+      where: { id: { in: top.map((t) => t.userId) } },
+      select: { id: true, username: true, avatarUrl: true },
+    });
+    const userById = new Map(users.map((u) => [u.id, u]));
+    return top.map((t) => ({
+      userId: t.userId,
+      username: userById.get(t.userId)?.username ?? "unknown",
+      avatarUrl: userById.get(t.userId)?.avatarUrl ?? null,
+      level: t.level,
+      xp: t.xp,
+      messageCount: t.messageCount,
+    }));
+  });
 }

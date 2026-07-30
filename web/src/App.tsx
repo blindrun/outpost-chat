@@ -29,6 +29,7 @@ import { MemberList } from "./MemberList";
 import { ProfileCard } from "./ProfileCard";
 import { SearchPanel } from "./SearchPanel";
 import { PinnedMessagesPanel } from "./PinnedMessagesPanel";
+import { LeaderboardPanel } from "./LeaderboardPanel";
 
 // Matches a trailing "@partial" token in the text up to the cursor — used to
 // drive the mention-autocomplete popover. Must be at the start of the text
@@ -141,10 +142,12 @@ function App() {
   const [instanceSettingsOpen, setInstanceSettingsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [pinsOpen, setPinsOpen] = useState(false);
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [replyTarget, setReplyTarget] = useState<Message | null>(null);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const gatewayRef = useRef<Gateway | null>(null);
   const typingTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const micPromptedRef = useRef(false);
 
   const activeInstance = instances.find((i) => i.id === activeInstanceId) ?? null;
 
@@ -194,6 +197,27 @@ function App() {
       })
       .catch(console.error);
   }, [activeInstance?.baseUrl]);
+
+  // Prompt for mic access right after login instead of waiting for the
+  // first voice-channel join — asking cold mid-join was a rougher first
+  // experience (click Join Voice, get interrupted by a permission popup,
+  // audio briefly not working until it's granted). Fire-and-forget: the
+  // stream is only requested to trigger the OS/browser permission prompt
+  // and unlock device labels for enumerateDevices() (see
+  // UserSettingsModal's Voice tab), then immediately released — actual
+  // voice join still creates its own stream via LiveKit. Guarded by a ref
+  // so it only ever fires once per app load, not on every reconnect.
+  useEffect(() => {
+    if (!session || micPromptedRef.current) return;
+    micPromptedRef.current = true;
+    navigator.mediaDevices
+      ?.getUserMedia({ audio: true })
+      .then((stream) => stream.getTracks().forEach((t) => t.stop()))
+      .catch(() => {
+        // Denied or no mic present — same fallback as the existing Voice
+        // settings flow, nothing further to do here.
+      });
+  }, [session]);
 
   // Connect to the gateway once authenticated against the active instance.
   useEffect(() => {
@@ -746,6 +770,9 @@ function App() {
           onClose={() => setPinsOpen(false)}
         />
       )}
+      {leaderboardOpen && (
+        <LeaderboardPanel baseUrl={activeInstance.baseUrl} token={session.token} onClose={() => setLeaderboardOpen(false)} />
+      )}
 
       <main className="chat-pane">
         {selectedChannel ? (
@@ -759,6 +786,11 @@ function App() {
               <button type="button" className="chat-header-icon-btn" title="Search" onClick={() => setSearchOpen(true)}>
                 🔍
               </button>
+              {instanceInfo?.levelingEnabled && (
+                <button type="button" className="chat-header-icon-btn" title="Leaderboard" onClick={() => setLeaderboardOpen(true)}>
+                  🏆
+                </button>
+              )}
               <button
                 type="button"
                 className={`chat-header-icon-btn ${memberListOpen ? "active" : ""}`}
