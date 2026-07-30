@@ -278,6 +278,8 @@ button, input, select {
   border-radius: 8px;
   width: 440px;
   max-width: calc(100vw - 2rem);
+  max-height: calc(100vh - 4rem);
+  overflow-y: auto;
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
@@ -500,6 +502,7 @@ button, input, select {
 .invite-new-form { display: flex; align-items: center; gap: 0.3rem; }
 .invite-new-form input { flex: 1; min-width: 0; background: var(--bg-input); border: none; border-radius: 3px; padding: 0.35rem 0.5rem; color: var(--text-normal); }
 .invite-new-form .btn { padding: 0.4rem 0.9rem; font-size: 0.8rem; white-space: nowrap; }
+.bot-emoji-input { max-width: 70px; flex: 0 0 auto; }
 .invite-hint { color: var(--text-faint); font-size: 0.7rem; margin: -0.3rem 0 0; }
 
 /* ---------- Chat area ---------- */

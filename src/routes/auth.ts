@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../plugins/db.js";
 import { EVERYONE_ROLE_NAME, DEFAULT_EVERYONE_PERMISSIONS } from "../util/permissions.js";
 import { isInviteValid } from "../util/invites.js";
+import { postSystemMessage } from "../util/bot.js";
 
 const registerSchema = z.object({
   username: z.string().min(3).max(32),
@@ -49,7 +50,7 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     try {
-      const user = await prisma.$transaction(async (tx) => {
+      const { user, botSettings } = await prisma.$transaction(async (tx) => {
         const userCount = await tx.user.count();
         const passwordHash = await bcrypt.hash(body.password, 12);
 
@@ -62,12 +63,17 @@ export async function authRoutes(app: FastifyInstance) {
             create: {},
             update: {},
           });
+          await tx.botSettings.upsert({
+            where: { id: "singleton" },
+            create: {},
+            update: {},
+          });
           await tx.channel.create({ data: { name: "general", type: "TEXT" } });
           const everyoneRole = await tx.role.create({
             data: { name: EVERYONE_ROLE_NAME, permissions: DEFAULT_EVERYONE_PERMISSIONS },
           });
           await tx.userRole.create({ data: { userId: created.id, roleId: everyoneRole.id } });
-          return created;
+          return { user: created, botSettings: null };
         }
 
         const settings = await tx.instanceSettings.upsert({
@@ -93,8 +99,27 @@ export async function authRoutes(app: FastifyInstance) {
         if (everyoneRole) {
           await tx.userRole.create({ data: { userId: created.id, roleId: everyoneRole.id } });
         }
-        return created;
+
+        const bot = await tx.botSettings.upsert({ where: { id: "singleton" }, create: {}, update: {} });
+        if (bot.autoRoleEnabled && bot.autoRoleId && bot.autoRoleId !== everyoneRole?.id) {
+          const autoRole = await tx.role.findUnique({ where: { id: bot.autoRoleId } });
+          if (autoRole) {
+            await tx.userRole.create({ data: { userId: created.id, roleId: autoRole.id } });
+          }
+        }
+
+        return { user: created, botSettings: bot };
       });
+
+      // Deliberately outside the transaction — posting the welcome message
+      // broadcasts over the live gateway, which isn't transactional and
+      // shouldn't block/rollback registration if it fails.
+      if (botSettings?.welcomeEnabled && botSettings.welcomeChannelId) {
+        await postSystemMessage(
+          botSettings.welcomeChannelId,
+          botSettings.welcomeMessage.replaceAll("{user}", user.username),
+        );
+      }
 
       const token = app.jwt.sign({ sub: user.id, username: user.username });
       return reply.status(201).send({ token, user: toPublicUser(user) });

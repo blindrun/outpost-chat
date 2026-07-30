@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Message } from "./api";
+import { EmojiPicker } from "./EmojiPicker";
 
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🎉"];
 const MENTION_PATTERN = /@([a-zA-Z0-9_]+)/g;
@@ -74,6 +75,7 @@ export function MessageItem({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [fullPickerOpen, setFullPickerOpen] = useState(false);
   const isOwn = message.authorId === currentUserId;
   const authorName = message.authorUsername ?? message.authorId;
 
@@ -96,6 +98,7 @@ export function MessageItem({
     if (mine) onUnreact(message.id, emoji);
     else onReact(message.id, emoji);
     setPickerOpen(false);
+    setFullPickerOpen(false);
   }
 
   return (
@@ -107,7 +110,7 @@ export function MessageItem({
       )}
       <div className="message-body">
         <div className="message-header">
-          {message.isWebhook ? (
+          {message.isWebhook || message.isSystemBot ? (
             <span className="bot-badge">BOT</span>
           ) : (
             <span className={`presence-dot ${isOnline ? "online" : "offline"}`} />
@@ -157,6 +160,21 @@ export function MessageItem({
                 {emoji}
               </button>
             ))}
+            <button
+              title="More emoji"
+              onClick={() => {
+                setPickerOpen(false);
+                setFullPickerOpen(true);
+              }}
+            >
+              ➕
+            </button>
+          </div>
+        )}
+
+        {fullPickerOpen && (
+          <div className="picker-popover reaction-full-picker">
+            <EmojiPicker onSelect={toggleReaction} />
           </div>
         )}
 

@@ -15,11 +15,12 @@ import {
 import { Modal } from "./Modal";
 import { InvitePanel } from "./InvitePanel";
 import { WebhooksPanel } from "./WebhooksPanel";
+import { BotSettingsPanel } from "./BotSettingsPanel";
 import { ThemePicker } from "./ThemePicker";
 
 const ALL_PERMISSIONS: Permission[] = ["MANAGE_CHANNELS", "MANAGE_ROLES", "SEND_MESSAGES"];
 
-type Tab = "general" | "roles" | "members" | "invites" | "webhooks";
+type Tab = "general" | "roles" | "members" | "invites" | "webhooks" | "bot";
 
 function GeneralTab({
   baseUrl,
@@ -294,6 +295,9 @@ export function InstanceSettingsModal({
         <button className={tab === "webhooks" ? "active" : ""} onClick={() => setTab("webhooks")}>
           Webhooks
         </button>
+        <button className={tab === "bot" ? "active" : ""} onClick={() => setTab("bot")}>
+          Bot
+        </button>
       </div>
 
       {tab === "general" && (
@@ -303,6 +307,7 @@ export function InstanceSettingsModal({
       {tab === "members" && <MembersTab baseUrl={baseUrl} token={token} />}
       {tab === "invites" && <InvitePanel baseUrl={baseUrl} token={token} />}
       {tab === "webhooks" && <WebhooksPanel baseUrl={baseUrl} token={token} channels={channels} />}
+      {tab === "bot" && <BotSettingsPanel baseUrl={baseUrl} token={token} channels={channels} />}
 
       <div className="modal-actions">
         <button className="btn secondary" onClick={onClose}>

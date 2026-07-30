@@ -66,6 +66,7 @@ export interface ReplyPreview {
   content: string;
   authorUsername?: string;
   isWebhook: boolean;
+  isSystemBot?: boolean;
 }
 
 export interface Message {
@@ -80,6 +81,7 @@ export interface Message {
   editedAt?: string | null;
   reactions?: Reaction[];
   isWebhook?: boolean;
+  isSystemBot?: boolean;
   pinned?: boolean;
   replyToId?: string | null;
   replyTo?: ReplyPreview | null;
@@ -104,6 +106,43 @@ export interface Member {
   avatarUrl: string | null;
   joinedAt: string;
   roles: { id: string; name: string }[];
+}
+
+export interface BotSettings {
+  name: string;
+  avatarUrl: string | null;
+  welcomeEnabled: boolean;
+  welcomeChannelId: string | null;
+  welcomeMessage: string;
+  autoRoleEnabled: boolean;
+  autoRoleId: string | null;
+  customCommandsEnabled: boolean;
+  reactionRolesEnabled: boolean;
+  reactionRoleChannelId: string | null;
+  levelingEnabled: boolean;
+  levelUpAnnounce: boolean;
+  levelUpMessage: string;
+  automodEnabled: boolean;
+  automodBannedWords: string[];
+}
+
+export interface CustomCommand {
+  id: string;
+  trigger: string;
+  response: string;
+}
+
+export interface ReactionRoleEntry {
+  id: string;
+  emoji: string;
+  roleId: string;
+  roleName: string;
+}
+
+export interface BotConfig {
+  settings: BotSettings;
+  customCommands: CustomCommand[];
+  reactionRoles: ReactionRoleEntry[];
 }
 
 export function toWsUrl(baseUrl: string): string {
@@ -289,6 +328,39 @@ export function createWebhook(baseUrl: string, token: string, channelId: string,
 
 export function deleteWebhook(baseUrl: string, token: string, webhookId: string) {
   return request<void>(baseUrl, `/webhooks/${webhookId}`, token, { method: "DELETE" });
+}
+
+export function getBotConfig(baseUrl: string, token: string) {
+  return request<BotConfig>(baseUrl, "/bot/settings", token);
+}
+
+export function updateBotSettings(baseUrl: string, token: string, updates: Partial<BotSettings>) {
+  return request<BotSettings>(baseUrl, "/bot/settings", token, {
+    method: "PATCH",
+    body: JSON.stringify(updates),
+  });
+}
+
+export function createCustomCommand(baseUrl: string, token: string, trigger: string, response: string) {
+  return request<CustomCommand>(baseUrl, "/bot/commands", token, {
+    method: "POST",
+    body: JSON.stringify({ trigger, response }),
+  });
+}
+
+export function deleteCustomCommand(baseUrl: string, token: string, id: string) {
+  return request<void>(baseUrl, `/bot/commands/${id}`, token, { method: "DELETE" });
+}
+
+export function createReactionRole(baseUrl: string, token: string, emoji: string, roleId: string) {
+  return request<ReactionRoleEntry>(baseUrl, "/bot/reaction-roles", token, {
+    method: "POST",
+    body: JSON.stringify({ emoji, roleId }),
+  });
+}
+
+export function deleteReactionRole(baseUrl: string, token: string, id: string) {
+  return request<void>(baseUrl, `/bot/reaction-roles/${id}`, token, { method: "DELETE" });
 }
 
 type GatewayEvent =
