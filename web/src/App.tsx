@@ -602,13 +602,16 @@ function App() {
                       const member = members.find((m) => m.userId === userId);
                       const speaking = isMyChannel && voice.speakingUserIds.has(userId);
                       return (
-                        <span key={userId} className={`voice-member-avatar ${speaking ? "speaking" : ""}`} title={member?.username ?? userId}>
-                          {member?.avatarUrl ? (
-                            <img src={member.avatarUrl} alt="" />
-                          ) : (
-                            <span className="avatar-placeholder">{(member?.username ?? "?")[0]?.toUpperCase()}</span>
-                          )}
-                        </span>
+                        <div key={userId} className="voice-member-row">
+                          <span className={`voice-member-avatar ${speaking ? "speaking" : ""}`}>
+                            {member?.avatarUrl ? (
+                              <img src={member.avatarUrl} alt="" />
+                            ) : (
+                              <span className="avatar-placeholder">{(member?.username ?? "?")[0]?.toUpperCase()}</span>
+                            )}
+                          </span>
+                          <span className="voice-member-name">{member?.username ?? userId}</span>
+                        </div>
                       );
                     })}
                   </div>
