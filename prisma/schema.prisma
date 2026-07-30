@@ -26,6 +26,7 @@ model InstanceSettings {
   iconUrl                 String?
   theme                   String  @default("business")
   requireInviteToRegister Boolean @default(false)
+  defaultChannelId        String?
 }
 
 model Invite {
@@ -52,17 +53,46 @@ model Channel {
   createdAt DateTime    @default(now())
 
   messages Message[]
+  webhooks Webhook[]
+}
+
+// A channel-scoped bearer token that lets an external service post messages
+// without a real user account — the "bot integration" backlog item, phased
+// as webhooks first since they don't need a persistent connection or their
+// own auth/permission model, just a channel-scoped secret.
+model Webhook {
+  id        String   @id @default(uuid())
+  channelId String
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  name      String
+  avatarUrl String?
+  token     String   @unique
+  createdBy String
+  createdAt DateTime @default(now())
+
+  messages Message[]
 }
 
 model Message {
   id            String    @id @default(uuid())
   channelId     String
   channel       Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  authorId      String
+  // Exactly one of authorId/webhookId is set — a message is sent by either a
+  // real user (over the gateway) or a webhook (over plain REST), never both.
+  authorId      String?
+  webhookId     String?
+  webhook       Webhook?  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
   content       String
   attachmentUrl String?
   createdAt     DateTime  @default(now())
   editedAt      DateTime?
+  pinned        Boolean   @default(false)
+  // Replies point at another message in the same channel. SetNull (not
+  // Cascade) so deleting the original just drops the quote rather than
+  // taking every reply to it down too.
+  replyToId String?
+  replyTo   Message?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   Message[] @relation("MessageReplies")
 
   reactions Reaction[]
 }

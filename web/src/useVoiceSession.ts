@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { MutableRefObject, useCallback, useRef, useState } from "react";
 import {
   ConnectionState,
   LocalParticipant,
@@ -10,7 +10,7 @@ import {
   RoomEvent,
   Track,
 } from "livekit-client";
-import { Channel, getVoiceToken } from "./api";
+import { Channel, Gateway, getVoiceToken } from "./api";
 import { AudioSettings, loadAudioSettings } from "./audioSettings";
 
 // Hangover keeps the mic briefly open after level drops below threshold so
@@ -146,10 +146,14 @@ function setupVoiceActivity(
 // stays connected while browsing other channels — mirroring Discord's
 // persistent bottom voice bar. VoicePanel and the user-panel mute/deafen
 // buttons both read from this single instance.
-export function useVoiceSession(baseUrl: string, token: string) {
+export function useVoiceSession(baseUrl: string, token: string, gatewayRef: MutableRefObject<Gateway | null>) {
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [participants, setParticipants] = useState<ParticipantInfo[]>([]);
+  // Only ever populated for the room this client is actually connected to —
+  // LiveKit only reports speaking activity for a room you've joined, so
+  // there's no way to know this for voice channels the user isn't in.
+  const [speakingUserIds, setSpeakingUserIds] = useState<Set<string>>(new Set());
   const [micEnabled, setMicEnabled] = useState(false);
   const [muted, setMuted] = useState(false);
   const [deafened, setDeafened] = useState(false);
@@ -199,14 +203,20 @@ export function useVoiceSession(baseUrl: string, token: string) {
 
         room.on(RoomEvent.ParticipantConnected, () => isCurrent() && refreshParticipants(room));
         room.on(RoomEvent.ParticipantDisconnected, () => isCurrent() && refreshParticipants(room));
+        room.on(RoomEvent.ActiveSpeakersChanged, (speakers: Participant[]) => {
+          if (!isCurrent()) return;
+          setSpeakingUserIds(new Set(speakers.map((s) => s.identity)));
+        });
         room.on(RoomEvent.ConnectionStateChanged, (state) => {
           if (!isCurrent()) return;
           if (state === ConnectionState.Disconnected) {
             automationCleanupRef.current?.();
             automationCleanupRef.current = null;
+            gatewayRef.current?.sendVoiceLeave();
             setActiveChannel(null);
             setConnecting(false);
             setParticipants([]);
+            setSpeakingUserIds(new Set());
             setMode(null);
             setPttActive(false);
             setVadLevel(0);
@@ -234,6 +244,7 @@ export function useVoiceSession(baseUrl: string, token: string) {
 
         await room.connect(url, voiceToken);
         if (!isCurrent()) return; // superseded (e.g. leave clicked) while connecting
+        gatewayRef.current?.sendVoiceJoin(channel.id);
         refreshParticipants(room);
         setConnecting(false);
         setMode(settings.mode);
@@ -272,7 +283,7 @@ export function useVoiceSession(baseUrl: string, token: string) {
         setConnecting(false);
       }
     },
-    [baseUrl, token],
+    [baseUrl, token, gatewayRef],
   );
 
   const leave = useCallback(() => {
@@ -280,14 +291,16 @@ export function useVoiceSession(baseUrl: string, token: string) {
     automationCleanupRef.current = null;
     roomRef.current?.disconnect();
     roomRef.current = null;
+    gatewayRef.current?.sendVoiceLeave();
     setActiveChannel(null);
     setConnecting(false);
     setParticipants([]);
+    setSpeakingUserIds(new Set());
     setMicEnabled(false);
     setPttActive(false);
     setVadLevel(0);
     setMode(null);
-  }, []);
+  }, [gatewayRef]);
 
   const toggleMute = useCallback(async () => {
     const next = !mutedRef.current;
@@ -325,6 +338,7 @@ export function useVoiceSession(baseUrl: string, token: string) {
     connected: activeChannel !== null,
     connecting,
     participants,
+    speakingUserIds,
     micEnabled,
     muted,
     deafened,

@@ -18,6 +18,7 @@ const updateInstanceSettingsSchema = z.object({
   iconUrl: z.string().url().nullable().optional(),
   theme: z.enum(["business", "cyberpunk", "hacker", "esports"]).optional(),
   requireInviteToRegister: z.boolean().optional(),
+  defaultChannelId: z.string().nullable().optional(),
 });
 
 const createChannelSchema = z.object({
@@ -58,6 +59,8 @@ export async function instanceRoutes(app: FastifyInstance) {
       theme: settings.theme,
       requireInviteToRegister: settings.requireInviteToRegister,
       hasOwner,
+      gifSearchEnabled: !!process.env.GIPHY_API_KEY,
+      defaultChannelId: settings.defaultChannelId,
     };
   });
 
@@ -69,6 +72,13 @@ export async function instanceRoutes(app: FastifyInstance) {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user?.isOwner) return reply.status(403).send({ error: "only the instance owner can change settings" });
 
+    if (body.defaultChannelId) {
+      const channel = await prisma.channel.findUnique({ where: { id: body.defaultChannelId } });
+      if (!channel || channel.type !== "TEXT") {
+        return reply.status(400).send({ error: "defaultChannelId must be an existing text channel" });
+      }
+    }
+
     const updated = await prisma.instanceSettings.upsert({
       where: { id: "singleton" },
       create: {
@@ -77,6 +87,7 @@ export async function instanceRoutes(app: FastifyInstance) {
         ...(body.iconUrl !== undefined ? { iconUrl: body.iconUrl } : {}),
         ...(body.theme !== undefined ? { theme: body.theme } : {}),
         ...(body.requireInviteToRegister !== undefined ? { requireInviteToRegister: body.requireInviteToRegister } : {}),
+        ...(body.defaultChannelId !== undefined ? { defaultChannelId: body.defaultChannelId } : {}),
       },
       update: {
         ...(body.name !== undefined ? { name: body.name } : {}),
@@ -84,6 +95,7 @@ export async function instanceRoutes(app: FastifyInstance) {
         ...(body.iconUrl !== undefined ? { iconUrl: body.iconUrl } : {}),
         ...(body.theme !== undefined ? { theme: body.theme } : {}),
         ...(body.requireInviteToRegister !== undefined ? { requireInviteToRegister: body.requireInviteToRegister } : {}),
+        ...(body.defaultChannelId !== undefined ? { defaultChannelId: body.defaultChannelId } : {}),
       },
     });
     return updated;
@@ -211,5 +223,18 @@ export async function instanceRoutes(app: FastifyInstance) {
       update: {},
     });
     return reply.status(201).send(userRole);
+  });
+
+  // Remove a role from a member — same MANAGE_ROLES gate as assigning one.
+  app.delete("/members/:userId/roles/:roleId", { onRequest: [app.authenticate] }, async (req, reply) => {
+    const { userId: targetUserId, roleId } = req.params as { userId: string; roleId: string };
+    const { sub: requesterId } = req.user as { sub: string };
+
+    if (!(await hasPermission(requesterId, PERMISSIONS.MANAGE_ROLES))) {
+      return reply.status(403).send({ error: "missing MANAGE_ROLES permission" });
+    }
+
+    await prisma.userRole.delete({ where: { userId_roleId: { userId: targetUserId, roleId } } }).catch(() => null);
+    return reply.status(204).send();
   });
 }
