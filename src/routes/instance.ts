@@ -48,9 +48,10 @@ export async function instanceRoutes(app: FastifyInstance) {
   // address before showing login/register/first-owner-setup, and to render
   // this instance's name/description/theme even for a not-yet-logged-in user.
   app.get("/instance-info", async () => {
-    const [settings, hasOwner] = await Promise.all([
+    const [settings, hasOwner, botSettings] = await Promise.all([
       getOrCreateSettings(),
       prisma.user.count().then((c) => c > 0),
+      prisma.botSettings.findUnique({ where: { id: "singleton" } }),
     ]);
     return {
       name: settings.name,
@@ -61,6 +62,7 @@ export async function instanceRoutes(app: FastifyInstance) {
       hasOwner,
       gifSearchEnabled: !!process.env.GIPHY_API_KEY,
       defaultChannelId: settings.defaultChannelId,
+      levelingEnabled: botSettings?.levelingEnabled ?? false,
     };
   });
 

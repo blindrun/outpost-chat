@@ -25,6 +25,7 @@ export interface InstanceInfo {
   hasOwner: boolean;
   gifSearchEnabled: boolean;
   defaultChannelId: string | null;
+  levelingEnabled: boolean;
 }
 
 export interface Gif {
@@ -384,6 +385,19 @@ export function createReactionRole(baseUrl: string, token: string, emoji: string
 
 export function deleteReactionRole(baseUrl: string, token: string, id: string) {
   return request<void>(baseUrl, `/bot/reaction-roles/${id}`, token, { method: "DELETE" });
+}
+
+export interface LeaderboardEntry {
+  userId: string;
+  username: string;
+  avatarUrl: string | null;
+  level: number;
+  xp: number;
+  messageCount: number;
+}
+
+export function getLeaderboard(baseUrl: string, token: string) {
+  return request<LeaderboardEntry[]>(baseUrl, "/bot/leaderboard", token);
 }
 
 type GatewayEvent =
