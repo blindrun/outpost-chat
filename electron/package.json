@@ -12,7 +12,7 @@
   "scripts": {
     "build-web": "node scripts/build-web.js",
     "dev": "npm run build-web && electron .",
-    "dist": "npm run build-web && electron-builder"
+    "dist": "npm run build-web && electron-builder --publish never"
   },
   "devDependencies": {
     "electron": "^43.2.0",
@@ -28,11 +28,17 @@
       "main.js",
       "web-dist/**/*"
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "blindrun",
+      "repo": "outpost-chat"
+    },
     "mac": {
       "icon": "build/icon.png",
       "category": "public.app-category.social-networking",
       "target": [
-        "dmg"
+        "dmg",
+        "zip"
       ]
     },
     "win": {
@@ -52,5 +58,8 @@
   },
   "allowScripts": {
     "electron@33.4.11": true
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   }
 }

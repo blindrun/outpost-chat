@@ -51,4 +51,7 @@ jobs:
             electron/release/*.exe
             electron/release/*.AppImage
             electron/release/*.deb
+            electron/release/*.zip
+            electron/release/latest*.yml
+            electron/release/*.blockmap
           fail_on_unmatched_files: false
