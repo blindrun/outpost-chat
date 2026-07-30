@@ -66,8 +66,10 @@ model Channel {
   position  Int         @default(0)
   createdAt DateTime    @default(now())
 
-  messages Message[]
-  webhooks Webhook[]
+  messages         Message[]
+  webhooks         Webhook[]
+  reactionRoles    ReactionRole[]
+  reactionRoleMenu ReactionRoleMenu?
 }
 
 // A channel-scoped bearer token that lets an external service post messages
@@ -152,12 +154,9 @@ model BotSettings {
 
   customCommandsEnabled Boolean @default(false)
 
-  // The bot maintains exactly one "reaction role menu" message, posted into
-  // reactionRoleChannelId and re-edited (not reposted) whenever entries
-  // change — reactionRoleMessageId tracks which message that is.
-  reactionRolesEnabled  Boolean @default(false)
-  reactionRoleChannelId String?
-  reactionRoleMessageId String?
+  // Per-channel reaction-role menus are tracked in ReactionRoleMenu, not
+  // here — this is just the master on/off switch for the whole feature.
+  reactionRolesEnabled Boolean @default(false)
 
   levelingEnabled  Boolean @default(false)
   levelUpAnnounce  Boolean @default(true)
@@ -177,16 +176,30 @@ model CustomCommand {
   createdAt DateTime @default(now())
 }
 
-// One row per configured emoji->role mapping. All entries render together
-// into the bot's single reaction-role menu message (see BotSettings above),
-// not a separate message each — matches the real Carl-bot convention of one
-// menu message per channel.
+// One row per configured emoji->role mapping, scoped to a channel. All
+// entries for the same channel render together into that channel's one
+// standing reaction-role menu message (see ReactionRoleMenu below) — a
+// channel can have its own menu, matching the real Carl-bot convention of
+// one menu message per channel (not a single instance-wide menu).
 model ReactionRole {
   id        String   @id @default(uuid())
-  emoji     String   @unique
+  channelId String
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  emoji     String
   roleId    String
   role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+
+  @@unique([channelId, emoji])
+}
+
+// Tracks which message is the standing reaction-role menu for a given
+// channel, so refreshing the menu edits that message in place instead of
+// reposting every time an entry is added/removed.
+model ReactionRoleMenu {
+  channelId String  @id
+  channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  messageId String
 }
 
 model UserLevel {

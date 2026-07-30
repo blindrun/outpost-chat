@@ -13,7 +13,6 @@ const updateBotSettingsSchema = z.object({
   autoRoleId: z.string().nullable().optional(),
   customCommandsEnabled: z.boolean().optional(),
   reactionRolesEnabled: z.boolean().optional(),
-  reactionRoleChannelId: z.string().nullable().optional(),
   levelingEnabled: z.boolean().optional(),
   levelUpAnnounce: z.boolean().optional(),
   levelUpMessage: z.string().min(1).max(500).optional(),
@@ -32,6 +31,7 @@ const createCommandSchema = z.object({
 });
 
 const createReactionRoleSchema = z.object({
+  channelId: z.string(),
   emoji: z.string().min(1).max(8),
   roleId: z.string(),
 });
@@ -51,13 +51,20 @@ export async function botRoutes(app: FastifyInstance) {
     const [settings, customCommands, reactionRoles] = await Promise.all([
       getBotSettings(),
       prisma.customCommand.findMany({ orderBy: { createdAt: "asc" } }),
-      prisma.reactionRole.findMany({ include: { role: true }, orderBy: { createdAt: "asc" } }),
+      prisma.reactionRole.findMany({ include: { role: true, channel: true }, orderBy: { createdAt: "asc" } }),
     ]);
 
     return {
       settings,
       customCommands,
-      reactionRoles: reactionRoles.map((r) => ({ id: r.id, emoji: r.emoji, roleId: r.roleId, roleName: r.role.name })),
+      reactionRoles: reactionRoles.map((r) => ({
+        id: r.id,
+        channelId: r.channelId,
+        channelName: r.channel.name,
+        emoji: r.emoji,
+        roleId: r.roleId,
+        roleName: r.role.name,
+      })),
     };
   });
 
@@ -74,12 +81,6 @@ export async function botRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "welcomeChannelId must be an existing text channel" });
       }
     }
-    if (body.reactionRoleChannelId) {
-      const channel = await prisma.channel.findUnique({ where: { id: body.reactionRoleChannelId } });
-      if (!channel || channel.type !== "TEXT") {
-        return reply.status(400).send({ error: "reactionRoleChannelId must be an existing text channel" });
-      }
-    }
     if (body.autoRoleId) {
       const role = await prisma.role.findUnique({ where: { id: body.autoRoleId } });
       if (!role) return reply.status(400).send({ error: "autoRoleId must be an existing role" });
@@ -88,10 +89,17 @@ export async function botRoutes(app: FastifyInstance) {
     await getBotSettings();
     const updated = await prisma.botSettings.update({ where: { id: "singleton" }, data: body });
 
-    // The reaction-role channel or the enabled flag may have just changed —
-    // (re)post the menu into wherever it now belongs.
-    if (body.reactionRolesEnabled !== undefined || body.reactionRoleChannelId !== undefined) {
-      await refreshReactionRoleMenu();
+    // Turning the master switch on (re)posts every channel's existing menu
+    // — entries created while it was off still exist in the DB, they just
+    // never had a message to render into.
+    if (body.reactionRolesEnabled === true) {
+      const channelIds = await prisma.reactionRole.findMany({
+        distinct: ["channelId"],
+        select: { channelId: true },
+      });
+      for (const { channelId } of channelIds) {
+        await refreshReactionRoleMenu(channelId);
+      }
     }
 
     return updated;
@@ -128,15 +136,28 @@ export async function botRoutes(app: FastifyInstance) {
     }
     const body = createReactionRoleSchema.parse(req.body);
 
-    const role = await prisma.role.findUnique({ where: { id: body.roleId } });
+    const [role, channel] = await Promise.all([
+      prisma.role.findUnique({ where: { id: body.roleId } }),
+      prisma.channel.findUnique({ where: { id: body.channelId } }),
+    ]);
     if (!role) return reply.status(404).send({ error: "role not found" });
+    if (!channel || channel.type !== "TEXT") return reply.status(400).send({ error: "channelId must be an existing text channel" });
 
-    const existing = await prisma.reactionRole.findUnique({ where: { emoji: body.emoji } });
-    if (existing) return reply.status(409).send({ error: `${body.emoji} is already mapped to a role` });
+    const existing = await prisma.reactionRole.findUnique({
+      where: { channelId_emoji: { channelId: body.channelId, emoji: body.emoji } },
+    });
+    if (existing) return reply.status(409).send({ error: `${body.emoji} is already mapped to a role in #${channel.name}` });
 
     const created = await prisma.reactionRole.create({ data: body });
-    await refreshReactionRoleMenu();
-    return reply.status(201).send({ id: created.id, emoji: created.emoji, roleId: created.roleId, roleName: role.name });
+    await refreshReactionRoleMenu(body.channelId);
+    return reply.status(201).send({
+      id: created.id,
+      channelId: created.channelId,
+      channelName: channel.name,
+      emoji: created.emoji,
+      roleId: created.roleId,
+      roleName: role.name,
+    });
   });
 
   app.delete("/bot/reaction-roles/:id", { onRequest: [app.authenticate] }, async (req, reply) => {
@@ -145,8 +166,9 @@ export async function botRoutes(app: FastifyInstance) {
       return reply.status(403).send({ error: "only the instance owner can manage reaction roles" });
     }
     const { id } = req.params as { id: string };
+    const existing = await prisma.reactionRole.findUnique({ where: { id } });
     await prisma.reactionRole.delete({ where: { id } }).catch(() => null);
-    await refreshReactionRoleMenu();
+    if (existing) await refreshReactionRoleMenu(existing.channelId);
     return reply.status(204).send();
   });
 

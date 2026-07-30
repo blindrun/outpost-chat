@@ -88,25 +88,29 @@ function ReactionRolesList({
   baseUrl,
   token,
   roles,
+  channels,
   entries,
   onChange,
 }: {
   baseUrl: string;
   token: string;
   roles: Role[];
+  channels: Channel[];
   entries: ReactionRoleEntry[];
   onChange: () => void;
 }) {
+  const textChannels = channels.filter((c) => c.type === "TEXT");
+  const [channelId, setChannelId] = useState(textChannels[0]?.id ?? "");
   const [emoji, setEmoji] = useState("");
   const [roleId, setRoleId] = useState(roles[0]?.id ?? "");
   const [error, setError] = useState<string | null>(null);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!emoji.trim() || !roleId) return;
+    if (!channelId || !emoji.trim() || !roleId) return;
     setError(null);
     try {
-      await createReactionRole(baseUrl, token, emoji.trim(), roleId);
+      await createReactionRole(baseUrl, token, channelId, emoji.trim(), roleId);
       setEmoji("");
       onChange();
     } catch (err) {
@@ -124,28 +128,50 @@ function ReactionRolesList({
     }
   }
 
+  // Grouped by channel so each channel's own menu is obvious — every entry
+  // in a group renders together into that one channel's standing message.
+  const byChannel = new Map<string, ReactionRoleEntry[]>();
+  for (const entry of entries) {
+    const list = byChannel.get(entry.channelId) ?? [];
+    list.push(entry);
+    byChannel.set(entry.channelId, list);
+  }
+
   return (
     <div className="settings-section">
       <h3>Reaction Roles</h3>
       <p className="subtitle">
-        The bot posts (and keeps edited in place) one standing message listing these — members react to it to get the role.
+        Each channel gets its own standing menu message (edited in place, not reposted) listing that channel's entries below —
+        members react to it to get the role.
       </p>
       {error && <p className="error">{error}</p>}
-      <ul className="invite-list">
-        {entries.map((entry) => (
-          <li key={entry.id}>
-            <div className="invite-row">
-              <strong>{entry.emoji}</strong>
-              <span className="invite-meta">→ {entry.roleName}</span>
-            </div>
-            <button type="button" className="text-btn" onClick={() => handleDelete(entry.id)}>
-              delete
-            </button>
-          </li>
-        ))}
-        {entries.length === 0 && <p className="picker-empty">No reaction roles yet.</p>}
-      </ul>
+      {[...byChannel.entries()].map(([cid, groupEntries]) => (
+        <div key={cid} className="reaction-role-group">
+          <h4>#{groupEntries[0].channelName}</h4>
+          <ul className="invite-list">
+            {groupEntries.map((entry) => (
+              <li key={entry.id}>
+                <div className="invite-row">
+                  <strong>{entry.emoji}</strong>
+                  <span className="invite-meta">→ {entry.roleName}</span>
+                </div>
+                <button type="button" className="text-btn" onClick={() => handleDelete(entry.id)}>
+                  delete
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+      {entries.length === 0 && <p className="picker-empty">No reaction roles yet.</p>}
       <form onSubmit={handleCreate} className="invite-new-form">
+        <select value={channelId} onChange={(e) => setChannelId(e.target.value)}>
+          {textChannels.map((c) => (
+            <option key={c.id} value={c.id}>
+              #{c.name}
+            </option>
+          ))}
+        </select>
         <input className="bot-emoji-input" placeholder="emoji" value={emoji} onChange={(e) => setEmoji(e.target.value)} />
         <select value={roleId} onChange={(e) => setRoleId(e.target.value)}>
           {roles.map((r) => (
@@ -154,7 +180,7 @@ function ReactionRolesList({
             </option>
           ))}
         </select>
-        <button type="submit" className="btn" disabled={roles.length === 0}>
+        <button type="submit" className="btn" disabled={roles.length === 0 || textChannels.length === 0}>
           Add
         </button>
       </form>
@@ -178,7 +204,6 @@ export function BotSettingsPanel({ baseUrl, token, channels }: { baseUrl: string
   const [autoRoleId, setAutoRoleId] = useState("");
   const [customCommandsEnabled, setCustomCommandsEnabled] = useState(false);
   const [reactionRolesEnabled, setReactionRolesEnabled] = useState(false);
-  const [reactionRoleChannelId, setReactionRoleChannelId] = useState("");
   const [levelingEnabled, setLevelingEnabled] = useState(false);
   const [levelUpAnnounce, setLevelUpAnnounce] = useState(true);
   const [levelUpMessage, setLevelUpMessage] = useState("");
@@ -198,7 +223,6 @@ export function BotSettingsPanel({ baseUrl, token, channels }: { baseUrl: string
         setAutoRoleId(c.settings.autoRoleId ?? "");
         setCustomCommandsEnabled(c.settings.customCommandsEnabled);
         setReactionRolesEnabled(c.settings.reactionRolesEnabled);
-        setReactionRoleChannelId(c.settings.reactionRoleChannelId ?? "");
         setLevelingEnabled(c.settings.levelingEnabled);
         setLevelUpAnnounce(c.settings.levelUpAnnounce);
         setLevelUpMessage(c.settings.levelUpMessage);
@@ -224,7 +248,6 @@ export function BotSettingsPanel({ baseUrl, token, channels }: { baseUrl: string
         autoRoleId: autoRoleId || null,
         customCommandsEnabled,
         reactionRolesEnabled,
-        reactionRoleChannelId: reactionRoleChannelId || null,
         levelingEnabled,
         levelUpAnnounce,
         levelUpMessage,
@@ -343,21 +366,8 @@ export function BotSettingsPanel({ baseUrl, token, channels }: { baseUrl: string
             checked={reactionRolesEnabled}
             onChange={(e) => setReactionRolesEnabled(e.target.checked)}
           />
-          Post a reaction-role menu (managed below)
+          Post reaction-role menus (managed below — each channel gets its own)
         </label>
-        {reactionRolesEnabled && (
-          <label>
-            Channel
-            <select value={reactionRoleChannelId} onChange={(e) => setReactionRoleChannelId(e.target.value)}>
-              <option value="">select a channel…</option>
-              {textChannels.map((c) => (
-                <option key={c.id} value={c.id}>
-                  #{c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
 
         <h3>Leveling / XP</h3>
         <label className="checkbox-label">
@@ -398,7 +408,14 @@ export function BotSettingsPanel({ baseUrl, token, channels }: { baseUrl: string
       </form>
 
       <CustomCommandsList baseUrl={baseUrl} token={token} commands={config.customCommands} onChange={refresh} />
-      <ReactionRolesList baseUrl={baseUrl} token={token} roles={roles} entries={config.reactionRoles} onChange={refresh} />
+      <ReactionRolesList
+        baseUrl={baseUrl}
+        token={token}
+        roles={roles}
+        channels={channels}
+        entries={config.reactionRoles}
+        onChange={refresh}
+      />
     </div>
   );
 }

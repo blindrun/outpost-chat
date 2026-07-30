@@ -952,6 +952,8 @@ button, input, select {
   letter-spacing: 0.02em;
 }
 .settings-section h3 { margin: 0; font-size: 0.9rem; color: var(--header-primary); }
+.reaction-role-group { display: flex; flex-direction: column; gap: 0.3rem; }
+.reaction-role-group h4 { margin: 0.4rem 0 0; font-size: 0.8rem; color: var(--text-muted); }
 .char-counter { align-self: flex-end; font-size: 0.7rem; color: var(--text-faint); margin-top: -0.4rem; }
 .settings-avatar-row { display: flex; align-items: center; gap: 1rem; }
 .success { color: var(--green); font-size: 0.8rem; margin: 0; }
