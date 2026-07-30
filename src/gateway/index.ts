@@ -7,8 +7,13 @@ import {
   broadcastAll,
   isOnline,
   allOnlineUserIds,
+  joinVoiceChannel,
+  leaveVoiceChannel,
+  voiceChannelMembers,
+  allVoiceState,
 } from "./rooms.js";
 import { PERMISSIONS, hasPermission } from "../util/permissions.js";
+import { hydrateAuthors, hydrateReplyPreviews } from "../routes/messages.js";
 
 const clientMessageSchema = z.discriminatedUnion("type", [
   z.object({
@@ -16,12 +21,17 @@ const clientMessageSchema = z.discriminatedUnion("type", [
     channelId: z.string(),
     content: z.string().max(4000),
     attachmentUrl: z.string().url().optional(),
+    replyToId: z.string().optional(),
   }),
   z.object({ type: z.literal("TYPING_START"), channelId: z.string() }),
   z.object({ type: z.literal("MESSAGE_EDIT"), messageId: z.string(), content: z.string().min(1).max(4000) }),
   z.object({ type: z.literal("MESSAGE_DELETE"), messageId: z.string() }),
+  z.object({ type: z.literal("MESSAGE_PIN"), messageId: z.string() }),
+  z.object({ type: z.literal("MESSAGE_UNPIN"), messageId: z.string() }),
   z.object({ type: z.literal("REACTION_ADD"), messageId: z.string(), emoji: z.string().min(1).max(8) }),
   z.object({ type: z.literal("REACTION_REMOVE"), messageId: z.string(), emoji: z.string().min(1).max(8) }),
+  z.object({ type: z.literal("VOICE_JOIN"), channelId: z.string() }),
+  z.object({ type: z.literal("VOICE_LEAVE") }),
 ]);
 
 type ClientMessage = z.infer<typeof clientMessageSchema>;
@@ -52,6 +62,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
         type: "READY",
         channels: await prisma.channel.findMany({ orderBy: { position: "asc" } }),
         onlineUserIds: allOnlineUserIds(),
+        voiceState: allVoiceState(),
       }),
     );
 
@@ -88,6 +99,17 @@ export async function gatewayRoutes(app: FastifyInstance) {
             sendError("message must have content or an attachment");
             return;
           }
+
+          let replyToId: string | undefined;
+          if (parsed.replyToId) {
+            const target = await prisma.message.findUnique({ where: { id: parsed.replyToId } });
+            if (!target || target.channelId !== parsed.channelId) {
+              sendError("reply target not found in this channel");
+              return;
+            }
+            replyToId = target.id;
+          }
+
           const [message, author] = await Promise.all([
             prisma.message.create({
               data: {
@@ -95,13 +117,16 @@ export async function gatewayRoutes(app: FastifyInstance) {
                 authorId: userId,
                 content: parsed.content,
                 attachmentUrl: parsed.attachmentUrl,
+                replyToId,
               },
+              include: { replyTo: true },
             }),
             prisma.user.findUnique({ where: { id: userId }, select: { avatarUrl: true } }),
           ]);
+          const [hydrated] = await hydrateReplyPreviews([message]);
           broadcastAll({
             type: "MESSAGE_CREATE",
-            message: { ...message, authorUsername: username, authorAvatarUrl: author?.avatarUrl ?? null },
+            message: { ...hydrated, authorUsername: username, authorAvatarUrl: author?.avatarUrl ?? null },
           });
         } else {
           broadcastAll(
@@ -131,12 +156,14 @@ export async function gatewayRoutes(app: FastifyInstance) {
             prisma.message.update({
               where: { id: message.id },
               data: { content: parsed.content, editedAt: new Date() },
+              include: { replyTo: true },
             }),
             prisma.user.findUnique({ where: { id: userId }, select: { avatarUrl: true } }),
           ]);
+          const [hydrated] = await hydrateReplyPreviews([updated]);
           broadcastAll({
             type: "MESSAGE_UPDATE",
-            message: { ...updated, authorUsername: username, authorAvatarUrl: author?.avatarUrl ?? null },
+            message: { ...hydrated, authorUsername: username, authorAvatarUrl: author?.avatarUrl ?? null },
           });
         } else {
           const canModerate = await hasPermission(userId, PERMISSIONS.MANAGE_CHANNELS);
@@ -151,6 +178,33 @@ export async function gatewayRoutes(app: FastifyInstance) {
             channelId: message.channelId,
           });
         }
+        return;
+      }
+
+      if (parsed.type === "MESSAGE_PIN" || parsed.type === "MESSAGE_UNPIN") {
+        const canModerate = await hasPermission(userId, PERMISSIONS.MANAGE_CHANNELS);
+        if (!canModerate) {
+          sendError("missing MANAGE_CHANNELS permission");
+          return;
+        }
+        const message = await prisma.message.findUnique({ where: { id: parsed.messageId } });
+        if (!message) {
+          sendError("message not found");
+          return;
+        }
+        const [updated, hydratedAuthor] = await Promise.all([
+          prisma.message.update({
+            where: { id: message.id },
+            data: { pinned: parsed.type === "MESSAGE_PIN" },
+            include: { replyTo: true },
+          }),
+          hydrateAuthors([message]),
+        ]);
+        const [hydrated] = await hydrateReplyPreviews([updated]);
+        broadcastAll({
+          type: "MESSAGE_UPDATE",
+          message: { ...hydrated, authorUsername: hydratedAuthor[0]?.authorUsername, authorAvatarUrl: hydratedAuthor[0]?.authorAvatarUrl },
+        });
         return;
       }
 
@@ -190,6 +244,37 @@ export async function gatewayRoutes(app: FastifyInstance) {
             emoji: parsed.emoji,
           });
         }
+        return;
+      }
+
+      if (parsed.type === "VOICE_JOIN") {
+        const { prevChannelId, changed } = joinVoiceChannel(userId, parsed.channelId);
+        if (!changed) return;
+        if (prevChannelId) {
+          broadcastAll({
+            type: "VOICE_STATE_UPDATE",
+            channelId: prevChannelId,
+            userIds: voiceChannelMembers(prevChannelId),
+          });
+        }
+        broadcastAll({
+          type: "VOICE_STATE_UPDATE",
+          channelId: parsed.channelId,
+          userIds: voiceChannelMembers(parsed.channelId),
+        });
+        return;
+      }
+
+      if (parsed.type === "VOICE_LEAVE") {
+        const leftChannelId = leaveVoiceChannel(userId);
+        if (leftChannelId) {
+          broadcastAll({
+            type: "VOICE_STATE_UPDATE",
+            channelId: leftChannelId,
+            userIds: voiceChannelMembers(leftChannelId),
+          });
+        }
+        return;
       }
     });
 
@@ -197,6 +282,14 @@ export async function gatewayRoutes(app: FastifyInstance) {
       const result = unregisterConnection(socket);
       if (result?.isNowOffline) {
         broadcastAll({ type: "PRESENCE_UPDATE", userId: result.meta.userId, status: "offline" });
+        const leftChannelId = leaveVoiceChannel(result.meta.userId);
+        if (leftChannelId) {
+          broadcastAll({
+            type: "VOICE_STATE_UPDATE",
+            channelId: leftChannelId,
+            userIds: voiceChannelMembers(leftChannelId),
+          });
+        }
       }
     });
   });

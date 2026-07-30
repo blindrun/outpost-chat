@@ -22,6 +22,24 @@ export interface InstanceInfo {
   theme: Theme;
   requireInviteToRegister: boolean;
   hasOwner: boolean;
+  gifSearchEnabled: boolean;
+  defaultChannelId: string | null;
+}
+
+export interface Gif {
+  id: string;
+  title: string;
+  previewUrl: string;
+  url: string;
+}
+
+export interface Webhook {
+  id: string;
+  channelId: string;
+  name: string;
+  avatarUrl: string | null;
+  token: string;
+  createdAt: string;
 }
 
 export interface Invite {
@@ -43,6 +61,13 @@ export interface Reaction {
   createdAt: string;
 }
 
+export interface ReplyPreview {
+  id: string;
+  content: string;
+  authorUsername?: string;
+  isWebhook: boolean;
+}
+
 export interface Message {
   id: string;
   channelId: string;
@@ -54,6 +79,14 @@ export interface Message {
   createdAt: string;
   editedAt?: string | null;
   reactions?: Reaction[];
+  isWebhook?: boolean;
+  pinned?: boolean;
+  replyToId?: string | null;
+  replyTo?: ReplyPreview | null;
+}
+
+export interface SearchResult extends Message {
+  channelName: string;
 }
 
 export type Permission = "MANAGE_CHANNELS" | "MANAGE_ROLES" | "SEND_MESSAGES";
@@ -142,10 +175,28 @@ export function listMessages(baseUrl: string, token: string, channelId: string) 
   return request<Message[]>(baseUrl, `/channels/${channelId}/messages`, token);
 }
 
+export function searchMessages(baseUrl: string, token: string, q: string, channelId?: string) {
+  const params = new URLSearchParams({ q });
+  if (channelId) params.set("channelId", channelId);
+  return request<SearchResult[]>(baseUrl, `/messages/search?${params.toString()}`, token);
+}
+
+export function listPinnedMessages(baseUrl: string, token: string, channelId: string) {
+  return request<Message[]>(baseUrl, `/channels/${channelId}/pins`, token);
+}
+
 export function getVoiceToken(baseUrl: string, token: string, channelId: string) {
   return request<{ token: string; url: string }>(baseUrl, `/channels/${channelId}/voice-token`, token, {
     method: "POST",
   });
+}
+
+export function searchGifs(baseUrl: string, token: string, query: string) {
+  return request<Gif[]>(baseUrl, `/gifs/search?q=${encodeURIComponent(query)}`, token);
+}
+
+export function trendingGifs(baseUrl: string, token: string) {
+  return request<Gif[]>(baseUrl, "/gifs/trending", token);
 }
 
 export async function uploadFile(baseUrl: string, token: string, file: File): Promise<{ url: string }> {
@@ -190,6 +241,7 @@ export function updateInstanceSettings(
     iconUrl?: string | null;
     theme?: Theme;
     requireInviteToRegister?: boolean;
+    defaultChannelId?: string | null;
   },
 ) {
   return request<InstanceInfo>(baseUrl, "/instance/settings", token, {
@@ -220,8 +272,27 @@ export function assignRole(baseUrl: string, token: string, userId: string, roleI
   });
 }
 
+export function unassignRole(baseUrl: string, token: string, userId: string, roleId: string) {
+  return request<void>(baseUrl, `/members/${userId}/roles/${roleId}`, token, { method: "DELETE" });
+}
+
+export function listWebhooks(baseUrl: string, token: string, channelId: string) {
+  return request<Webhook[]>(baseUrl, `/channels/${channelId}/webhooks`, token);
+}
+
+export function createWebhook(baseUrl: string, token: string, channelId: string, name: string) {
+  return request<Webhook>(baseUrl, `/channels/${channelId}/webhooks`, token, {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function deleteWebhook(baseUrl: string, token: string, webhookId: string) {
+  return request<void>(baseUrl, `/webhooks/${webhookId}`, token, { method: "DELETE" });
+}
+
 type GatewayEvent =
-  | { type: "READY"; channels: Channel[]; onlineUserIds: string[] }
+  | { type: "READY"; channels: Channel[]; onlineUserIds: string[]; voiceState: Record<string, string[]> }
   | { type: "MESSAGE_CREATE"; message: Message }
   | { type: "MESSAGE_UPDATE"; message: Message }
   | { type: "MESSAGE_DELETE"; messageId: string; channelId: string }
@@ -229,6 +300,7 @@ type GatewayEvent =
   | { type: "REACTION_REMOVE"; messageId: string; channelId: string; userId: string; emoji: string }
   | { type: "PRESENCE_UPDATE"; userId: string; status: "online" | "offline" }
   | { type: "TYPING_START"; channelId: string; userId: string; username: string }
+  | { type: "VOICE_STATE_UPDATE"; channelId: string; userIds: string[] }
   | { type: "ERROR"; error: string };
 
 export class Gateway {
@@ -248,8 +320,8 @@ export class Gateway {
     return () => this.listeners.delete(listener);
   }
 
-  sendMessage(channelId: string, content: string, attachmentUrl?: string) {
-    this.ws.send(JSON.stringify({ type: "MESSAGE_SEND", channelId, content, attachmentUrl }));
+  sendMessage(channelId: string, content: string, attachmentUrl?: string, replyToId?: string) {
+    this.ws.send(JSON.stringify({ type: "MESSAGE_SEND", channelId, content, attachmentUrl, replyToId }));
   }
 
   sendTyping(channelId: string) {
@@ -270,6 +342,22 @@ export class Gateway {
 
   removeReaction(messageId: string, emoji: string) {
     this.ws.send(JSON.stringify({ type: "REACTION_REMOVE", messageId, emoji }));
+  }
+
+  pinMessage(messageId: string) {
+    this.ws.send(JSON.stringify({ type: "MESSAGE_PIN", messageId }));
+  }
+
+  unpinMessage(messageId: string) {
+    this.ws.send(JSON.stringify({ type: "MESSAGE_UNPIN", messageId }));
+  }
+
+  sendVoiceJoin(channelId: string) {
+    this.ws.send(JSON.stringify({ type: "VOICE_JOIN", channelId }));
+  }
+
+  sendVoiceLeave() {
+    this.ws.send(JSON.stringify({ type: "VOICE_LEAVE" }));
   }
 
   close() {

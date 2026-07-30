@@ -54,3 +54,40 @@ export function broadcastAll(payload: unknown, exclude?: WebSocket) {
     if (socket.readyState === socket.OPEN) socket.send(data);
   }
 }
+
+// Separate from the LiveKit room itself — this is "who's connected to which
+// voice channel" at the app level, so the sidebar can show it for *every*
+// voice channel, not just the one the current client happens to be in
+// (LiveKit's own client SDK only knows about rooms you've actually joined).
+const voiceMembers = new Map<string, Set<string>>(); // channelId -> userIds
+const userVoiceChannel = new Map<string, string>(); // userId -> channelId
+
+export function joinVoiceChannel(userId: string, channelId: string) {
+  const prevChannelId = userVoiceChannel.get(userId) ?? null;
+  if (prevChannelId === channelId) return { prevChannelId, changed: false };
+  if (prevChannelId) voiceMembers.get(prevChannelId)?.delete(userId);
+  if (!voiceMembers.has(channelId)) voiceMembers.set(channelId, new Set());
+  voiceMembers.get(channelId)!.add(userId);
+  userVoiceChannel.set(userId, channelId);
+  return { prevChannelId, changed: true };
+}
+
+export function leaveVoiceChannel(userId: string): string | null {
+  const prevChannelId = userVoiceChannel.get(userId);
+  if (!prevChannelId) return null;
+  voiceMembers.get(prevChannelId)?.delete(userId);
+  userVoiceChannel.delete(userId);
+  return prevChannelId;
+}
+
+export function voiceChannelMembers(channelId: string): string[] {
+  return [...(voiceMembers.get(channelId) ?? [])];
+}
+
+export function allVoiceState(): Record<string, string[]> {
+  const result: Record<string, string[]> = {};
+  for (const [channelId, members] of voiceMembers) {
+    if (members.size > 0) result[channelId] = [...members];
+  }
+  return result;
+}

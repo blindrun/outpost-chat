@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  Channel,
   InstanceInfo,
   Member,
   Permission,
@@ -13,31 +14,37 @@ import {
 } from "./api";
 import { Modal } from "./Modal";
 import { InvitePanel } from "./InvitePanel";
+import { WebhooksPanel } from "./WebhooksPanel";
 import { ThemePicker } from "./ThemePicker";
 
 const ALL_PERMISSIONS: Permission[] = ["MANAGE_CHANNELS", "MANAGE_ROLES", "SEND_MESSAGES"];
 
-type Tab = "general" | "roles" | "members" | "invites";
+type Tab = "general" | "roles" | "members" | "invites" | "webhooks";
 
 function GeneralTab({
   baseUrl,
   token,
   instanceInfo,
+  channels,
   onUpdated,
 }: {
   baseUrl: string;
   token: string;
   instanceInfo: InstanceInfo;
+  channels: Channel[];
   onUpdated: (info: InstanceInfo) => void;
 }) {
   const [name, setName] = useState(instanceInfo.name);
   const [description, setDescription] = useState(instanceInfo.description ?? "");
   const [theme, setTheme] = useState(instanceInfo.theme);
   const [requireInvite, setRequireInvite] = useState(instanceInfo.requireInviteToRegister);
+  const [defaultChannelId, setDefaultChannelId] = useState(instanceInfo.defaultChannelId ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [iconUploading, setIconUploading] = useState(false);
   const [iconError, setIconError] = useState<string | null>(null);
+
+  const textChannels = channels.filter((c) => c.type === "TEXT");
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -49,6 +56,7 @@ function GeneralTab({
         description,
         theme,
         requireInviteToRegister: requireInvite,
+        defaultChannelId: defaultChannelId || null,
       });
       onUpdated(updated);
     } catch (err) {
@@ -100,6 +108,17 @@ function GeneralTab({
       <label className="checkbox-label">
         <input type="checkbox" checked={requireInvite} onChange={(e) => setRequireInvite(e.target.checked)} />
         Require an invite code to register
+      </label>
+      <label>
+        Default Channel
+        <select value={defaultChannelId} onChange={(e) => setDefaultChannelId(e.target.value)}>
+          <option value="">No default — members choose a channel themselves</option>
+          {textChannels.map((c) => (
+            <option key={c.id} value={c.id}>
+              #{c.name}
+            </option>
+          ))}
+        </select>
       </label>
       <h3>Theme</h3>
       <ThemePicker value={theme} onChange={setTheme} />
@@ -243,12 +262,14 @@ export function InstanceSettingsModal({
   baseUrl,
   token,
   instanceInfo,
+  channels,
   onClose,
   onUpdated,
 }: {
   baseUrl: string;
   token: string;
   instanceInfo: InstanceInfo;
+  channels: Channel[];
   onClose: () => void;
   onUpdated: (info: InstanceInfo) => void;
 }) {
@@ -270,14 +291,18 @@ export function InstanceSettingsModal({
         <button className={tab === "invites" ? "active" : ""} onClick={() => setTab("invites")}>
           Invites
         </button>
+        <button className={tab === "webhooks" ? "active" : ""} onClick={() => setTab("webhooks")}>
+          Webhooks
+        </button>
       </div>
 
       {tab === "general" && (
-        <GeneralTab baseUrl={baseUrl} token={token} instanceInfo={instanceInfo} onUpdated={onUpdated} />
+        <GeneralTab baseUrl={baseUrl} token={token} instanceInfo={instanceInfo} channels={channels} onUpdated={onUpdated} />
       )}
       {tab === "roles" && <RolesTab baseUrl={baseUrl} token={token} />}
       {tab === "members" && <MembersTab baseUrl={baseUrl} token={token} />}
       {tab === "invites" && <InvitePanel baseUrl={baseUrl} token={token} />}
+      {tab === "webhooks" && <WebhooksPanel baseUrl={baseUrl} token={token} channels={channels} />}
 
       <div className="modal-actions">
         <button className="btn secondary" onClick={onClose}>

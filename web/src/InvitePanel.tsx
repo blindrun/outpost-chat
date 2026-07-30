@@ -69,21 +69,24 @@ export function InvitePanel({ baseUrl, token }: { baseUrl: string; token: string
       <p className="subtitle">Invite codes let new people register an account on this instance.</p>
       <form onSubmit={handleCreate} className="invite-new-form">
         <input
-          placeholder="max uses (blank = ∞)"
+          placeholder="max uses"
           type="number"
           min={1}
           value={maxUses}
           onChange={(e) => setMaxUses(e.target.value)}
         />
         <input
-          placeholder="expires in minutes"
+          placeholder="expires (min)"
           type="number"
           min={1}
           value={expiresMinutes}
           onChange={(e) => setExpiresMinutes(e.target.value)}
         />
-        <button type="submit">New</button>
+        <button type="submit" className="btn">
+          New
+        </button>
       </form>
+      <p className="invite-hint">Leave either field blank for unlimited uses / no expiration.</p>
       {error && <p className="error">{error}</p>}
       <ul className="invite-list">
         {invites.map((inv) => {

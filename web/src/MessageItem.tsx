@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Message } from "./api";
 
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🎉"];
+const MENTION_PATTERN = /@([a-zA-Z0-9_]+)/g;
 
 function formatTimestamp(iso: string): string {
   const date = new Date(iso);
@@ -15,22 +16,60 @@ function initials(name: string): string {
   return name.slice(0, 2).toUpperCase();
 }
 
+// Only highlights @tokens that match a real member username — a plain "@"
+// followed by text that isn't anyone here stays as ordinary text, since
+// there's no backend concept of a real mention/ping to back up styling it
+// otherwise.
+function renderContent(content: string, memberUsernames: Set<string>): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+  MENTION_PATTERN.lastIndex = 0;
+  while ((match = MENTION_PATTERN.exec(content))) {
+    if (match.index > lastIndex) parts.push(content.slice(lastIndex, match.index));
+    const username = match[1];
+    if (memberUsernames.has(username)) {
+      parts.push(
+        <span key={key++} className="mention">
+          @{username}
+        </span>,
+      );
+    } else {
+      parts.push(match[0]);
+    }
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < content.length) parts.push(content.slice(lastIndex));
+  return parts;
+}
+
 export function MessageItem({
   message,
   isOnline,
   currentUserId,
+  canModerate,
+  memberUsernames,
   onEdit,
   onDelete,
   onReact,
   onUnreact,
+  onReply,
+  onPin,
+  onUnpin,
 }: {
   message: Message;
   isOnline: boolean;
   currentUserId: string;
+  canModerate: boolean;
+  memberUsernames: Set<string>;
   onEdit: (messageId: string, content: string) => void;
   onDelete: (messageId: string) => void;
   onReact: (messageId: string, emoji: string) => void;
   onUnreact: (messageId: string, emoji: string) => void;
+  onReply: (message: Message) => void;
+  onPin: (messageId: string) => void;
+  onUnpin: (messageId: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
@@ -68,10 +107,27 @@ export function MessageItem({
       )}
       <div className="message-body">
         <div className="message-header">
-          <span className={`presence-dot ${isOnline ? "online" : "offline"}`} />
+          {message.isWebhook ? (
+            <span className="bot-badge">BOT</span>
+          ) : (
+            <span className={`presence-dot ${isOnline ? "online" : "offline"}`} />
+          )}
           <span className="message-author">{authorName}</span>
           <span className="message-timestamp">{formatTimestamp(message.createdAt)}</span>
+          {message.pinned && (
+            <span className="pinned-badge" title="Pinned message">
+              📌
+            </span>
+          )}
         </div>
+
+        {message.replyTo && (
+          <div className="reply-preview">
+            <span className="reply-arrow">↩</span>
+            <span className="reply-author">{message.replyTo.authorUsername ?? "unknown"}</span>
+            <span className="reply-snippet">{message.replyTo.content || "(attachment)"}</span>
+          </div>
+        )}
 
         {editing ? (
           <form onSubmit={submitEdit} className="edit-form">
@@ -84,7 +140,7 @@ export function MessageItem({
         ) : (
           message.content && (
             <div className="message-content">
-              {message.content}
+              {renderContent(message.content, memberUsernames)}
               {message.editedAt && <span className="edited-tag"> (edited)</span>}
             </div>
           )
@@ -120,9 +176,21 @@ export function MessageItem({
       </div>
 
       <div className="message-toolbar">
+        <button className="toolbar-btn" title="Reply" onClick={() => onReply(message)}>
+          ↩️
+        </button>
         <button className="toolbar-btn" title="React" onClick={() => setPickerOpen((v) => !v)}>
           😀
         </button>
+        {canModerate && (
+          <button
+            className="toolbar-btn"
+            title={message.pinned ? "Unpin" : "Pin"}
+            onClick={() => (message.pinned ? onUnpin(message.id) : onPin(message.id))}
+          >
+            📌
+          </button>
+        )}
         {isOwn && !editing && (
           <>
             <button className="toolbar-btn" title="Edit" onClick={() => setEditing(true)}>

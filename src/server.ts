@@ -13,6 +13,8 @@ import { instanceRoutes } from "./routes/instance.js";
 import { messageRoutes } from "./routes/messages.js";
 import { voiceRoutes } from "./routes/voice.js";
 import { uploadRoutes } from "./routes/uploads.js";
+import { gifRoutes } from "./routes/gifs.js";
+import { webhookRoutes } from "./routes/webhooks.js";
 import { gatewayRoutes } from "./gateway/index.js";
 import { ensureBucket } from "./plugins/storage.js";
 
@@ -60,6 +62,8 @@ app.register(instanceRoutes);
 app.register(messageRoutes);
 app.register(voiceRoutes);
 app.register(uploadRoutes);
+app.register(gifRoutes);
+app.register(webhookRoutes);
 app.register(gatewayRoutes);
 
 // Serves the built web client (single-container deployment: this backend is
