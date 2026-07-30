@@ -757,6 +757,7 @@ function App() {
         </div>
         <div ref={voice.audioContainerRef} style={{ display: "none" }} />
       </aside>
+      <div ref={voice.videoContainerRef} className="screen-share-overlay" />
 
       {userSettingsOpen && (
         <UserSettingsModal

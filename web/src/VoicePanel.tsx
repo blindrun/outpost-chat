@@ -63,6 +63,9 @@ export function VoicePanel({ channel, session }: { channel: Channel; session: Vo
             <button className="btn" onClick={session.toggleDeafen}>
               {session.deafened ? "Undeafen" : "Deafen"}
             </button>
+            <button className="btn secondary" onClick={session.toggleScreenShare}>
+              {session.screenSharing ? "Stop Sharing" : "Share Screen"}
+            </button>
           </>
         )}
       </div>
