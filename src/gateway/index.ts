@@ -14,6 +14,7 @@ import {
 } from "./rooms.js";
 import { PERMISSIONS, hasPermission } from "../util/permissions.js";
 import { hydrateAuthors, hydrateReplyPreviews } from "../routes/messages.js";
+import { isAutomodBlocked, handlePostMessageBotHooks, handleReactionRoleToggle } from "../util/bot.js";
 
 const clientMessageSchema = z.discriminatedUnion("type", [
   z.object({
@@ -100,6 +101,11 @@ export async function gatewayRoutes(app: FastifyInstance) {
             return;
           }
 
+          if (parsed.content.trim() && (await isAutomodBlocked(parsed.content))) {
+            sendError("message blocked: contains a banned word");
+            return;
+          }
+
           let replyToId: string | undefined;
           if (parsed.replyToId) {
             const target = await prisma.message.findUnique({ where: { id: parsed.replyToId } });
@@ -128,6 +134,15 @@ export async function gatewayRoutes(app: FastifyInstance) {
             type: "MESSAGE_CREATE",
             message: { ...hydrated, authorUsername: username, authorAvatarUrl: author?.avatarUrl ?? null },
           });
+
+          // Fire-and-forget on purpose — commands/leveling/level-up
+          // announcements are follow-up bot activity, not part of the
+          // user's own send succeeding or failing.
+          if (parsed.content.trim()) {
+            handlePostMessageBotHooks(parsed.channelId, userId, username, parsed.content).catch((err) =>
+              app.log.error(err, "bot hook failed"),
+            );
+          }
         } else {
           broadcastAll(
             { type: "TYPING_START", channelId: parsed.channelId, userId, username },
@@ -232,6 +247,9 @@ export async function gatewayRoutes(app: FastifyInstance) {
             username,
             emoji: parsed.emoji,
           });
+          handleReactionRoleToggle(userId, message.id, parsed.emoji, true).catch((err) =>
+            app.log.error(err, "reaction-role toggle failed"),
+          );
         } else {
           await prisma.reaction.deleteMany({
             where: { messageId: message.id, userId, emoji: parsed.emoji },
@@ -243,6 +261,9 @@ export async function gatewayRoutes(app: FastifyInstance) {
             userId,
             emoji: parsed.emoji,
           });
+          handleReactionRoleToggle(userId, message.id, parsed.emoji, false).catch((err) =>
+            app.log.error(err, "reaction-role toggle failed"),
+          );
         }
         return;
       }

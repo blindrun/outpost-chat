@@ -19,27 +19,41 @@ const searchQuerySchema = z.object({
 // author UUID instead of a username — only live MESSAGE_CREATE broadcasts
 // carried it, from the sender's own JWT. Webhook-authored messages
 // (authorId null, webhookId set) are joined the same way, from Webhook
-// instead of User. Shared between the history, search, and pins endpoints,
-// and the gateway (for reply previews).
-export async function hydrateAuthors<T extends { authorId: string | null; webhookId: string | null }>(
+// instead of User; built-in-bot messages (isSystemBot true, both null) pull
+// the configurable name/avatar from the BotSettings singleton. Shared
+// between the history, search, and pins endpoints, and the gateway (for
+// reply previews).
+export async function hydrateAuthors<T extends { authorId: string | null; webhookId: string | null; isSystemBot?: boolean }>(
   messages: T[],
-): Promise<(T & { authorUsername?: string; authorAvatarUrl?: string | null; isWebhook: boolean })[]> {
+): Promise<(T & { authorUsername?: string; authorAvatarUrl?: string | null; isWebhook: boolean; isSystemBot: boolean })[]> {
   const authorIds = [...new Set(messages.filter((m) => m.authorId).map((m) => m.authorId as string))];
   const webhookIds = [...new Set(messages.filter((m) => m.webhookId).map((m) => m.webhookId as string))];
-  const [authors, webhooks] = await Promise.all([
+  const needsBotSettings = messages.some((m) => m.isSystemBot);
+  const [authors, webhooks, botSettings] = await Promise.all([
     prisma.user.findMany({ where: { id: { in: authorIds } }, select: { id: true, username: true, avatarUrl: true } }),
     prisma.webhook.findMany({ where: { id: { in: webhookIds } }, select: { id: true, name: true, avatarUrl: true } }),
+    needsBotSettings ? prisma.botSettings.findUnique({ where: { id: "singleton" } }) : Promise.resolve(null),
   ]);
   const authorById = new Map(authors.map((a) => [a.id, a]));
   const webhookById = new Map(webhooks.map((w) => [w.id, w]));
 
   return messages.map((m) => {
+    if (m.isSystemBot) {
+      return {
+        ...m,
+        authorUsername: botSettings?.name ?? "Bot",
+        authorAvatarUrl: botSettings?.avatarUrl ?? null,
+        isWebhook: false,
+        isSystemBot: true,
+      };
+    }
     const webhook = m.webhookId ? webhookById.get(m.webhookId) : undefined;
     return {
       ...m,
       authorUsername: webhook?.name ?? authorById.get(m.authorId ?? "")?.username,
       authorAvatarUrl: webhook?.avatarUrl ?? authorById.get(m.authorId ?? "")?.avatarUrl,
       isWebhook: !!webhook,
+      isSystemBot: false,
     };
   });
 }
@@ -51,8 +65,16 @@ const REPLY_PREVIEW_LENGTH = 200;
 // content trimmed down to a short quote — shared between history and
 // search so both show full reply context, not just a dangling replyToId.
 export async function hydrateReplyPreviews<
-  T extends { replyTo: { id: string; content: string; authorId: string | null; webhookId: string | null } | null },
->(messages: T[]): Promise<(Omit<T, "replyTo"> & { replyTo: { id: string; content: string; authorUsername?: string; isWebhook: boolean } | null })[]> {
+  T extends {
+    replyTo: { id: string; content: string; authorId: string | null; webhookId: string | null; isSystemBot?: boolean } | null;
+  },
+>(
+  messages: T[],
+): Promise<
+  (Omit<T, "replyTo"> & {
+    replyTo: { id: string; content: string; authorUsername?: string; isWebhook: boolean; isSystemBot: boolean } | null;
+  })[]
+> {
   const targets = messages.filter((m): m is T & { replyTo: NonNullable<T["replyTo"]> } => !!m.replyTo).map((m) => m.replyTo);
   const hydratedTargets = await hydrateAuthors(targets);
   const byId = new Map(hydratedTargets.map((t) => [t.id, t]));
@@ -67,6 +89,7 @@ export async function hydrateReplyPreviews<
             content: target.content.length > REPLY_PREVIEW_LENGTH ? `${target.content.slice(0, REPLY_PREVIEW_LENGTH)}…` : target.content,
             authorUsername: target.authorUsername,
             isWebhook: target.isWebhook,
+            isSystemBot: target.isSystemBot,
           }
         : null,
     };

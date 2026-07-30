@@ -77,11 +77,14 @@ model Message {
   id            String    @id @default(uuid())
   channelId     String
   channel       Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  // Exactly one of authorId/webhookId is set — a message is sent by either a
-  // real user (over the gateway) or a webhook (over plain REST), never both.
+  // At most one of authorId/webhookId is set, and never alongside
+  // isSystemBot — a message is sent by a real user (over the gateway), a
+  // webhook (over plain REST), or the built-in bot (server-generated),
+  // never more than one of the three.
   authorId      String?
   webhookId     String?
   webhook       Webhook?  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  isSystemBot   Boolean   @default(false)
   content       String
   attachmentUrl String?
   createdAt     DateTime  @default(now())
@@ -114,7 +117,73 @@ model Role {
   permissions String[] @default([])
   position    Int      @default(0)
 
-  memberRoles UserRole[]
+  memberRoles   UserRole[]
+  reactionRoles ReactionRole[]
+}
+
+// Singleton, same pattern as InstanceSettings — this instance's one built-in
+// bot identity (nameable, per the "change the bot's name" ask) plus a toggle
+// + config per feature so admins can turn on only what they want.
+model BotSettings {
+  id        String  @id @default("singleton")
+  name      String  @default("Outpost Bot")
+  avatarUrl String?
+
+  welcomeEnabled   Boolean @default(false)
+  welcomeChannelId String?
+  welcomeMessage   String  @default("Welcome to the server, {user}! 👋")
+
+  autoRoleEnabled Boolean @default(false)
+  autoRoleId      String?
+
+  customCommandsEnabled Boolean @default(false)
+
+  // The bot maintains exactly one "reaction role menu" message, posted into
+  // reactionRoleChannelId and re-edited (not reposted) whenever entries
+  // change — reactionRoleMessageId tracks which message that is.
+  reactionRolesEnabled  Boolean @default(false)
+  reactionRoleChannelId String?
+  reactionRoleMessageId String?
+
+  levelingEnabled  Boolean @default(false)
+  levelUpAnnounce  Boolean @default(true)
+  levelUpMessage   String  @default("🎉 {user} just reached level {level}!")
+
+  automodEnabled     Boolean  @default(false)
+  automodBannedWords String[] @default([])
+}
+
+model CustomCommand {
+  id        String   @id @default(uuid())
+  // Stored without the "!" prefix — matched against a message that's
+  // exactly "!<trigger>" (case-insensitive), same convention as classic
+  // Discord prefix-command bots.
+  trigger   String   @unique
+  response  String
+  createdAt DateTime @default(now())
+}
+
+// One row per configured emoji->role mapping. All entries render together
+// into the bot's single reaction-role menu message (see BotSettings above),
+// not a separate message each — matches the real Carl-bot convention of one
+// menu message per channel.
+model ReactionRole {
+  id        String   @id @default(uuid())
+  emoji     String   @unique
+  roleId    String
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model UserLevel {
+  userId       String    @id
+  xp           Int       @default(0)
+  level        Int       @default(0)
+  messageCount Int       @default(0)
+  // 60s-per-message XP cooldown (matches MEE6/Tatsu convention, prevents
+  // spam-leveling) — tracked here rather than in-memory so it survives a
+  // server restart.
+  lastXpAt     DateTime?
 }
 
 model UserRole {
