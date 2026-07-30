@@ -584,6 +584,22 @@ button, input, select {
 .message:hover { background: rgba(4, 4, 5, 0.07); }
 .message .avatar { margin-top: 0.15rem; }
 .message-body { flex: 1; min-width: 0; }
+
+/* Consecutive same-author messages: no repeated avatar/name/timestamp,
+   tighter vertical rhythm, timestamp only shown on hover in the avatar's
+   gutter (same 32px width so message text still lines up). */
+.message-grouped { padding-top: 0; padding-bottom: 0; margin-top: 1px; }
+.message-hover-timestamp {
+  width: 32px;
+  flex-shrink: 0;
+  text-align: center;
+  padding-top: 0.2rem;
+  font-size: 0.65rem;
+  color: var(--text-faint);
+  opacity: 0;
+}
+.message-grouped:hover .message-hover-timestamp { opacity: 1; }
+.pinned-badge-grouped { display: inline-block; margin-bottom: 0.15rem; }
 .message-header { display: flex; align-items: baseline; gap: 0.5rem; }
 .message-author { font-weight: 600; color: var(--header-primary); font-size: 0.95rem; }
 .avatar-btn { background: none; border: none; padding: 0; cursor: pointer; display: block; }
