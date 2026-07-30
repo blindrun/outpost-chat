@@ -886,7 +886,8 @@ button, input, select {
 .gear-btn:hover { color: var(--text-normal); }
 
 .modal h2 ~ .modal-tabs { margin-top: -0.25rem; }
-.settings-tabs button { flex: 1; }
+.settings-tabs { flex-wrap: wrap; }
+.settings-tabs button { flex: 1 1 auto; min-width: 5rem; }
 
 .settings-section {
   display: flex;
