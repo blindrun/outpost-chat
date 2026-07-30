@@ -16,6 +16,7 @@ import { uploadRoutes } from "./routes/uploads.js";
 import { gifRoutes } from "./routes/gifs.js";
 import { webhookRoutes } from "./routes/webhooks.js";
 import { botRoutes } from "./routes/bot.js";
+import { moderationRoutes } from "./routes/moderation.js";
 import { gatewayRoutes } from "./gateway/index.js";
 import { ensureBucket } from "./plugins/storage.js";
 import { ensureClaimCode } from "./util/claim.js";
@@ -68,6 +69,7 @@ app.register(uploadRoutes);
 app.register(gifRoutes);
 app.register(webhookRoutes);
 app.register(botRoutes);
+app.register(moderationRoutes);
 app.register(gatewayRoutes);
 
 // Serves the built web client (single-container deployment: this backend is

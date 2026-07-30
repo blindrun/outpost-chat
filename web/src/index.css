@@ -210,6 +210,8 @@ button, input, select {
 .theme-card-blurb { font-size: 0.7rem; color: var(--text-muted); }
 
 .error { color: var(--red); font-size: 0.8rem; margin: 0; }
+.composer-notice { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.3rem 0.6rem; background: rgba(237, 66, 69, 0.1); border-radius: 4px; }
+.composer-notice button { background: none; border: none; color: var(--red); cursor: pointer; font-size: 0.8rem; }
 .link { background: none; border: none; color: #00a8fc; cursor: pointer; padding: 0; font-size: 0.85rem; text-align: left; }
 .link:hover { text-decoration: underline; }
 .text-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0; font-size: 0.78rem; text-align: left; }
@@ -1056,6 +1058,9 @@ button, input, select {
 .profile-card-header { display: flex; align-items: center; gap: 0.7rem; }
 .profile-card-header h4 { margin: 0 0 0.2rem; font-size: 1rem; }
 .profile-card-bio { color: var(--text-normal); font-size: 0.85rem; line-height: 1.4; white-space: pre-wrap; }
+.mod-warn-row { display: flex; gap: 0.4rem; margin: 0.3rem 0; }
+.mod-warn-row input { flex: 1; }
+.mod-actions-row { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
 
 .ptt-bind-row { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; font-size: 0.85rem; color: var(--text-normal); }
 .ptt-bind-row strong { color: var(--header-primary); }

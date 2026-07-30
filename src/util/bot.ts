@@ -84,6 +84,41 @@ export async function isAutomodBlocked(content: string): Promise<boolean> {
   return settings.automodBannedWords.some((word) => lower.includes(word.toLowerCase()));
 }
 
+const WARNING_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+// A timed mute blocks MESSAGE_SEND entirely, checked before automod's own
+// per-message word filter runs.
+export async function isUserMuted(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { mutedUntil: true } });
+  return !!user?.mutedUntil && user.mutedUntil > new Date();
+}
+
+// Logs one warning (automod-triggered or a moderator's manual action) and
+// escalates to a timed mute once the count of warnings inside a rolling
+// 24h window reaches BotSettings.automodWarnThreshold — the "beyond
+// delete-on-match" half of automod. Manual warnings count toward the same
+// threshold as automod ones, same as Discord's unified strike system.
+export async function recordWarning(
+  userId: string,
+  reason: string,
+  source: "automod" | "manual",
+  moderatorId?: string,
+): Promise<{ count: number; threshold: number; muted: boolean; mutedUntil: Date | null }> {
+  const settings = await getBotSettings();
+  await prisma.warning.create({ data: { userId, reason, source, moderatorId } });
+
+  const since = new Date(Date.now() - WARNING_WINDOW_MS);
+  const count = await prisma.warning.count({ where: { userId, createdAt: { gte: since } } });
+
+  let mutedUntil: Date | null = null;
+  if (count >= settings.automodWarnThreshold) {
+    mutedUntil = new Date(Date.now() + settings.automodMuteMinutes * 60_000);
+    await prisma.user.update({ where: { id: userId }, data: { mutedUntil } });
+  }
+
+  return { count, threshold: settings.automodWarnThreshold, muted: !!mutedUntil, mutedUntil };
+}
+
 const RANK_PATTERN = /^!rank$/i;
 const LEADERBOARD_PATTERN = /^!leaderboard$/i;
 const COMMAND_PATTERN = /^!([a-zA-Z0-9_-]+)$/;

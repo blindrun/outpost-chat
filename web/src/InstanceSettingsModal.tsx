@@ -18,7 +18,7 @@ import { WebhooksPanel } from "./WebhooksPanel";
 import { BotSettingsPanel } from "./BotSettingsPanel";
 import { ThemePicker } from "./ThemePicker";
 
-const ALL_PERMISSIONS: Permission[] = ["MANAGE_CHANNELS", "MANAGE_ROLES", "SEND_MESSAGES"];
+const ALL_PERMISSIONS: Permission[] = ["MANAGE_CHANNELS", "MANAGE_ROLES", "SEND_MESSAGES", "MODERATE_MEMBERS"];
 
 type Tab = "general" | "roles" | "members" | "invites" | "webhooks" | "bot";
 

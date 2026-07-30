@@ -18,6 +18,8 @@ const updateBotSettingsSchema = z.object({
   levelUpMessage: z.string().min(1).max(500).optional(),
   automodEnabled: z.boolean().optional(),
   automodBannedWords: z.array(z.string().min(1).max(64)).max(200).optional(),
+  automodWarnThreshold: z.number().int().min(1).max(20).optional(),
+  automodMuteMinutes: z.number().int().min(1).max(10080).optional(),
 });
 
 const createCommandSchema = z.object({
