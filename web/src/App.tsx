@@ -18,7 +18,7 @@ import {
 } from "./api";
 import { VoicePanel } from "./VoicePanel";
 import { useVoiceSession } from "./useVoiceSession";
-import { MessageItem } from "./MessageItem";
+import { MessageItem, messageIdentityKey } from "./MessageItem";
 import { Modal } from "./Modal";
 import { AddServerModal } from "./AddServerModal";
 import { UserSettingsModal } from "./UserSettingsModal";
@@ -38,6 +38,11 @@ function getMentionQuery(text: string, cursor: number): string | null {
   const match = upToCursor.match(/(?:^|\s)@([a-zA-Z0-9_]*)$/);
   return match ? match[1] : null;
 }
+
+// Consecutive messages from the same author within this window collapse
+// into one visual group (Discord-style) — same threshold Discord itself
+// uses.
+const MESSAGE_GROUP_WINDOW_MS = 7 * 60 * 1000;
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -764,10 +769,18 @@ function App() {
               </button>
             </div>
             <div className="messages">
-              {channelMessages.map((m) => (
+              {channelMessages.map((m, i) => {
+                const prev = channelMessages[i - 1];
+                const grouped =
+                  !!prev &&
+                  !m.replyTo &&
+                  messageIdentityKey(prev) === messageIdentityKey(m) &&
+                  new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() < MESSAGE_GROUP_WINDOW_MS;
+                return (
                 <MessageItem
                   key={m.id}
                   message={m}
+                  grouped={grouped}
                   isOnline={onlineUserIds.has(m.authorId)}
                   currentUserId={session.user.id}
                   canModerate={canManageChannels}
@@ -784,7 +797,8 @@ function App() {
                   onUnpin={(id) => gatewayRef.current?.unpinMessage(id)}
                   onViewProfile={setViewingProfileUserId}
                 />
-              ))}
+                );
+              })}
             </div>
             <p className="typing">{typingLabel && `${typingLabel} is typing…`}</p>
             <div className="composer-area">

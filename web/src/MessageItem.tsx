@@ -13,6 +13,20 @@ function formatTimestamp(iso: string): string {
   return isToday ? `Today at ${time}` : `${date.toLocaleDateString()} ${time}`;
 }
 
+function formatShortTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+// Which "identity" posted a message, for consecutive-message grouping —
+// real users by authorId, webhooks/the built-in bot by display name (the
+// only identity the client has for those, since webhookId isn't exposed
+// to the frontend).
+export function messageIdentityKey(m: Message): string {
+  if (m.isSystemBot) return "bot:system";
+  if (m.isWebhook) return `bot:${m.authorUsername ?? "webhook"}`;
+  return `user:${m.authorId}`;
+}
+
 function initials(name: string): string {
   return name.slice(0, 2).toUpperCase();
 }
@@ -47,6 +61,7 @@ function renderContent(content: string, memberUsernames: Set<string>): React.Rea
 
 export function MessageItem({
   message,
+  grouped,
   isOnline,
   currentUserId,
   canModerate,
@@ -61,6 +76,10 @@ export function MessageItem({
   onViewProfile,
 }: {
   message: Message;
+  // True when this message is a same-author, same-minute-ish continuation
+  // of the one right above it — collapses the repeated avatar/name/
+  // timestamp header, Discord-style.
+  grouped: boolean;
   isOnline: boolean;
   currentUserId: string;
   canModerate: boolean;
@@ -106,8 +125,10 @@ export function MessageItem({
   const isRealUser = !message.isWebhook && !message.isSystemBot && !!message.authorId;
 
   return (
-    <div className="message">
-      {isRealUser ? (
+    <div className={`message ${grouped ? "message-grouped" : ""}`}>
+      {grouped ? (
+        <span className="message-hover-timestamp">{formatShortTime(message.createdAt)}</span>
+      ) : isRealUser ? (
         <button type="button" className="avatar-btn" onClick={() => onViewProfile(message.authorId)}>
           {message.authorAvatarUrl ? (
             <img className="avatar" src={message.authorAvatarUrl} alt="" />
@@ -121,26 +142,34 @@ export function MessageItem({
         <span className="avatar avatar-placeholder">{initials(authorName)}</span>
       )}
       <div className="message-body">
-        <div className="message-header">
-          {message.isWebhook || message.isSystemBot ? (
-            <span className="bot-badge">BOT</span>
-          ) : (
-            <span className={`presence-dot ${isOnline ? "online" : "offline"}`} />
-          )}
-          {isRealUser ? (
-            <button type="button" className="message-author-btn" onClick={() => onViewProfile(message.authorId)}>
-              {authorName}
-            </button>
-          ) : (
-            <span className="message-author">{authorName}</span>
-          )}
-          <span className="message-timestamp">{formatTimestamp(message.createdAt)}</span>
-          {message.pinned && (
-            <span className="pinned-badge" title="Pinned message">
+        {grouped ? (
+          message.pinned && (
+            <span className="pinned-badge pinned-badge-grouped" title="Pinned message">
               📌
             </span>
-          )}
-        </div>
+          )
+        ) : (
+          <div className="message-header">
+            {message.isWebhook || message.isSystemBot ? (
+              <span className="bot-badge">BOT</span>
+            ) : (
+              <span className={`presence-dot ${isOnline ? "online" : "offline"}`} />
+            )}
+            {isRealUser ? (
+              <button type="button" className="message-author-btn" onClick={() => onViewProfile(message.authorId)}>
+                {authorName}
+              </button>
+            ) : (
+              <span className="message-author">{authorName}</span>
+            )}
+            <span className="message-timestamp">{formatTimestamp(message.createdAt)}</span>
+            {message.pinned && (
+              <span className="pinned-badge" title="Pinned message">
+                📌
+              </span>
+            )}
+          </div>
+        )}
 
         {message.replyTo && (
           <div className="reply-preview">
