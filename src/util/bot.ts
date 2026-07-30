@@ -33,8 +33,12 @@ async function editSystemMessage(messageId: string, content: string) {
   return message;
 }
 
-async function renderReactionRoleMenu(): Promise<string> {
-  const entries = await prisma.reactionRole.findMany({ include: { role: true }, orderBy: { createdAt: "asc" } });
+async function renderReactionRoleMenu(channelId: string): Promise<string> {
+  const entries = await prisma.reactionRole.findMany({
+    where: { channelId },
+    include: { role: true },
+    orderBy: { createdAt: "asc" },
+  });
   if (entries.length === 0) {
     return "React to a role below to get it! (no roles configured yet)";
   }
@@ -42,25 +46,31 @@ async function renderReactionRoleMenu(): Promise<string> {
   return `React with an emoji below to get that role:\n\n${lines.join("\n")}`;
 }
 
-// Called any time a reaction-role entry is added/removed. Edits the one
-// standing menu message in place rather than reposting, so the channel
-// doesn't fill up with a fresh message every time an admin tweaks the list.
-export async function refreshReactionRoleMenu() {
+// Called any time a reaction-role entry is added/removed for a channel.
+// Edits that channel's one standing menu message in place rather than
+// reposting, so the channel doesn't fill up with a fresh message every
+// time an admin tweaks the list. Each channel gets its own independent
+// menu (ReactionRoleMenu is keyed by channelId) rather than one
+// instance-wide menu.
+export async function refreshReactionRoleMenu(channelId: string) {
   const settings = await getBotSettings();
-  if (!settings.reactionRolesEnabled || !settings.reactionRoleChannelId) return;
+  if (!settings.reactionRolesEnabled) return;
 
-  const content = await renderReactionRoleMenu();
-  const existing = settings.reactionRoleMessageId
-    ? await prisma.message.findUnique({ where: { id: settings.reactionRoleMessageId } })
-    : null;
+  const content = await renderReactionRoleMenu(channelId);
+  const existingMenu = await prisma.reactionRoleMenu.findUnique({ where: { channelId } });
+  const existing = existingMenu ? await prisma.message.findUnique({ where: { id: existingMenu.messageId } }) : null;
 
   if (existing) {
     await editSystemMessage(existing.id, content);
     return;
   }
 
-  const message = await postSystemMessage(settings.reactionRoleChannelId, content);
-  await prisma.botSettings.update({ where: { id: "singleton" }, data: { reactionRoleMessageId: message.id } });
+  const message = await postSystemMessage(channelId, content);
+  await prisma.reactionRoleMenu.upsert({
+    where: { channelId },
+    create: { channelId, messageId: message.id },
+    update: { messageId: message.id },
+  });
 }
 
 // Automod pre-check — run before a message is persisted at all, so a
@@ -124,15 +134,22 @@ export async function handlePostMessageBotHooks(channelId: string, userId: strin
   }
 }
 
-// Reactions only grant/revoke a role when they land on the bot's own
-// standing reaction-role menu message — reacting to any other message with
+// Reactions only grant/revoke a role when they land on one of the bot's own
+// standing reaction-role menu messages — reacting to any other message with
 // the same emoji does nothing, same as Carl-bot scoping roles to one
-// specific message rather than globally by emoji.
+// specific message rather than globally by emoji. Each channel has its own
+// menu (and its own emoji namespace), so which menu this message belongs to
+// determines which channel's ReactionRole entries apply.
 export async function handleReactionRoleToggle(userId: string, messageId: string, emoji: string, add: boolean) {
   const settings = await getBotSettings();
-  if (!settings.reactionRolesEnabled || messageId !== settings.reactionRoleMessageId) return;
+  if (!settings.reactionRolesEnabled) return;
 
-  const reactionRole = await prisma.reactionRole.findUnique({ where: { emoji } });
+  const menu = await prisma.reactionRoleMenu.findFirst({ where: { messageId } });
+  if (!menu) return;
+
+  const reactionRole = await prisma.reactionRole.findUnique({
+    where: { channelId_emoji: { channelId: menu.channelId, emoji } },
+  });
   if (!reactionRole) return;
 
   if (add) {

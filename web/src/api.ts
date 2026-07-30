@@ -121,7 +121,6 @@ export interface BotSettings {
   autoRoleId: string | null;
   customCommandsEnabled: boolean;
   reactionRolesEnabled: boolean;
-  reactionRoleChannelId: string | null;
   levelingEnabled: boolean;
   levelUpAnnounce: boolean;
   levelUpMessage: string;
@@ -137,6 +136,8 @@ export interface CustomCommand {
 
 export interface ReactionRoleEntry {
   id: string;
+  channelId: string;
+  channelName: string;
   emoji: string;
   roleId: string;
   roleName: string;
@@ -376,10 +377,10 @@ export function deleteCustomCommand(baseUrl: string, token: string, id: string) 
   return request<void>(baseUrl, `/bot/commands/${id}`, token, { method: "DELETE" });
 }
 
-export function createReactionRole(baseUrl: string, token: string, emoji: string, roleId: string) {
+export function createReactionRole(baseUrl: string, token: string, channelId: string, emoji: string, roleId: string) {
   return request<ReactionRoleEntry>(baseUrl, "/bot/reaction-roles", token, {
     method: "POST",
-    body: JSON.stringify({ emoji, roleId }),
+    body: JSON.stringify({ channelId, emoji, roleId }),
   });
 }
 
