@@ -18,6 +18,7 @@ function ProfileTab({
 }) {
   const [username, setUsername] = useState(user.username);
   const [email, setEmail] = useState(user.email);
+  const [bio, setBio] = useState(user.bio ?? "");
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSaving, setProfileSaving] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -28,9 +29,10 @@ function ProfileTab({
     setProfileError(null);
     setProfileSaving(true);
     try {
-      const updates: { username?: string; email?: string } = {};
+      const updates: { username?: string; email?: string; bio?: string | null } = {};
       if (username !== user.username) updates.username = username;
       if (email !== user.email) updates.email = email;
+      if (bio !== (user.bio ?? "")) updates.bio = bio.trim() || null;
       if (Object.keys(updates).length === 0) return;
       const result = await updateProfile(baseUrl, token, updates);
       onSessionUpdate({ token: result.token, user: result.user });
@@ -84,6 +86,17 @@ function ProfileTab({
           Email
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         </label>
+        <label>
+          Bio
+          <textarea
+            value={bio}
+            onChange={(e) => setBio(e.target.value.slice(0, 240))}
+            rows={3}
+            placeholder="Tell people a little about yourself"
+            maxLength={240}
+          />
+        </label>
+        <span className="char-counter">{bio.length}/240</span>
         {profileError && <p className="error">{profileError}</p>}
         <div className="modal-actions">
           <button type="submit" className="btn" disabled={profileSaving}>

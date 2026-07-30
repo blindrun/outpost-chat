@@ -26,6 +26,7 @@ import { InstanceSettingsModal } from "./InstanceSettingsModal";
 import { EmojiPicker } from "./EmojiPicker";
 import { GifPicker } from "./GifPicker";
 import { MemberList } from "./MemberList";
+import { ProfileCard } from "./ProfileCard";
 import { SearchPanel } from "./SearchPanel";
 import { PinnedMessagesPanel } from "./PinnedMessagesPanel";
 
@@ -125,12 +126,13 @@ function App() {
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [openPicker, setOpenPicker] = useState<"emoji" | "gif" | null>(null);
   const [voiceDetailsOpen, setVoiceDetailsOpen] = useState(false);
-  const [memberListOpen, setMemberListOpen] = useState(() => localStorage.getItem("memberListOpen") !== "false");
+  const [memberListOpen, setMemberListOpen] = useState(() => localStorage.getItem("memberListOpen") === "true");
   useEffect(() => {
     localStorage.setItem("memberListOpen", String(memberListOpen));
   }, [memberListOpen]);
   const draftInputRef = useRef<HTMLInputElement | null>(null);
   const [userSettingsOpen, setUserSettingsOpen] = useState(false);
+  const [viewingProfileUserId, setViewingProfileUserId] = useState<string | null>(null);
   const [instanceSettingsOpen, setInstanceSettingsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [pinsOpen, setPinsOpen] = useState(false);
@@ -466,6 +468,9 @@ function App() {
   const canManageChannels =
     session.user.isOwner ||
     (currentMember?.roles.some((r) => roles.find((role) => role.id === r.id)?.permissions.includes("MANAGE_CHANNELS")) ?? false);
+  const canManageRoles =
+    session.user.isOwner ||
+    (currentMember?.roles.some((r) => roles.find((role) => role.id === r.id)?.permissions.includes("MANAGE_ROLES")) ?? false);
   const mentionMatches =
     mentionQuery !== null
       ? members.filter((m) => m.username.toLowerCase().startsWith(mentionQuery.toLowerCase())).slice(0, 8)
@@ -688,6 +693,22 @@ function App() {
           onSessionUpdate={handleSessionUpdate}
         />
       )}
+      {viewingProfileUserId && (
+        <ProfileCard
+          baseUrl={activeInstance.baseUrl}
+          token={session.token}
+          userId={viewingProfileUserId}
+          currentUserId={session.user.id}
+          isOnline={onlineUserIds.has(viewingProfileUserId)}
+          canManageRoles={canManageRoles}
+          roles={roles}
+          onClose={() => setViewingProfileUserId(null)}
+          onEditProfile={() => {
+            setViewingProfileUserId(null);
+            setUserSettingsOpen(true);
+          }}
+        />
+      )}
       {instanceSettingsOpen && instanceInfo && (
         <InstanceSettingsModal
           baseUrl={activeInstance.baseUrl}
@@ -761,6 +782,7 @@ function App() {
                   }}
                   onPin={(id) => gatewayRef.current?.pinMessage(id)}
                   onUnpin={(id) => gatewayRef.current?.unpinMessage(id)}
+                  onViewProfile={setViewingProfileUserId}
                 />
               ))}
             </div>
@@ -857,7 +879,12 @@ function App() {
         )}
       </main>
       {memberListOpen && (
-        <MemberList baseUrl={activeInstance.baseUrl} token={session.token} onlineUserIds={onlineUserIds} />
+        <MemberList
+          baseUrl={activeInstance.baseUrl}
+          token={session.token}
+          onlineUserIds={onlineUserIds}
+          onSelectMember={setViewingProfileUserId}
+        />
       )}
     </div>
   );

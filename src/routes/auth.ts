@@ -23,6 +23,7 @@ const loginSchema = z.object({
 const updateProfileSchema = z.object({
   username: z.string().min(3).max(32).optional(),
   email: z.string().email().optional(),
+  bio: z.string().max(240).nullable().optional(),
 });
 
 const updatePasswordSchema = z.object({
@@ -30,8 +31,15 @@ const updatePasswordSchema = z.object({
   newPassword: z.string().min(8),
 });
 
-export function toPublicUser(user: { id: string; username: string; email: string; avatarUrl: string | null; isOwner: boolean }) {
-  return { id: user.id, username: user.username, email: user.email, avatarUrl: user.avatarUrl, isOwner: user.isOwner };
+export function toPublicUser(user: {
+  id: string;
+  username: string;
+  email: string;
+  avatarUrl: string | null;
+  bio: string | null;
+  isOwner: boolean;
+}) {
+  return { id: user.id, username: user.username, email: user.email, avatarUrl: user.avatarUrl, bio: user.bio, isOwner: user.isOwner };
 }
 
 export async function authRoutes(app: FastifyInstance) {
@@ -164,7 +172,7 @@ export async function authRoutes(app: FastifyInstance) {
     return toPublicUser(user);
   });
 
-  // Update username/email. Re-issues a JWT when the username changes, since
+  // Update username/email/bio. Re-issues a JWT when the username changes, since
   // the gateway reads `username` from the token at connect time (not a live
   // DB lookup) — the client is expected to swap in the new token and
   // reconnect so live broadcasts show the new name immediately.
@@ -184,7 +192,11 @@ export async function authRoutes(app: FastifyInstance) {
 
     const user = await prisma.user.update({
       where: { id: userId },
-      data: { ...(body.username ? { username: body.username } : {}), ...(body.email ? { email: body.email } : {}) },
+      data: {
+        ...(body.username ? { username: body.username } : {}),
+        ...(body.email ? { email: body.email } : {}),
+        ...(body.bio !== undefined ? { bio: body.bio } : {}),
+      },
     });
 
     const token = app.jwt.sign({ sub: user.id, username: user.username });

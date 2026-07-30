@@ -113,9 +113,31 @@ export async function instanceRoutes(app: FastifyInstance) {
       userId: u.id,
       username: u.username,
       avatarUrl: u.avatarUrl,
+      bio: u.bio,
       joinedAt: u.createdAt,
       roles: u.memberRoles.map((mr) => ({ id: mr.role.id, name: mr.role.name })),
     }));
+  });
+
+  // A single member's public profile — same shape as one entry from
+  // GET /members, but avoids fetching every member just to open one
+  // profile card (message avatars/usernames trigger this a lot).
+  app.get("/members/:userId", { onRequest: [app.authenticate] }, async (req, reply) => {
+    const { userId } = req.params as { userId: string };
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { memberRoles: { include: { role: true } } },
+    });
+    if (!user) return reply.status(404).send({ error: "member not found" });
+
+    return {
+      userId: user.id,
+      username: user.username,
+      avatarUrl: user.avatarUrl,
+      bio: user.bio,
+      joinedAt: user.createdAt,
+      roles: user.memberRoles.map((mr) => ({ id: mr.role.id, name: mr.role.name })),
+    };
   });
 
   // Invite management — owner-only. These gate REGISTRATION on this instance

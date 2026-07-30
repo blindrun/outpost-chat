@@ -13,6 +13,10 @@ model User {
   email        String   @unique
   passwordHash String
   avatarUrl    String?
+  // Plain text, app-enforced 240-char cap (no DB-level length constraint,
+  // same pattern as CustomCommand.response) — shown on a member's profile
+  // card.
+  bio          String?
   isOwner      Boolean  @default(false)
   createdAt    DateTime @default(now())
 
