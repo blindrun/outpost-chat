@@ -3,6 +3,7 @@ export interface User {
   username: string;
   email: string;
   avatarUrl?: string | null;
+  bio?: string | null;
   isOwner: boolean;
 }
 
@@ -104,6 +105,7 @@ export interface Member {
   userId: string;
   username: string;
   avatarUrl: string | null;
+  bio: string | null;
   joinedAt: string;
   roles: { id: string; name: string }[];
 }
@@ -270,7 +272,11 @@ export function setAvatar(baseUrl: string, token: string, avatarUrl: string) {
   return request<User>(baseUrl, "/auth/me/avatar", token, { method: "PATCH", body: JSON.stringify({ avatarUrl }) });
 }
 
-export function updateProfile(baseUrl: string, token: string, updates: { username?: string; email?: string }) {
+export function updateProfile(
+  baseUrl: string,
+  token: string,
+  updates: { username?: string; email?: string; bio?: string | null },
+) {
   return request<{ token: string; user: User }>(baseUrl, "/auth/me", token, {
     method: "PATCH",
     body: JSON.stringify(updates),
@@ -304,6 +310,10 @@ export function updateInstanceSettings(
 
 export function listMembers(baseUrl: string, token: string) {
   return request<Member[]>(baseUrl, "/members", token);
+}
+
+export function getMemberProfile(baseUrl: string, token: string, userId: string) {
+  return request<Member>(baseUrl, `/members/${userId}`, token);
 }
 
 export function listRoles(baseUrl: string, token: string) {

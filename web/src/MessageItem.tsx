@@ -58,6 +58,7 @@ export function MessageItem({
   onReply,
   onPin,
   onUnpin,
+  onViewProfile,
 }: {
   message: Message;
   isOnline: boolean;
@@ -71,6 +72,7 @@ export function MessageItem({
   onReply: (message: Message) => void;
   onPin: (messageId: string) => void;
   onUnpin: (messageId: string) => void;
+  onViewProfile: (userId: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
@@ -101,9 +103,19 @@ export function MessageItem({
     setFullPickerOpen(false);
   }
 
+  const isRealUser = !message.isWebhook && !message.isSystemBot && !!message.authorId;
+
   return (
     <div className="message">
-      {message.authorAvatarUrl ? (
+      {isRealUser ? (
+        <button type="button" className="avatar-btn" onClick={() => onViewProfile(message.authorId)}>
+          {message.authorAvatarUrl ? (
+            <img className="avatar" src={message.authorAvatarUrl} alt="" />
+          ) : (
+            <span className="avatar avatar-placeholder">{initials(authorName)}</span>
+          )}
+        </button>
+      ) : message.authorAvatarUrl ? (
         <img className="avatar" src={message.authorAvatarUrl} alt="" />
       ) : (
         <span className="avatar avatar-placeholder">{initials(authorName)}</span>
@@ -115,7 +127,13 @@ export function MessageItem({
           ) : (
             <span className={`presence-dot ${isOnline ? "online" : "offline"}`} />
           )}
-          <span className="message-author">{authorName}</span>
+          {isRealUser ? (
+            <button type="button" className="message-author-btn" onClick={() => onViewProfile(message.authorId)}>
+              {authorName}
+            </button>
+          ) : (
+            <span className="message-author">{authorName}</span>
+          )}
           <span className="message-timestamp">{formatTimestamp(message.createdAt)}</span>
           {message.pinned && (
             <span className="pinned-badge" title="Pinned message">
