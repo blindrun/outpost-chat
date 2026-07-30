@@ -50,6 +50,14 @@ Installers are unsigned (no paid code-signing certificate for a personal
 project), so Windows SmartScreen / macOS Gatekeeper will warn on first
 run — that's expected, not a sign of a bad build.
 
+The app checks for updates on launch and installs new ones automatically
+(via [`electron-updater`](https://www.electron.build/auto-update) against
+this repo's Releases). On Windows and Linux this works the same as any
+other install; on macOS, automatic updates need a code-signed build to
+apply — without one, an update can be detected but not installed
+automatically, so a new version there still means downloading the
+installer again from the Releases page.
+
 ## Building from source
 
 ```
