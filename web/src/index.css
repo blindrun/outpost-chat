@@ -535,6 +535,17 @@ button, input, select {
   flex-shrink: 0;
 }
 .chat-header .channel-icon { color: var(--text-faint); }
+.thread-back-btn {
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+}
+.thread-back-btn:hover { color: var(--text-normal); background: var(--interactive-hover); }
 .chat-header-icon-btn {
   margin-left: auto;
   background: none;
@@ -701,6 +712,22 @@ button, input, select {
 }
 .reaction-pill:hover { border-color: var(--brand); }
 .reaction-pill.mine { border-color: var(--brand); background: rgba(88, 101, 242, 0.22); }
+
+.thread-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+  padding: 0.3rem 0.6rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  color: var(--brand);
+  font-size: 0.8rem;
+  cursor: pointer;
+  width: fit-content;
+}
+.thread-badge:hover { background: var(--interactive-hover); }
 
 .message-attachment { max-width: 320px; max-height: 320px; border-radius: 8px; margin-top: 0.4rem; display: block; }
 

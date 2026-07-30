@@ -77,6 +77,7 @@ model Invite {
 enum ChannelType {
   TEXT
   VOICE
+  THREAD
 }
 
 model Channel {
@@ -85,11 +86,17 @@ model Channel {
   type      ChannelType @default(TEXT)
   position  Int         @default(0)
   createdAt DateTime    @default(now())
+  // THREAD channels only — which channel/message they branched off of.
+  // Denormalized (parentChannelId duplicates parentMessage.channelId)
+  // so opening a thread doesn't need an extra join back through Message.
+  parentChannelId String?
+  parentMessageId String? @unique
 
   messages         Message[]
   webhooks         Webhook[]
   reactionRoles    ReactionRole[]
   reactionRoleMenu ReactionRoleMenu?
+  parentMessage    Message?           @relation("MessageThread", fields: [parentMessageId], references: [id])
 }
 
 // A channel-scoped bearer token that lets an external service post messages
@@ -132,6 +139,10 @@ model Message {
   replyToId String?
   replyTo   Message?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies   Message[] @relation("MessageReplies")
+
+  // Reverse side of Channel.parentMessageId — at most one thread per
+  // message, matching Discord's "start a thread from this message".
+  thread Channel? @relation("MessageThread")
 
   reactions Reaction[]
 }
