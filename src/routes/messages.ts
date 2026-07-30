@@ -145,12 +145,21 @@ export async function messageRoutes(app: FastifyInstance) {
       },
       orderBy: { createdAt: "desc" },
       take: query.limit,
-      include: { reactions: true, replyTo: true },
+      include: {
+        reactions: true,
+        replyTo: true,
+        thread: { include: { _count: { select: { messages: true } } } },
+      },
     });
 
     const hydrated = await hydrateAuthors(messages);
     const withReplies = await hydrateReplyPreviews(hydrated);
-    return withReplies.reverse();
+    return withReplies
+      .map(({ thread, ...m }) => ({
+        ...m,
+        thread: thread ? { id: thread.id, name: thread.name, messageCount: thread._count.messages } : null,
+      }))
+      .reverse();
   });
 
   // Pinned messages for a channel — any authenticated user can view them

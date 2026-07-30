@@ -67,7 +67,11 @@ export async function gatewayRoutes(app: FastifyInstance) {
     socket.send(
       JSON.stringify({
         type: "READY",
-        channels: await prisma.channel.findMany({ orderBy: { position: "asc" } }),
+        // THREAD channels are intentionally excluded — they aren't
+        // top-level sidebar entries, the client only learns about one when
+        // it's created/opened (via THREAD_CREATE or fetching a message's
+        // thread directly).
+        channels: await prisma.channel.findMany({ where: { type: { not: "THREAD" } }, orderBy: { position: "asc" } }),
         onlineUserIds: allOnlineUserIds(),
         voiceState: allVoiceState(),
       }),
@@ -98,7 +102,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
         }
 
         if (parsed.type === "MESSAGE_SEND") {
-          if (channel.type !== "TEXT") {
+          if (channel.type === "VOICE") {
             sendError("cannot send messages in a voice channel");
             return;
           }

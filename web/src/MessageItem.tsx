@@ -74,6 +74,7 @@ export function MessageItem({
   onPin,
   onUnpin,
   onViewProfile,
+  onThreadClick,
 }: {
   message: Message;
   // True when this message is a same-author, same-minute-ish continuation
@@ -92,6 +93,10 @@ export function MessageItem({
   onPin: (messageId: string) => void;
   onUnpin: (messageId: string) => void;
   onViewProfile: (userId: string) => void;
+  // Creates a thread on this message if it doesn't have one yet, then
+  // opens it either way — same handler covers "start a thread" and
+  // "open the existing thread" since the caller (App.tsx) knows which.
+  onThreadClick: (message: Message) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
@@ -238,6 +243,12 @@ export function MessageItem({
             ))}
           </div>
         )}
+
+        {message.thread && (
+          <button type="button" className="thread-badge" onClick={() => onThreadClick(message)}>
+            🧵 {message.thread.name} · {message.thread.messageCount} {message.thread.messageCount === 1 ? "message" : "messages"}
+          </button>
+        )}
       </div>
 
       <div className="message-toolbar">
@@ -247,6 +258,11 @@ export function MessageItem({
         <button className="toolbar-btn" title="React" onClick={() => setPickerOpen((v) => !v)}>
           😀
         </button>
+        {!message.thread && (
+          <button className="toolbar-btn" title="Reply in Thread" onClick={() => onThreadClick(message)}>
+            🧵
+          </button>
+        )}
         {canModerate && (
           <button
             className="toolbar-btn"

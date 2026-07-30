@@ -9,8 +9,10 @@ import {
   Role,
   User,
   createChannel,
+  createThread,
   getCurrentUser,
   getInstanceInfo,
+  getThread,
   listMembers,
   listMessages,
   listRoles,
@@ -110,6 +112,11 @@ function App() {
   }, []);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
+  // Set while selectedChannelId points at a THREAD channel — lets the
+  // header show a "back to #parent" breadcrumb without needing a whole
+  // separate view, since a thread is just rendered through the same
+  // selectedChannelId-driven message list/composer as any other channel.
+  const [threadParentId, setThreadParentId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Record<string, Message[]>>({});
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   // channelId -> userIds currently connected to that voice channel. Tracked
@@ -285,6 +292,16 @@ function App() {
           else next.delete(event.userId);
           return next;
         });
+      } else if (event.type === "THREAD_CREATE") {
+        setChannels((prev) => (prev.some((c) => c.id === event.thread.id) ? prev : [...prev, event.thread]));
+        setMessages((prev) => ({
+          ...prev,
+          [event.thread.parentChannelId ?? ""]: (prev[event.thread.parentChannelId ?? ""] ?? []).map((m) =>
+            m.id === event.parentMessageId
+              ? { ...m, thread: { id: event.thread.id, name: event.thread.name, messageCount: 0 } }
+              : m,
+          ),
+        }));
       } else if (event.type === "ERROR") {
         // Surfaces gateway-level rejections a user needs to see, chiefly
         // automod's own "banned word (warning N/M)" / mute messages — these
@@ -415,6 +432,23 @@ function App() {
     setPendingAttachment(null);
     setOpenPicker(null);
     setReplyTarget(null);
+  }
+
+  // Opens a message's existing thread, or creates one first if it doesn't
+  // have one yet — either way ends by pointing selectedChannelId at the
+  // thread channel, reusing the normal message list/composer for it.
+  async function handleThreadClick(message: Message) {
+    if (!activeInstance || !session) return;
+    try {
+      const thread = message.thread
+        ? await getThread(activeInstance.baseUrl, session.token, message.id)
+        : await createThread(activeInstance.baseUrl, session.token, message.id);
+      setChannels((prev) => (prev.some((c) => c.id === thread.id) ? prev : [...prev, thread]));
+      setThreadParentId(message.channelId);
+      setSelectedChannelId(thread.id);
+    } catch (err) {
+      setChannelError((err as Error).message);
+    }
   }
 
   function handleTyping() {
@@ -790,7 +824,24 @@ function App() {
         {selectedChannel ? (
           <>
             <div className="chat-header">
-              <span className="channel-icon">#</span>
+              {selectedChannel.type === "THREAD" && threadParentId ? (
+                <>
+                  <button
+                    type="button"
+                    className="thread-back-btn"
+                    title="Back to channel"
+                    onClick={() => {
+                      setSelectedChannelId(threadParentId);
+                      setThreadParentId(null);
+                    }}
+                  >
+                    ← {channels.find((c) => c.id === threadParentId)?.name ?? "channel"}
+                  </button>
+                  <span className="channel-icon">🧵</span>
+                </>
+              ) : (
+                <span className="channel-icon">#</span>
+              )}
               {selectedChannel.name}
               <button type="button" className="chat-header-icon-btn" title="Pinned Messages" onClick={() => setPinsOpen(true)}>
                 📌
@@ -840,6 +891,7 @@ function App() {
                   onPin={(id) => gatewayRef.current?.pinMessage(id)}
                   onUnpin={(id) => gatewayRef.current?.unpinMessage(id)}
                   onViewProfile={setViewingProfileUserId}
+                  onThreadClick={handleThreadClick}
                 />
                 );
               })}

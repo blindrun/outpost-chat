@@ -10,9 +10,26 @@ export interface User {
 export interface Channel {
   id: string;
   name: string;
-  type: "TEXT" | "VOICE";
+  // THREAD channels are never present in the READY channel list or the
+  // sidebar's text/voice filters — they're added to local state directly
+  // when a thread is created/opened, purely so selectedChannelId-based
+  // lookups (name, message history) work the same as any other channel.
+  type: "TEXT" | "VOICE" | "THREAD";
   position: number;
 }
+
+export interface ThreadInfo {
+  id: string;
+  name: string;
+  messageCount: number;
+}
+
+export type ThreadChannel = Channel & {
+  type: "THREAD";
+  parentChannelId: string | null;
+  parentMessageId: string | null;
+  createdAt: string;
+};
 
 export type Theme = "business" | "cyberpunk" | "hacker" | "esports";
 
@@ -87,6 +104,7 @@ export interface Message {
   pinned?: boolean;
   replyToId?: string | null;
   replyTo?: ReplyPreview | null;
+  thread?: ThreadInfo | null;
 }
 
 export interface SearchResult extends Message {
@@ -242,6 +260,17 @@ export function searchMessages(baseUrl: string, token: string, q: string, channe
 
 export function listPinnedMessages(baseUrl: string, token: string, channelId: string) {
   return request<Message[]>(baseUrl, `/channels/${channelId}/pins`, token);
+}
+
+export function createThread(baseUrl: string, token: string, messageId: string, name?: string) {
+  return request<ThreadChannel>(baseUrl, `/messages/${messageId}/thread`, token, {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function getThread(baseUrl: string, token: string, messageId: string) {
+  return request<ThreadChannel>(baseUrl, `/messages/${messageId}/thread`, token);
 }
 
 export function getVoiceToken(baseUrl: string, token: string, channelId: string) {
@@ -447,6 +476,7 @@ type GatewayEvent =
   | { type: "PRESENCE_UPDATE"; userId: string; status: "online" | "offline" }
   | { type: "TYPING_START"; channelId: string; userId: string; username: string }
   | { type: "VOICE_STATE_UPDATE"; channelId: string; userIds: string[] }
+  | { type: "THREAD_CREATE"; parentMessageId: string; thread: ThreadChannel }
   | { type: "ERROR"; error: string };
 
 export class Gateway {
