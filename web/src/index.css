@@ -176,6 +176,17 @@ button, input, select {
   outline: none;
 }
 .add-server-form input:focus { border-color: var(--brand); }
+.claim-banner {
+  border: 1px solid var(--brand);
+  border-radius: 8px;
+  padding: 1rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+}
+.claim-banner p { margin: 0; }
 
 .theme-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
 .theme-card {

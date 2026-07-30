@@ -42,6 +42,12 @@ export function AddServerModal({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [inviteCode, setInviteCode] = useState(initialInviteCode ?? "");
+  const [claimCode, setClaimCode] = useState("");
+  // A fresh (no-owner) instance shows a "Claim This Server" banner first —
+  // the actual account-creation form only appears once that's clicked, so
+  // nobody stumbles into becoming the owner without realizing a claim code
+  // was needed.
+  const [claiming, setClaiming] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authing, setAuthing] = useState(false);
 
@@ -103,7 +109,14 @@ export function AddServerModal({
       const result =
         authMode === "login"
           ? await login(baseUrl, email, password)
-          : await register(baseUrl, username, email, password, inviteCode || undefined);
+          : await register(
+              baseUrl,
+              username,
+              email,
+              password,
+              inviteCode || undefined,
+              !info?.hasOwner ? claimCode || undefined : undefined,
+            );
 
       const instance: Instance = { id: crypto.randomUUID(), label: label.trim() || info?.name || address, baseUrl };
 
@@ -172,12 +185,37 @@ export function AddServerModal({
   }
 
   if (step === "auth") {
+    if (!info?.hasOwner && !claiming) {
+      return (
+        <div className="add-server-form">
+          <h2>{info?.name}</h2>
+          {info?.description && <p className="subtitle">{info.description}</p>}
+          <div className="claim-banner">
+            <p>
+              <strong>This server hasn't been claimed yet.</strong>
+            </p>
+            <p className="subtitle">
+              The admin who installed it can find a claim code printed in the server's console output.
+            </p>
+            <button type="button" className="btn" onClick={() => setClaiming(true)}>
+              Claim This Server
+            </button>
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="btn secondary" onClick={() => setStep("address")}>
+              Back
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="add-server-form">
         <h2>{info?.name}</h2>
         {info?.description && <p className="subtitle">{info.description}</p>}
         {!info?.hasOwner ? (
-          <p className="subtitle">You'll be the first user here — set up an account and you'll become the owner.</p>
+          <p className="subtitle">Enter the claim code from the server console to set up this instance and become its owner.</p>
         ) : (
           <div className="modal-tabs">
             <button className={authMode === "login" ? "active" : ""} onClick={() => setAuthMode("login")}>
@@ -189,6 +227,17 @@ export function AddServerModal({
           </div>
         )}
         <form onSubmit={handleAuth}>
+          {!info?.hasOwner && (
+            <label>
+              Claim Code
+              <input
+                value={claimCode}
+                onChange={(e) => setClaimCode(e.target.value)}
+                placeholder="e.g. K3F9-7QXZ-M2PL"
+                autoFocus
+              />
+            </label>
+          )}
           {(authMode === "register" || !info?.hasOwner) && (
             <label>
               Username
@@ -211,11 +260,15 @@ export function AddServerModal({
           )}
           {authError && <p className="error">{authError}</p>}
           <div className="modal-actions">
-            <button type="button" className="btn secondary" onClick={() => setStep("address")}>
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => (!info?.hasOwner ? setClaiming(false) : setStep("address"))}
+            >
               Back
             </button>
             <button type="submit" className="btn" disabled={authing}>
-              {authing ? "…" : info?.hasOwner ? (authMode === "login" ? "Log In" : "Register") : "Set Up Instance"}
+              {authing ? "…" : info?.hasOwner ? (authMode === "login" ? "Log In" : "Register") : "Claim Server"}
             </button>
           </div>
         </form>

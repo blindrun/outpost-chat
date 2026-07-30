@@ -5,12 +5,14 @@ import { prisma } from "../plugins/db.js";
 import { EVERYONE_ROLE_NAME, DEFAULT_EVERYONE_PERMISSIONS } from "../util/permissions.js";
 import { isInviteValid } from "../util/invites.js";
 import { postSystemMessage } from "../util/bot.js";
+import { consumeClaimCode } from "../util/claim.js";
 
 const registerSchema = z.object({
   username: z.string().min(3).max(32),
   email: z.string().email(),
   password: z.string().min(8),
   inviteCode: z.string().optional(),
+  claimCode: z.string().optional(),
 });
 
 const loginSchema = z.object({
@@ -55,6 +57,9 @@ export async function authRoutes(app: FastifyInstance) {
         const passwordHash = await bcrypt.hash(body.password, 12);
 
         if (userCount === 0) {
+          if (!(await consumeClaimCode(body.claimCode, tx))) {
+            throw new Error("CLAIM_CODE_INVALID");
+          }
           const created = await tx.user.create({
             data: { username: body.username, email: body.email, passwordHash, isOwner: true },
           });
@@ -126,6 +131,11 @@ export async function authRoutes(app: FastifyInstance) {
     } catch (err) {
       if (err instanceof Error && (err.message === "INVITE_REQUIRED" || err.message === "INVITE_INVALID")) {
         return reply.status(403).send({ error: "a valid invite code is required to register on this instance" });
+      }
+      if (err instanceof Error && err.message === "CLAIM_CODE_INVALID") {
+        return reply
+          .status(403)
+          .send({ error: "invalid or missing claim code — check the server console output for this instance" });
       }
       throw err;
     }

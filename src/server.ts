@@ -18,6 +18,7 @@ import { webhookRoutes } from "./routes/webhooks.js";
 import { botRoutes } from "./routes/bot.js";
 import { gatewayRoutes } from "./gateway/index.js";
 import { ensureBucket } from "./plugins/storage.js";
+import { ensureClaimCode } from "./util/claim.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -47,6 +48,7 @@ await app.register(fastifyWebsocket);
 await app.register(fastifyMultipart);
 
 await ensureBucket();
+await ensureClaimCode(app.log);
 
 app.decorate("authenticate", async (req, reply) => {
   try {

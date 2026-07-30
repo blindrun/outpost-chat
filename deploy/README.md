@@ -31,7 +31,12 @@ this is purely LAN/local testing (see [TLS](#tls--reverse-proxy-required-for-voi
 below for why). It generates every secret and starts everything with
 `docker compose up -d`.
 
-The first account anyone registers on a fresh instance becomes the owner.
+A fresh instance prints a one-time claim code to its own log at startup
+(`docker compose logs app` — `install.sh` also waits for and prints it
+directly). The client shows a "Claim This Server" prompt until someone
+enters that code, which is what actually creates the owner account —
+nobody can register at all before that, so there's no race to be the
+first (real) user.
 
 ## TLS / reverse proxy (required for voice)
 
