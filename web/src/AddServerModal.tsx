@@ -3,7 +3,29 @@ import type { Instance, Session } from "./App";
 import { InstanceInfo, Theme, getInstanceInfo, login, register, updateInstanceSettings } from "./api";
 import { ThemePicker } from "./ThemePicker";
 
-type Step = "address" | "connecting" | "auth" | "theme";
+type Step = "address" | "connecting" | "auth" | "theme" | "intro";
+
+// A short admin-only walkthrough shown once, right after the very first
+// owner finishes setup — points at real, already-built Instance Settings
+// tabs rather than teasing anything that doesn't exist yet.
+const INTRO_CARDS: { title: string; body: string }[] = [
+  {
+    title: "You're the owner",
+    body: "Everything here lives under the gear icon (⚙) next to your instance name — Instance Settings. This is a quick tour of what's there; skip it anytime and come back later.",
+  },
+  {
+    title: "Invites & Roles",
+    body: "Invites tab: generate shareable join links, optionally require a code to register at all. Roles tab: create roles with specific permissions (manage channels, manage roles, send messages) and assign them from the member list sidebar.",
+  },
+  {
+    title: "Your built-in bot",
+    body: "Bot tab: give it a name and avatar, then turn on only what you want — welcome messages for new members, an auto-assigned role, custom \"!\" text commands, reaction roles, a leveling/XP system with !rank and !leaderboard, and a banned-word auto-moderation filter.",
+  },
+  {
+    title: "Webhooks, and that's it",
+    body: "Webhooks tab: let an external tool (CI, a script, anything that can POST) post messages into a channel without a real account. That covers everything — Instance Settings is always one click away via the gear icon.",
+  },
+];
 
 // A bare address (no scheme) needs a guess. HTTPS is the right default —
 // any real self-hosted instance behind a reverse proxy needs it (voice
@@ -54,6 +76,7 @@ export function AddServerModal({
   const [pendingSession, setPendingSession] = useState<Session | null>(null);
   const [pendingInstance, setPendingInstance] = useState<Instance | null>(null);
   const [theme, setTheme] = useState<Theme>("business");
+  const [introIndex, setIntroIndex] = useState(0);
 
   async function probeAddress(rawAddress: string) {
     setProbeError(null);
@@ -144,6 +167,12 @@ export function AddServerModal({
     } catch (err) {
       console.error(err);
     }
+    setIntroIndex(0);
+    setStep("intro");
+  }
+
+  function finishIntro() {
+    if (!pendingSession || !pendingInstance) return;
     onConnected(pendingInstance, pendingSession);
   }
 
@@ -276,14 +305,47 @@ export function AddServerModal({
     );
   }
 
+  if (step === "theme") {
+    return (
+      <div className="add-server-form">
+        <h2>Choose a Theme</h2>
+        <p className="subtitle">You can change this later in Instance Settings.</p>
+        <ThemePicker value={theme} onChange={setTheme} />
+        <div className="modal-actions">
+          <button className="btn" onClick={handleThemeConfirm}>
+            Continue
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const isLastIntroCard = introIndex === INTRO_CARDS.length - 1;
+  const card = INTRO_CARDS[introIndex];
   return (
     <div className="add-server-form">
-      <h2>Choose a Theme</h2>
-      <p className="subtitle">You can change this later in Instance Settings.</p>
-      <ThemePicker value={theme} onChange={setTheme} />
+      <h2>{card.title}</h2>
+      <p className="subtitle">{card.body}</p>
+      <div className="intro-dots">
+        {INTRO_CARDS.map((_, i) => (
+          <span key={i} className={i === introIndex ? "active" : ""} />
+        ))}
+      </div>
       <div className="modal-actions">
-        <button className="btn" onClick={handleThemeConfirm}>
-          Continue
+        <button type="button" className="btn secondary" onClick={finishIntro}>
+          Skip
+        </button>
+        {introIndex > 0 && (
+          <button type="button" className="btn secondary" onClick={() => setIntroIndex((i) => i - 1)}>
+            Back
+          </button>
+        )}
+        <button
+          type="button"
+          className="btn"
+          onClick={() => (isLastIntroCard ? finishIntro() : setIntroIndex((i) => i + 1))}
+        >
+          {isLastIntroCard ? "Get Started" : "Next"}
         </button>
       </div>
     </div>
