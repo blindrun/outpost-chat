@@ -161,13 +161,19 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
   const [vadLevel, setVadLevel] = useState(0);
   const [mode, setMode] = useState<AudioSettings["mode"] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [screenSharing, setScreenSharing] = useState(false);
 
   const roomRef = useRef<Room | null>(null);
   const audioContainerRef = useRef<HTMLDivElement | null>(null);
+  // Visible, unlike audioContainerRef — screen share video tiles render
+  // here directly (both remote shares and the local preview), one <video>
+  // element per active share, labeled via a data attribute set on attach.
+  const videoContainerRef = useRef<HTMLDivElement | null>(null);
   const automationCleanupRef = useRef<(() => void) | null>(null);
   const mutedRef = useRef(false);
   const deafenedRef = useRef(false);
   const mutedBeforeDeafenRef = useRef(false);
+  const screenSharingRef = useRef(false);
 
   function refreshParticipants(room: Room) {
     setParticipants([toInfo(room.localParticipant), ...Array.from(room.remoteParticipants.values()).map(toInfo)]);
@@ -220,6 +226,8 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
             setMode(null);
             setPttActive(false);
             setVadLevel(0);
+            screenSharingRef.current = false;
+            setScreenSharing(false);
           }
         });
         room.on(
@@ -234,12 +242,59 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
                 el.setSinkId(settings.outputDeviceId).catch((err) => console.warn("setSinkId failed:", err));
               }
               audioContainerRef.current.appendChild(el);
+            } else if (track.source === Track.Source.ScreenShare && videoContainerRef.current) {
+              const el = track.attach();
+              el.dataset.participant = participant.identity;
+              el.className = "screen-share-video";
+              const wrapper = document.createElement("div");
+              wrapper.className = "screen-share-tile";
+              wrapper.dataset.participant = participant.identity;
+              const label = document.createElement("span");
+              label.className = "screen-share-label";
+              label.textContent = `${participant.name || participant.identity}'s screen`;
+              wrapper.appendChild(el);
+              wrapper.appendChild(label);
+              videoContainerRef.current.appendChild(wrapper);
             }
           },
         );
         room.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
           if (!isCurrent()) return;
           track.detach().forEach((el) => el.remove());
+          if (track.source === Track.Source.ScreenShare) {
+            videoContainerRef.current?.querySelectorAll(".screen-share-tile").forEach((wrapper) => {
+              if (!wrapper.querySelector("video, audio")) wrapper.remove();
+            });
+          }
+        });
+        room.on(RoomEvent.LocalTrackPublished, (pub) => {
+          if (!isCurrent() || pub.source !== Track.Source.ScreenShare || !pub.track || !videoContainerRef.current) return;
+          const el = pub.track.attach();
+          el.muted = true;
+          el.dataset.participant = room.localParticipant.identity;
+          el.className = "screen-share-video";
+          const wrapper = document.createElement("div");
+          wrapper.className = "screen-share-tile";
+          wrapper.dataset.participant = room.localParticipant.identity;
+          const label = document.createElement("span");
+          label.className = "screen-share-label";
+          label.textContent = "Your screen";
+          wrapper.appendChild(el);
+          wrapper.appendChild(label);
+          videoContainerRef.current.appendChild(wrapper);
+          screenSharingRef.current = true;
+          setScreenSharing(true);
+        });
+        room.on(RoomEvent.LocalTrackUnpublished, (pub) => {
+          if (!isCurrent() || pub.source !== Track.Source.ScreenShare) return;
+          pub.track?.detach().forEach((el) => el.remove());
+          videoContainerRef.current
+            ?.querySelectorAll(`.screen-share-tile[data-participant="${room.localParticipant.identity}"]`)
+            .forEach((wrapper) => {
+              if (!wrapper.querySelector("video, audio")) wrapper.remove();
+            });
+          screenSharingRef.current = false;
+          setScreenSharing(false);
         });
 
         await room.connect(url, voiceToken);
@@ -300,7 +355,21 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
     setPttActive(false);
     setVadLevel(0);
     setMode(null);
+    screenSharingRef.current = false;
+    setScreenSharing(false);
   }, [gatewayRef]);
+
+  // getDisplayMedia rejects if the user cancels the browser's share picker
+  // — that's not a real error, just leave screenSharing false and move on.
+  const toggleScreenShare = useCallback(async () => {
+    const room = roomRef.current;
+    if (!room) return;
+    try {
+      await room.localParticipant.setScreenShareEnabled(!screenSharingRef.current);
+    } catch (err) {
+      if ((err as Error).name !== "NotAllowedError") setError((err as Error).message);
+    }
+  }, []);
 
   const toggleMute = useCallback(async () => {
     const next = !mutedRef.current;
@@ -346,11 +415,14 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
     vadLevel,
     mode,
     error,
+    screenSharing,
     audioContainerRef,
+    videoContainerRef,
     join,
     leave,
     toggleMute,
     toggleDeafen,
+    toggleScreenShare,
   };
 }
 

@@ -934,7 +934,7 @@ button, input, select {
 
 .voice-panel { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 1.5rem; padding: 2rem; }
 .voice-panel h3 { color: var(--header-primary); }
-.voice-controls { display: flex; gap: 0.6rem; }
+.voice-controls { display: flex; gap: 0.6rem; flex-wrap: wrap; justify-content: center; }
 .voice-participants { list-style: none; padding: 0; margin: 0; display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center; }
 .voice-participant { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; width: 88px; }
 .voice-participant .avatar { width: 64px; height: 64px; font-size: 1.4rem; }
@@ -942,6 +942,41 @@ button, input, select {
 .voice-mic-status { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
 .voice-vad-meter { width: 200px; }
 .voice-status-note { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
+
+/* ---------- Screen share ---------- */
+/* Floating overlay so shares stay visible regardless of which channel is
+   currently selected — voice (and now screen share) is a persistent,
+   app-wide session, not scoped to one channel's view. Hidden via :empty
+   when nothing is being shared. */
+.screen-share-overlay {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: min(480px, 40vw);
+}
+.screen-share-overlay:empty { display: none; }
+.screen-share-tile {
+  position: relative;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.screen-share-video { display: block; width: 100%; max-height: 40vh; }
+.screen-share-label {
+  position: absolute;
+  bottom: 0.4rem;
+  left: 0.5rem;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+}
 
 /* ---------- Settings modals (User + Instance) ---------- */
 
