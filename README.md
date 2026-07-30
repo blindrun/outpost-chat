@@ -50,6 +50,19 @@ Installers are unsigned (no paid code-signing certificate for a personal
 project), so Windows SmartScreen / macOS Gatekeeper will warn on first
 run — that's expected, not a sign of a bad build.
 
+**On macOS specifically**, an unsigned app often shows a scarier message
+than a simple warning: *"Outpost is damaged and can't be opened. You
+should move it to the Trash."* This is Gatekeeper's quarantine check
+misreporting an unsigned app as corrupted — the download isn't actually
+damaged. Fix it from Terminal:
+
+```bash
+xattr -cr /Applications/Outpost.app
+```
+
+(adjust the path if you didn't install to `/Applications`), then open it
+normally.
+
 The app checks for updates on launch and installs new ones automatically
 (via [`electron-updater`](https://www.electron.build/auto-update) against
 this repo's Releases). On Windows and Linux this works the same as any
