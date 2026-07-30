@@ -276,6 +276,40 @@ button, input, select {
 .server-icon.action { background: var(--bg-sidebar); color: var(--green); font-size: 1.4rem; }
 .server-icon.action:hover { background: var(--green); color: #fff; }
 
+.server-context-backdrop { position: fixed; inset: 0; z-index: 30; }
+.server-context-menu {
+  position: fixed;
+  z-index: 31;
+  background: var(--bg-primary);
+  border-radius: 8px;
+  padding: 0.4rem;
+  min-width: 160px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.server-context-label {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-faint);
+  text-transform: uppercase;
+}
+.server-context-item {
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+  color: var(--text-normal);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.server-context-item:hover { background: var(--interactive-hover); }
+.server-context-item.danger { color: var(--red); }
+.server-context-item.danger:hover { background: rgba(237, 66, 69, 0.1); }
+
 .rail-divider { width: 32px; height: 2px; background: var(--border-subtle); border-radius: 1px; margin: 0.2rem 0; }
 
 /* ---------- Modal ---------- */
