@@ -6,12 +6,14 @@ export function MemberList({
   token,
   onlineUserIds,
   onSelectMember,
+  onOpenFriends,
   refreshKey,
 }: {
   baseUrl: string;
   token: string;
   onlineUserIds: Set<string>;
   onSelectMember: (userId: string) => void;
+  onOpenFriends: () => void;
   // Bumped by the parent whenever a moderation action (ban/unban, role
   // change) happens elsewhere — this list otherwise only loads once on
   // mount, so a ban made from a profile card wouldn't show up here until a
@@ -20,6 +22,8 @@ export function MemberList({
 }) {
   const [members, setMembers] = useState<Member[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     listMembers(baseUrl, token)
@@ -31,8 +35,11 @@ export function MemberList({
   // information every regular member needs to see. An owner manages bans
   // from Instance Settings > Members instead (see InstanceSettingsModal).
   const active = members.filter((m) => !m.banned);
-  const online = active.filter((m) => onlineUserIds.has(m.userId));
-  const offline = active.filter((m) => !onlineUserIds.has(m.userId));
+  const filtered = query.trim()
+    ? active.filter((m) => m.username.toLowerCase().includes(query.trim().toLowerCase()))
+    : active;
+  const online = filtered.filter((m) => onlineUserIds.has(m.userId));
+  const offline = filtered.filter((m) => !onlineUserIds.has(m.userId));
 
   function renderGroup(title: string, list: Member[]) {
     if (list.length === 0) return null;
@@ -61,9 +68,42 @@ export function MemberList({
 
   return (
     <aside className="member-sidebar">
+      <div className="member-sidebar-header">
+        <button
+          type="button"
+          className="chat-header-icon-btn"
+          title="Friends"
+          onClick={onOpenFriends}
+        >
+          👤
+        </button>
+        <button
+          type="button"
+          className={`chat-header-icon-btn ${searchOpen ? "active" : ""}`}
+          title="Search Members"
+          onClick={() => {
+            setSearchOpen((v) => !v);
+            if (searchOpen) setQuery("");
+          }}
+        >
+          🔍
+        </button>
+      </div>
+      {searchOpen && (
+        <input
+          autoFocus
+          className="member-sidebar-search"
+          placeholder="Search members…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      )}
       {error && <p className="error">{error}</p>}
       {renderGroup("Online", online)}
       {renderGroup("Offline", offline)}
+      {searchOpen && query.trim() && online.length === 0 && offline.length === 0 && (
+        <p className="picker-empty">No members match "{query.trim()}".</p>
+      )}
     </aside>
   );
 }
