@@ -1015,6 +1015,10 @@ function App() {
             setViewingProfileUserId(null);
             setUserSettingsOpen(true);
           }}
+          onMessage={(id) => {
+            setViewingProfileUserId(null);
+            handleOpenDM(id);
+          }}
           onMemberChanged={() => setMemberListRefreshKey((k) => k + 1)}
         />
       )}

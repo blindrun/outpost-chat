@@ -45,6 +45,24 @@ export async function friendRoutes(app: FastifyInstance) {
     return { friends, incoming, outgoing, blocked };
   });
 
+  // The relationship between the caller and one other user — lets a
+  // profile card show the right single action (Add Friend / Accept /
+  // Message / nothing) without fetching the whole friends list just to
+  // find one entry.
+  app.get("/friends/:userId/status", async (req, reply) => {
+    const { sub: userId } = req.user as { sub: string };
+    const { userId: otherId } = req.params as { userId: string };
+    if (otherId === userId) return reply.send({ status: "self" });
+
+    const row = await findFriendship(userId, otherId);
+    if (!row) return { status: "none" };
+    if (row.status === "ACCEPTED") return { status: "friends" };
+    if (row.status === "PENDING") {
+      return { status: row.requesterId === userId ? "pending_outgoing" : "pending_incoming" };
+    }
+    return { status: row.blockedById === userId ? "blocked_by_me" : "blocked_by_them" };
+  });
+
   // Sends a request by username. If the other user already sent one to us,
   // this auto-accepts instead of erroring — mirrors Discord's own UX for
   // "add someone who already asked you."
