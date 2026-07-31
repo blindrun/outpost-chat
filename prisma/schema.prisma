@@ -24,6 +24,11 @@ model User {
   // manually via POST /moderation/mute or automatically once a user's
   // rolling warning count crosses BotSettings.automodWarnThreshold.
   mutedUntil   DateTime?
+  // Permanently blocked from logging in or authenticating at all — unlike
+  // a mute (still logged in, just can't send messages), a ban invalidates
+  // every already-issued JWT immediately (checked on every authenticated
+  // request, not just at login) since tokens here have no expiry.
+  banned       Boolean   @default(false)
 
   memberRoles UserRole[]
   warnings    Warning[]

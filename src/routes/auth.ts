@@ -162,6 +162,10 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.status(401).send({ error: "invalid credentials" });
     }
 
+    if (user.banned) {
+      return reply.status(403).send({ error: "this account has been banned" });
+    }
+
     const token = app.jwt.sign({ sub: user.id, username: user.username });
     return reply.send({ token, user: toPublicUser(user) });
   });

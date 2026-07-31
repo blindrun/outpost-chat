@@ -3,9 +3,12 @@ import {
   Member,
   Role,
   assignRole,
+  banMember,
   getMemberProfile,
+  kickMember,
   muteMember,
   unassignRole,
+  unbanMember,
   unmuteMember,
   warnMember,
 } from "./api";
@@ -98,6 +101,41 @@ export function ProfileCard({
     }
   }
 
+  // A momentary disruption (forces their live connection closed, account
+  // stays valid) — no confirmation needed, matching this app's existing
+  // pattern for reversible-ish moderator actions.
+  async function handleKick() {
+    setError(null);
+    try {
+      await kickMember(baseUrl, token, userId);
+      setModNotice("Kicked — disconnected, but can log back in immediately.");
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function handleBan() {
+    setError(null);
+    try {
+      await banMember(baseUrl, token, userId);
+      setModNotice("Banned — account disabled and disconnected.");
+      refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function handleUnban() {
+    setError(null);
+    try {
+      await unbanMember(baseUrl, token, userId);
+      setModNotice("Unbanned.");
+      refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
   return (
     <div className="role-popover-backdrop" onClick={onClose}>
       <div className="role-popover profile-card" onClick={(e) => e.stopPropagation()}>
@@ -146,6 +184,7 @@ export function ProfileCard({
                 {canModerate && (
                   <>
                     <h4>Moderation</h4>
+                    {profile.banned && <p className="error">Banned</p>}
                     {profile.mutedUntil && new Date(profile.mutedUntil) > new Date() && (
                       <p className="invite-meta">Muted until {new Date(profile.mutedUntil).toLocaleString()}</p>
                     )}
@@ -170,6 +209,20 @@ export function ProfileCard({
                       <button type="button" className="btn secondary" onClick={handleUnmute}>
                         Unmute
                       </button>
+                    </div>
+                    <div className="mod-actions-row">
+                      <button type="button" className="btn secondary" onClick={handleKick}>
+                        Kick
+                      </button>
+                      {profile.banned ? (
+                        <button type="button" className="btn secondary" onClick={handleUnban}>
+                          Unban
+                        </button>
+                      ) : (
+                        <button type="button" className="btn secondary danger" onClick={handleBan}>
+                          Ban
+                        </button>
+                      )}
                     </div>
                   </>
                 )}

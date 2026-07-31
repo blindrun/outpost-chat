@@ -210,6 +210,7 @@ button, input, select {
 .theme-card-blurb { font-size: 0.7rem; color: var(--text-muted); }
 
 .error { color: var(--red); font-size: 0.8rem; margin: 0; }
+.force-disconnect-notice { margin-bottom: 0.8rem; font-size: 0.9rem; text-align: center; }
 .composer-notice { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.3rem 0.6rem; background: rgba(237, 66, 69, 0.1); border-radius: 4px; }
 .composer-notice button { background: none; border: none; color: var(--red); cursor: pointer; font-size: 0.8rem; }
 .link { background: none; border: none; color: #00a8fc; cursor: pointer; padding: 0; font-size: 0.85rem; text-align: left; }
@@ -375,6 +376,8 @@ button, input, select {
 .btn:hover { background: var(--brand-hover); }
 .btn.secondary { background: transparent; color: var(--text-normal); }
 .btn.secondary:hover { text-decoration: underline; }
+.btn.secondary.danger { color: var(--red); }
+.btn.secondary.danger:hover { text-decoration: underline; }
 .btn:disabled { opacity: 0.5; cursor: default; }
 
 /* ---------- Sidebar (channel list) ---------- */
