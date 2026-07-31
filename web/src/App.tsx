@@ -151,6 +151,7 @@ function App() {
   const [pendingAttachment, setPendingAttachment] = useState<{ url: string; name: string } | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [composerNotice, setComposerNotice] = useState<string | null>(null);
+  const [forceDisconnectReason, setForceDisconnectReason] = useState<"kicked" | "banned" | null>(null);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [openPicker, setOpenPicker] = useState<"emoji" | "gif" | null>(null);
   const [voiceDetailsOpen, setVoiceDetailsOpen] = useState(false);
@@ -316,6 +317,16 @@ function App() {
               : m,
           ),
         }));
+      } else if (event.type === "FORCE_DISCONNECT") {
+        // Kick or ban landed on this exact client — drop the stored session
+        // for this instance (not the whole bookmark, unlike Leave Server)
+        // and fall back to its login screen with a reason banner. A kick
+        // leaves the account itself untouched, so logging back in works
+        // immediately; a ban's account-level block kicks in server-side on
+        // the next login attempt regardless of what happens here.
+        if (activeInstanceId) localStorage.removeItem(`session:${activeInstanceId}`);
+        setSession(null);
+        setForceDisconnectReason(event.reason);
       } else if (event.type === "ERROR") {
         // Surfaces gateway-level rejections a user needs to see, chiefly
         // automod's own "banned word (warning N/M)" / mute messages — these
@@ -433,12 +444,29 @@ function App() {
   }
 
   if (!session) {
-    // Bookmarked instance but no stored session (shouldn't normally happen —
-    // a bookmark is only created after a successful login/register).
+    // Bookmarked instance but no stored session — either it shouldn't
+    // normally happen (a bookmark is only created after a successful
+    // login/register), or a moderator just kicked/banned this exact client
+    // (see the FORCE_DISCONNECT gateway handler above), in which case
+    // forceDisconnectReason explains why they landed back here.
     return (
       <div className="auth-screen">
         <div className="auth-form">
-          <AddServerModal embedded initialBaseUrl={activeInstance.baseUrl} onConnected={handleConnected} />
+          {forceDisconnectReason && (
+            <p className="error force-disconnect-notice">
+              {forceDisconnectReason === "banned"
+                ? "You've been banned from this server."
+                : "You've been disconnected by a moderator. You can log back in."}
+            </p>
+          )}
+          <AddServerModal
+            embedded
+            initialBaseUrl={activeInstance.baseUrl}
+            onConnected={(instance, newSession) => {
+              setForceDisconnectReason(null);
+              handleConnected(instance, newSession);
+            }}
+          />
         </div>
       </div>
     );

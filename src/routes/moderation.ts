@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../plugins/db.js";
 import { PERMISSIONS, hasPermission } from "../util/permissions.js";
 import { recordWarning } from "../util/bot.js";
+import { disconnectUser } from "../gateway/rooms.js";
 
 const warnSchema = z.object({
   reason: z.string().min(1).max(500),
@@ -76,6 +77,48 @@ export async function moderationRoutes(app: FastifyInstance) {
     }
     const { userId } = req.params as { userId: string };
     await prisma.user.update({ where: { id: userId }, data: { mutedUntil: null } }).catch(() => null);
+    return reply.status(204).send();
+  });
+
+  // A momentary disruption, not a lockout — forces their live gateway
+  // connection(s) closed, but their account and JWT stay valid, so
+  // reconnecting works immediately. The lighter of the two actions.
+  app.post("/moderation/:userId/kick", { onRequest: [app.authenticate] }, async (req, reply) => {
+    const { sub: requesterId } = req.user as { sub: string };
+    if (!(await requireModerator(requesterId))) {
+      return reply.status(403).send({ error: "missing MODERATE_MEMBERS permission" });
+    }
+    const { userId } = req.params as { userId: string };
+    const target = await prisma.user.findUnique({ where: { id: userId } });
+    if (!target) return reply.status(404).send({ error: "member not found" });
+    if (target.isOwner) return reply.status(400).send({ error: "cannot kick the instance owner" });
+
+    disconnectUser(userId, "kicked");
+    return reply.status(204).send();
+  });
+
+  app.post("/moderation/:userId/ban", { onRequest: [app.authenticate] }, async (req, reply) => {
+    const { sub: requesterId } = req.user as { sub: string };
+    if (!(await requireModerator(requesterId))) {
+      return reply.status(403).send({ error: "missing MODERATE_MEMBERS permission" });
+    }
+    const { userId } = req.params as { userId: string };
+    const target = await prisma.user.findUnique({ where: { id: userId } });
+    if (!target) return reply.status(404).send({ error: "member not found" });
+    if (target.isOwner) return reply.status(400).send({ error: "cannot ban the instance owner" });
+
+    await prisma.user.update({ where: { id: userId }, data: { banned: true } });
+    disconnectUser(userId, "banned");
+    return reply.status(204).send();
+  });
+
+  app.post("/moderation/:userId/unban", { onRequest: [app.authenticate] }, async (req, reply) => {
+    const { sub: requesterId } = req.user as { sub: string };
+    if (!(await requireModerator(requesterId))) {
+      return reply.status(403).send({ error: "missing MODERATE_MEMBERS permission" });
+    }
+    const { userId } = req.params as { userId: string };
+    await prisma.user.update({ where: { id: userId }, data: { banned: false } }).catch(() => null);
     return reply.status(204).send();
   });
 }

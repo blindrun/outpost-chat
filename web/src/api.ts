@@ -127,6 +127,7 @@ export interface Member {
   bio: string | null;
   joinedAt: string;
   mutedUntil: string | null;
+  banned: boolean;
   roles: { id: string; name: string }[];
 }
 
@@ -466,6 +467,18 @@ export function unmuteMember(baseUrl: string, token: string, userId: string) {
   return request<void>(baseUrl, `/moderation/${userId}/unmute`, token, { method: "POST" });
 }
 
+export function kickMember(baseUrl: string, token: string, userId: string) {
+  return request<void>(baseUrl, `/moderation/${userId}/kick`, token, { method: "POST" });
+}
+
+export function banMember(baseUrl: string, token: string, userId: string) {
+  return request<void>(baseUrl, `/moderation/${userId}/ban`, token, { method: "POST" });
+}
+
+export function unbanMember(baseUrl: string, token: string, userId: string) {
+  return request<void>(baseUrl, `/moderation/${userId}/unban`, token, { method: "POST" });
+}
+
 type GatewayEvent =
   | { type: "READY"; channels: Channel[]; onlineUserIds: string[]; voiceState: Record<string, string[]> }
   | { type: "MESSAGE_CREATE"; message: Message }
@@ -477,6 +490,7 @@ type GatewayEvent =
   | { type: "TYPING_START"; channelId: string; userId: string; username: string }
   | { type: "VOICE_STATE_UPDATE"; channelId: string; userIds: string[] }
   | { type: "THREAD_CREATE"; parentMessageId: string; thread: ThreadChannel }
+  | { type: "FORCE_DISCONNECT"; reason: "kicked" | "banned" }
   | { type: "ERROR"; error: string };
 
 export class Gateway {

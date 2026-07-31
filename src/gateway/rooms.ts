@@ -47,6 +47,22 @@ export function allOnlineUserIds(): string[] {
   return [...onlineCounts.keys()];
 }
 
+// Forcibly ends every live connection for a user — used by kick (a
+// momentary disruption; their still-valid JWT lets them reconnect right
+// away) and ban (paired with the DB flag that then rejects that same JWT
+// on its next use, so this is what makes the ban take effect immediately
+// instead of only at their next login attempt). Sends a typed message
+// first so the client can show why, rather than a bare dropped connection.
+export function disconnectUser(userId: string, reason: "kicked" | "banned") {
+  for (const [socket, meta] of connections) {
+    if (meta.userId !== userId) continue;
+    if (socket.readyState === socket.OPEN) {
+      socket.send(JSON.stringify({ type: "FORCE_DISCONNECT", reason }));
+    }
+    socket.close();
+  }
+}
+
 export function broadcastAll(payload: unknown, exclude?: WebSocket) {
   const data = JSON.stringify(payload);
   for (const socket of allConnections) {

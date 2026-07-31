@@ -62,6 +62,12 @@ export async function gatewayRoutes(app: FastifyInstance) {
       return;
     }
 
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { banned: true } });
+    if (user?.banned) {
+      socket.close(4003, "banned");
+      return;
+    }
+
     const wasOffline = registerConnection(socket, userId, username);
 
     socket.send(

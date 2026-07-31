@@ -8,6 +8,7 @@ import fastifyWebsocket from "@fastify/websocket";
 import fastifyCors from "@fastify/cors";
 import fastifyMultipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
+import { prisma } from "./plugins/db.js";
 import { authRoutes } from "./routes/auth.js";
 import { instanceRoutes } from "./routes/instance.js";
 import { messageRoutes } from "./routes/messages.js";
@@ -55,6 +56,15 @@ await ensureClaimCode(app.log);
 app.decorate("authenticate", async (req, reply) => {
   try {
     await req.jwtVerify();
+    // Tokens never expire, so a ban has to be checked live on every
+    // request rather than only at login — otherwise a banned user's
+    // already-issued JWT would keep working indefinitely.
+    const { sub } = req.user as { sub: string };
+    const user = await prisma.user.findUnique({ where: { id: sub }, select: { banned: true } });
+    if (user?.banned) {
+      reply.status(403).send({ error: "banned" });
+      return;
+    }
   } catch {
     reply.status(401).send({ error: "unauthorized" });
   }
