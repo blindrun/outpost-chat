@@ -239,6 +239,20 @@ button, input, select {
   grid-template-columns: 72px 240px 1fr 240px;
   height: 100vh;
 }
+.connection-banner {
+  position: fixed;
+  top: 0.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  background: var(--brand);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
 /* Grid items default to min-height: auto, which lets their content grow
    past the row's 100vh height instead of respecting it — the row (and the
    whole page) grows instead, breaking every pane's own `overflow-y: auto`
