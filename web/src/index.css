@@ -1152,6 +1152,14 @@ button, input, select {
 .member-list-info { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .member-list-name { color: var(--text-normal); font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .member-list-roles { color: var(--text-faint); font-size: 0.7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member-list-entry.banned { opacity: 0.6; }
+.member-list-entry.banned .member-list-name { text-decoration: line-through; }
+.member-list-banned-tag {
+  color: var(--red);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
 
 .role-popover-backdrop {
   position: fixed;
