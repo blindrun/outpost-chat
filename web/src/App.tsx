@@ -148,6 +148,7 @@ function App() {
   const [newChannelName, setNewChannelName] = useState("");
   const [creatingChannelType, setCreatingChannelType] = useState<"TEXT" | "VOICE" | null>(null);
   const [draggedChannelId, setDraggedChannelId] = useState<string | null>(null);
+  const [memberListRefreshKey, setMemberListRefreshKey] = useState(0);
   const [dragOverChannelId, setDragOverChannelId] = useState<string | null>(null);
   const [channelError, setChannelError] = useState<string | null>(null);
   const [gatewayGeneration, setGatewayGeneration] = useState(0);
@@ -944,6 +945,7 @@ function App() {
             setViewingProfileUserId(null);
             setUserSettingsOpen(true);
           }}
+          onMemberChanged={() => setMemberListRefreshKey((k) => k + 1)}
         />
       )}
       {instanceSettingsOpen && instanceInfo && (
@@ -1164,6 +1166,7 @@ function App() {
           token={session.token}
           onlineUserIds={onlineUserIds}
           onSelectMember={setViewingProfileUserId}
+          refreshKey={memberListRefreshKey}
         />
       )}
     </div>

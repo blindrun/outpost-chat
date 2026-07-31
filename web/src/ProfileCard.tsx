@@ -24,6 +24,7 @@ export function ProfileCard({
   roles,
   onClose,
   onEditProfile,
+  onMemberChanged,
 }: {
   baseUrl: string;
   token: string;
@@ -35,6 +36,10 @@ export function ProfileCard({
   roles: Role[];
   onClose: () => void;
   onEditProfile: () => void;
+  // Tells the parent's member list sidebar to refetch — it only loads once
+  // on mount otherwise, so without this a ban/role change made from here
+  // wouldn't show up there until a full reload.
+  onMemberChanged: () => void;
 }) {
   const [profile, setProfile] = useState<Member | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +62,7 @@ export function ProfileCard({
       if (has) await unassignRole(baseUrl, token, userId, roleId);
       else await assignRole(baseUrl, token, userId, roleId);
       refresh();
+      onMemberChanged();
     } catch (err) {
       setError((err as Error).message);
     }
@@ -120,6 +126,7 @@ export function ProfileCard({
       await banMember(baseUrl, token, userId);
       setModNotice("Banned — account disabled and disconnected.");
       refresh();
+      onMemberChanged();
     } catch (err) {
       setError((err as Error).message);
     }
@@ -131,6 +138,7 @@ export function ProfileCard({
       await unbanMember(baseUrl, token, userId);
       setModNotice("Unbanned.");
       refresh();
+      onMemberChanged();
     } catch (err) {
       setError((err as Error).message);
     }
