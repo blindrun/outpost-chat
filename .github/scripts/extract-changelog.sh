@@ -8,8 +8,10 @@ version="${1#v}"
 awk -v ver="v${version}" '
   /^## / {
     if (matched) exit
-    split($0, a, " ")
-    if (a[2] == ver) { matched=1; next }
+    found = 0
+    n = split($0, a, " ")
+    for (i = 1; i <= n; i++) if (a[i] == ver) found = 1
+    if (found) { matched = 1; next }
     next
   }
   matched { print }
