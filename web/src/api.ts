@@ -630,6 +630,12 @@ export function listFriends(baseUrl: string, token: string) {
   return request<FriendsList>(baseUrl, "/friends", token);
 }
 
+export type FriendStatus = "self" | "none" | "friends" | "pending_outgoing" | "pending_incoming" | "blocked_by_me" | "blocked_by_them";
+
+export function getFriendStatus(baseUrl: string, token: string, userId: string) {
+  return request<{ status: FriendStatus }>(baseUrl, `/friends/${userId}/status`, token);
+}
+
 export function sendFriendRequest(baseUrl: string, token: string, username: string) {
   return request<void>(baseUrl, "/friends/request", token, {
     method: "POST",

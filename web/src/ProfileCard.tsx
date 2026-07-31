@@ -1,12 +1,18 @@
 import { useEffect, useState } from "react";
 import {
+  FriendStatus,
   Member,
   Role,
+  acceptFriendRequest,
   assignRole,
   banMember,
+  declineFriendRequest,
+  getFriendStatus,
   getMemberProfile,
   kickMember,
   muteMember,
+  removeFriend,
+  sendFriendRequest,
   unassignRole,
   unbanMember,
   unmuteMember,
@@ -24,6 +30,7 @@ export function ProfileCard({
   roles,
   onClose,
   onEditProfile,
+  onMessage,
   onMemberChanged,
 }: {
   baseUrl: string;
@@ -36,6 +43,9 @@ export function ProfileCard({
   roles: Role[];
   onClose: () => void;
   onEditProfile: () => void;
+  // Opens (or creates) a DM with this user and switches to it — only ever
+  // called once friendStatus is "friends", same gate the backend enforces.
+  onMessage: (userId: string) => void;
   // Tells the parent's member list sidebar to refetch — it only loads once
   // on mount otherwise, so without this a ban/role change made from here
   // wouldn't show up there until a full reload.
@@ -45,6 +55,8 @@ export function ProfileCard({
   const [error, setError] = useState<string | null>(null);
   const [modNotice, setModNotice] = useState<string | null>(null);
   const [warnReason, setWarnReason] = useState("");
+  const [friendStatus, setFriendStatus] = useState<FriendStatus | null>(null);
+  const [friendBusy, setFriendBusy] = useState(false);
 
   function refresh() {
     getMemberProfile(baseUrl, token, userId)
@@ -52,9 +64,70 @@ export function ProfileCard({
       .catch((err) => setError(err.message));
   }
 
+  function refreshFriendStatus() {
+    if (userId === currentUserId) return;
+    getFriendStatus(baseUrl, token, userId)
+      .then((r) => setFriendStatus(r.status))
+      .catch(() => {});
+  }
+
   useEffect(refresh, [baseUrl, token, userId]);
+  useEffect(refreshFriendStatus, [baseUrl, token, userId, currentUserId]);
 
   const isSelf = userId === currentUserId;
+
+  async function handleSendFriendRequest() {
+    if (!profile) return;
+    setError(null);
+    setFriendBusy(true);
+    try {
+      await sendFriendRequest(baseUrl, token, profile.username);
+      refreshFriendStatus();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setFriendBusy(false);
+    }
+  }
+
+  async function handleAcceptFriendRequest() {
+    setError(null);
+    setFriendBusy(true);
+    try {
+      await acceptFriendRequest(baseUrl, token, userId);
+      refreshFriendStatus();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setFriendBusy(false);
+    }
+  }
+
+  async function handleDeclineFriendRequest() {
+    setError(null);
+    setFriendBusy(true);
+    try {
+      await declineFriendRequest(baseUrl, token, userId);
+      refreshFriendStatus();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setFriendBusy(false);
+    }
+  }
+
+  async function handleRemoveFriend() {
+    setError(null);
+    setFriendBusy(true);
+    try {
+      await removeFriend(baseUrl, token, userId);
+      refreshFriendStatus();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setFriendBusy(false);
+    }
+  }
 
   async function toggleRole(roleId: string, has: boolean) {
     setError(null);
@@ -174,6 +247,37 @@ export function ProfileCard({
               </button>
             ) : (
               <>
+                {friendStatus === "friends" && (
+                  <div className="mod-actions-row">
+                    <button type="button" className="btn" onClick={() => onMessage(userId)}>
+                      Message
+                    </button>
+                    <button type="button" className="btn secondary" onClick={handleRemoveFriend} disabled={friendBusy}>
+                      Remove Friend
+                    </button>
+                  </div>
+                )}
+                {friendStatus === "none" && (
+                  <button type="button" className="btn secondary" onClick={handleSendFriendRequest} disabled={friendBusy}>
+                    {friendBusy ? "…" : "Add Friend"}
+                  </button>
+                )}
+                {friendStatus === "pending_outgoing" && (
+                  <button type="button" className="btn secondary" disabled>
+                    Friend Request Sent
+                  </button>
+                )}
+                {friendStatus === "pending_incoming" && (
+                  <div className="mod-actions-row">
+                    <button type="button" className="btn" onClick={handleAcceptFriendRequest} disabled={friendBusy}>
+                      Accept Friend Request
+                    </button>
+                    <button type="button" className="btn secondary" onClick={handleDeclineFriendRequest} disabled={friendBusy}>
+                      Decline
+                    </button>
+                  </div>
+                )}
+
                 {canManageRoles && (
                   <>
                     <h4>Roles</h4>
