@@ -189,6 +189,31 @@ function App() {
   const stickToBottomRef = useRef(true);
   const prevChannelIdRef = useRef<string | null>(null);
 
+  // Follows new messages to the bottom, but only when the user was already
+  // there — switching channels always jumps to the bottom of that
+  // channel's most recent history regardless of where the previous
+  // channel's scroll position was left. Every hook in this component has
+  // to run unconditionally on every render (React's own rule), so this
+  // lives up here before either of the early `return`s below rather than
+  // next to the `channelMessages` it's conceptually paired with — hooks
+  // called after a conditional return cause a real "rendered more/fewer
+  // hooks than previous render" crash the moment that condition flips.
+  useEffect(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const currentMessages = selectedChannelId ? messages[selectedChannelId] ?? [] : [];
+    const channelChanged = prevChannelIdRef.current !== selectedChannelId;
+    prevChannelIdRef.current = selectedChannelId;
+    if (channelChanged) stickToBottomRef.current = true;
+    if (channelChanged || stickToBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+    // currentMessages is read for its length/identity to know a new
+    // message arrived — referencing it here (rather than only in the
+    // dependency array) keeps eslint's exhaustive-deps reasoning honest.
+    void currentMessages;
+  }, [selectedChannelId, messages]);
+
   const activeInstance = instances.find((i) => i.id === activeInstanceId) ?? null;
 
   // Owns the LiveKit room for the whole app (not per-channel-view) so voice
@@ -681,21 +706,6 @@ function App() {
   const selectedChannel = channels.find((c) => c.id === selectedChannelId) ?? null;
   const channelMessages = selectedChannelId ? messages[selectedChannelId] ?? [] : [];
   const typingLabel = selectedChannelId ? typingByChannel[selectedChannelId] : null;
-
-  // Follows new messages to the bottom, but only when the user was already
-  // there — switching channels always jumps to the bottom of that
-  // channel's most recent history regardless of where the previous
-  // channel's scroll position was left.
-  useEffect(() => {
-    const el = messagesContainerRef.current;
-    if (!el) return;
-    const channelChanged = prevChannelIdRef.current !== selectedChannelId;
-    prevChannelIdRef.current = selectedChannelId;
-    if (channelChanged) stickToBottomRef.current = true;
-    if (channelChanged || stickToBottomRef.current) {
-      el.scrollTop = el.scrollHeight;
-    }
-  }, [channelMessages, selectedChannelId]);
 
   function handleMessagesScroll() {
     const el = messagesContainerRef.current;
