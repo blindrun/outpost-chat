@@ -1,3 +1,10 @@
+import type {
+  AuthenticationResponseJSON,
+  PublicKeyCredentialCreationOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON,
+  RegistrationResponseJSON,
+} from "@simplewebauthn/browser";
+
 export interface User {
   id: string;
   username: string;
@@ -7,6 +14,27 @@ export interface User {
   isOwner: boolean;
 }
 
+export interface WebauthnCredentialInfo {
+  id: string;
+  nickname: string;
+  createdAt?: string;
+}
+
+// Returned by POST /auth/login instead of a real session the moment the
+// account has any MFA method configured — see login() below.
+export interface MfaChallenge {
+  mfaRequired: true;
+  mfaToken: string;
+  totpEnabled: boolean;
+  webauthnCredentials: WebauthnCredentialInfo[];
+}
+
+export interface MfaStatus {
+  totpEnabled: boolean;
+  backupCodesRemaining: number;
+  webauthnCredentials: WebauthnCredentialInfo[];
+}
+
 export interface Channel {
   id: string;
   name: string;
@@ -14,7 +42,10 @@ export interface Channel {
   // sidebar's text/voice filters — they're added to local state directly
   // when a thread is created/opened, purely so selectedChannelId-based
   // lookups (name, message history) work the same as any other channel.
-  type: "TEXT" | "VOICE" | "THREAD";
+  // DM channels are similarly excluded from the shared list (they're
+  // per-user, not instance-wide) and merged in from READY's separate
+  // `dmChannels` field / a DM_CHANNEL_CREATE event instead.
+  type: "TEXT" | "VOICE" | "THREAD" | "DM";
   position: number;
 }
 
@@ -30,6 +61,31 @@ export type ThreadChannel = Channel & {
   parentMessageId: string | null;
   createdAt: string;
 };
+
+// A DM channel's `name` is set to the other participant's username, so
+// generic channel-name UI (composer placeholder, thread back-button label)
+// works unmodified — otherUserId/otherUsername/otherAvatarUrl are the
+// DM-specific fields components branch on.
+export type DMChannel = Channel & {
+  type: "DM";
+  otherUserId: string;
+  otherUsername: string;
+  otherAvatarUrl: string | null;
+};
+
+export interface FriendUser {
+  userId: string;
+  username: string;
+  avatarUrl: string | null;
+  online: boolean;
+}
+
+export interface FriendsList {
+  friends: FriendUser[];
+  incoming: FriendUser[];
+  outgoing: FriendUser[];
+  blocked: FriendUser[];
+}
 
 export type Theme = "business" | "cyberpunk" | "hacker" | "esports";
 
@@ -224,9 +280,90 @@ export function register(
 }
 
 export function login(baseUrl: string, email: string, password: string) {
-  return request<{ token: string; user: User }>(baseUrl, "/auth/login", null, {
+  return request<{ token: string; user: User } | MfaChallenge>(baseUrl, "/auth/login", null, {
     method: "POST",
     body: JSON.stringify({ email, password }),
+  });
+}
+
+export function mfaVerifyCode(baseUrl: string, mfaToken: string, code: string) {
+  return request<{ token: string; user: User }>(baseUrl, "/auth/mfa/verify-code", null, {
+    method: "POST",
+    body: JSON.stringify({ mfaToken, code }),
+  });
+}
+
+export function mfaWebauthnLoginOptions(baseUrl: string, mfaToken: string) {
+  return request<{ options: PublicKeyCredentialRequestOptionsJSON; mfaToken: string }>(
+    baseUrl,
+    "/auth/mfa/webauthn/options",
+    null,
+    { method: "POST", body: JSON.stringify({ mfaToken }) },
+  );
+}
+
+export function mfaWebauthnLoginVerify(baseUrl: string, mfaToken: string, response: AuthenticationResponseJSON) {
+  return request<{ token: string; user: User }>(baseUrl, "/auth/mfa/webauthn/verify", null, {
+    method: "POST",
+    body: JSON.stringify({ mfaToken, response }),
+  });
+}
+
+export function getMfaStatus(baseUrl: string, token: string) {
+  return request<MfaStatus>(baseUrl, "/mfa/status", token);
+}
+
+export function setupTotp(baseUrl: string, token: string) {
+  return request<{ secret: string; qrCodeDataUrl: string }>(baseUrl, "/mfa/totp/setup", token, { method: "POST" });
+}
+
+export function confirmTotp(baseUrl: string, token: string, code: string) {
+  return request<{ backupCodes: string[] }>(baseUrl, "/mfa/totp/confirm", token, {
+    method: "POST",
+    body: JSON.stringify({ code }),
+  });
+}
+
+export function disableTotp(baseUrl: string, token: string, password: string) {
+  return request<void>(baseUrl, "/mfa/totp/disable", token, {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });
+}
+
+export function regenerateBackupCodes(baseUrl: string, token: string, password: string) {
+  return request<{ backupCodes: string[] }>(baseUrl, "/mfa/backup-codes/regenerate", token, {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });
+}
+
+export function webauthnRegisterOptions(baseUrl: string, token: string) {
+  return request<{ options: PublicKeyCredentialCreationOptionsJSON; challengeToken: string }>(
+    baseUrl,
+    "/mfa/webauthn/register/options",
+    token,
+    { method: "POST" },
+  );
+}
+
+export function webauthnRegisterVerify(
+  baseUrl: string,
+  token: string,
+  challengeToken: string,
+  response: RegistrationResponseJSON,
+  nickname: string,
+) {
+  return request<WebauthnCredentialInfo>(baseUrl, "/mfa/webauthn/register/verify", token, {
+    method: "POST",
+    body: JSON.stringify({ challengeToken, response, nickname }),
+  });
+}
+
+export function deleteWebauthnCredential(baseUrl: string, token: string, credentialId: string, password: string) {
+  return request<void>(baseUrl, `/mfa/webauthn/${credentialId}`, token, {
+    method: "DELETE",
+    body: JSON.stringify({ password }),
   });
 }
 
@@ -489,8 +626,51 @@ export function unbanMember(baseUrl: string, token: string, userId: string) {
   return request<void>(baseUrl, `/moderation/${userId}/unban`, token, { method: "POST" });
 }
 
+export function listFriends(baseUrl: string, token: string) {
+  return request<FriendsList>(baseUrl, "/friends", token);
+}
+
+export function sendFriendRequest(baseUrl: string, token: string, username: string) {
+  return request<void>(baseUrl, "/friends/request", token, {
+    method: "POST",
+    body: JSON.stringify({ username }),
+  });
+}
+
+export function acceptFriendRequest(baseUrl: string, token: string, userId: string) {
+  return request<void>(baseUrl, `/friends/${userId}/accept`, token, { method: "POST" });
+}
+
+export function declineFriendRequest(baseUrl: string, token: string, userId: string) {
+  return request<void>(baseUrl, `/friends/${userId}/decline`, token, { method: "POST" });
+}
+
+export function removeFriend(baseUrl: string, token: string, userId: string) {
+  return request<void>(baseUrl, `/friends/${userId}`, token, { method: "DELETE" });
+}
+
+export function blockUser(baseUrl: string, token: string, userId: string) {
+  return request<void>(baseUrl, `/friends/${userId}/block`, token, { method: "POST" });
+}
+
+export function unblockUser(baseUrl: string, token: string, userId: string) {
+  return request<void>(baseUrl, `/friends/${userId}/unblock`, token, { method: "POST" });
+}
+
+// Get-or-create — safe to call every time "Message" is clicked, not just
+// the first time.
+export function openDM(baseUrl: string, token: string, userId: string) {
+  return request<DMChannel>(baseUrl, `/dms/${userId}`, token, { method: "POST" });
+}
+
 type GatewayEvent =
-  | { type: "READY"; channels: Channel[]; onlineUserIds: string[]; voiceState: Record<string, string[]> }
+  | {
+      type: "READY";
+      channels: Channel[];
+      dmChannels: DMChannel[];
+      onlineUserIds: string[];
+      voiceState: Record<string, string[]>;
+    }
   | { type: "MESSAGE_CREATE"; message: Message }
   | { type: "MESSAGE_UPDATE"; message: Message }
   | { type: "MESSAGE_DELETE"; messageId: string; channelId: string }
@@ -502,6 +682,10 @@ type GatewayEvent =
   | { type: "THREAD_CREATE"; parentMessageId: string; thread: ThreadChannel }
   | { type: "FORCE_DISCONNECT"; reason: "kicked" | "banned" }
   | { type: "CHANNELS_UPDATE"; channels: Channel[] }
+  | { type: "DM_CHANNEL_CREATE"; channel: DMChannel }
+  | { type: "FRIEND_REQUEST_RECEIVED"; user: FriendUser }
+  | { type: "FRIEND_REQUEST_ACCEPTED"; user: FriendUser }
+  | { type: "FRIEND_REMOVED"; userId: string }
   | { type: "ERROR"; error: string };
 
 export class Gateway {

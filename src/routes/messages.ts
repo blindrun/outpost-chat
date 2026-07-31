@@ -96,24 +96,42 @@ export async function hydrateReplyPreviews<
   });
 }
 
+// DM channels have exactly two participants; every other route in this
+// file treats "any authenticated user" as authorized (see the search
+// comment below), so this is the one access check that needs to exist at
+// all — shared by history, pins, and search.
+async function assertDmAccess(channelId: string, userId: string): Promise<boolean> {
+  const participant = await prisma.dMParticipant.findUnique({
+    where: { channelId_userId: { channelId, userId } },
+  });
+  return !!participant;
+}
+
 export async function messageRoutes(app: FastifyInstance) {
   app.addHook("onRequest", app.authenticate);
 
   // Simple case-insensitive substring search across this instance's whole
   // message history, not just whatever's currently loaded in the client —
-  // every channel is readable by any authenticated user here (no private
-  // channels), so no extra access check is needed beyond authentication.
+  // every TEXT/VOICE/THREAD channel is readable by any authenticated user
+  // here (no private channels), so no extra access check is needed beyond
+  // authentication. DM channels are the one exception: excluded from the
+  // instance-wide search entirely, and only searchable directly (via
+  // channelId) by their two participants.
   app.get("/messages/search", async (req, reply) => {
+    const { sub: userId } = req.user as { sub: string };
     const query = searchQuerySchema.parse(req.query);
     if (query.channelId) {
       const channel = await prisma.channel.findUnique({ where: { id: query.channelId } });
       if (!channel) return reply.status(404).send({ error: "channel not found" });
+      if (channel.type === "DM" && !(await assertDmAccess(channel.id, userId))) {
+        return reply.status(403).send({ error: "not a participant in this channel" });
+      }
     }
 
     const messages = await prisma.message.findMany({
       where: {
         content: { contains: query.q, mode: "insensitive" },
-        ...(query.channelId ? { channelId: query.channelId } : {}),
+        ...(query.channelId ? { channelId: query.channelId } : { channel: { type: { not: "DM" } } }),
       },
       orderBy: { createdAt: "desc" },
       take: query.limit,
@@ -126,11 +144,15 @@ export async function messageRoutes(app: FastifyInstance) {
   });
 
   app.get("/channels/:channelId/messages", async (req, reply) => {
+    const { sub: userId } = req.user as { sub: string };
     const { channelId } = req.params as { channelId: string };
     const query = historyQuerySchema.parse(req.query);
 
     const channel = await prisma.channel.findUnique({ where: { id: channelId } });
     if (!channel) return reply.status(404).send({ error: "channel not found" });
+    if (channel.type === "DM" && !(await assertDmAccess(channelId, userId))) {
+      return reply.status(403).send({ error: "not a participant in this channel" });
+    }
 
     let beforeDate: Date | undefined;
     if (query.before) {
@@ -163,12 +185,17 @@ export async function messageRoutes(app: FastifyInstance) {
   });
 
   // Pinned messages for a channel — any authenticated user can view them
-  // (same "no private channels" reasoning as search); pinning/unpinning
-  // itself is moderator-gated over the gateway, not here.
+  // (same "no private channels" reasoning as search) except DMs, gated the
+  // same way as history above; pinning/unpinning itself happens over the
+  // gateway, not here.
   app.get("/channels/:channelId/pins", async (req, reply) => {
+    const { sub: userId } = req.user as { sub: string };
     const { channelId } = req.params as { channelId: string };
     const channel = await prisma.channel.findUnique({ where: { id: channelId } });
     if (!channel) return reply.status(404).send({ error: "channel not found" });
+    if (channel.type === "DM" && !(await assertDmAccess(channelId, userId))) {
+      return reply.status(403).send({ error: "not a participant in this channel" });
+    }
 
     const messages = await prisma.message.findMany({
       where: { channelId, pinned: true },

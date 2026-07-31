@@ -1,10 +1,22 @@
 import { useEffect, useRef, useState } from "react";
+import { startAuthentication } from "@simplewebauthn/browser";
 import type { Instance, Session } from "./App";
-import { InstanceInfo, Theme, getInstanceInfo, login, register, updateInstanceSettings } from "./api";
+import {
+  InstanceInfo,
+  MfaChallenge,
+  Theme,
+  getInstanceInfo,
+  login,
+  mfaVerifyCode,
+  mfaWebauthnLoginOptions,
+  mfaWebauthnLoginVerify,
+  register,
+  updateInstanceSettings,
+} from "./api";
 import { ThemePicker } from "./ThemePicker";
 import { TurnstileWidget } from "./TurnstileWidget";
 
-type Step = "address" | "connecting" | "auth" | "theme" | "intro";
+type Step = "address" | "connecting" | "auth" | "mfa" | "theme" | "intro";
 
 // A short admin-only walkthrough shown once, right after the very first
 // owner finishes setup — points at real, already-built Instance Settings
@@ -80,6 +92,15 @@ export function AddServerModal({
   const [theme, setTheme] = useState<Theme>("business");
   const [introIndex, setIntroIndex] = useState(0);
 
+  // Second-factor step, entered when POST /auth/login comes back with
+  // mfaRequired instead of a session. mfaChallenge holds the short-lived
+  // mfaToken (and its re-signed successor once a WebAuthn challenge is
+  // fetched) plus which methods the account has configured.
+  const [mfaChallenge, setMfaChallenge] = useState<MfaChallenge | null>(null);
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaError, setMfaError] = useState<string | null>(null);
+  const [mfaBusy, setMfaBusy] = useState(false);
+
   async function probeAddress(rawAddress: string) {
     setProbeError(null);
     setProbing(true);
@@ -126,6 +147,22 @@ export function AddServerModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Shared by both a direct login/register success and the MFA challenge's
+  // eventual success — same "first user on a fresh instance gets a theme
+  // step" branch either way (though in practice MFA can only be configured
+  // by an existing user, so info.hasOwner is always already true by the
+  // time this runs from the MFA path).
+  function finishLogin(result: Session) {
+    const instance: Instance = { id: crypto.randomUUID(), label: label.trim() || info?.name || address, baseUrl };
+    if (!info?.hasOwner) {
+      setPendingSession(result);
+      setPendingInstance(instance);
+      setStep("theme");
+      return;
+    }
+    onConnected(instance, result);
+  }
+
   async function handleAuth(e: React.FormEvent) {
     e.preventDefault();
     setAuthError(null);
@@ -144,22 +181,50 @@ export function AddServerModal({
               turnstileToken || undefined,
             );
 
-      const instance: Instance = { id: crypto.randomUUID(), label: label.trim() || info?.name || address, baseUrl };
-
-      if (!info?.hasOwner) {
-        // First user on a fresh instance — one extra step to pick a theme
-        // before entering the app.
-        setPendingSession(result);
-        setPendingInstance(instance);
-        setStep("theme");
+      if ("mfaRequired" in result) {
+        setMfaChallenge(result);
+        setMfaError(null);
+        setMfaCode("");
+        setStep("mfa");
         return;
       }
 
-      onConnected(instance, result);
+      finishLogin(result);
     } catch (err) {
       setAuthError((err as Error).message);
     } finally {
       setAuthing(false);
+    }
+  }
+
+  async function handleMfaCodeSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!mfaChallenge) return;
+    setMfaError(null);
+    setMfaBusy(true);
+    try {
+      const result = await mfaVerifyCode(baseUrl, mfaChallenge.mfaToken, mfaCode.trim());
+      finishLogin(result);
+    } catch (err) {
+      setMfaError((err as Error).message);
+    } finally {
+      setMfaBusy(false);
+    }
+  }
+
+  async function handleMfaWebauthn() {
+    if (!mfaChallenge) return;
+    setMfaError(null);
+    setMfaBusy(true);
+    try {
+      const { options, mfaToken } = await mfaWebauthnLoginOptions(baseUrl, mfaChallenge.mfaToken);
+      const response = await startAuthentication({ optionsJSON: options });
+      const result = await mfaWebauthnLoginVerify(baseUrl, mfaToken, response);
+      finishLogin(result);
+    } catch (err) {
+      setMfaError((err as Error).message);
+    } finally {
+      setMfaBusy(false);
     }
   }
 
@@ -315,6 +380,56 @@ export function AddServerModal({
             </button>
           </div>
         </form>
+      </div>
+    );
+  }
+
+  if (step === "mfa" && mfaChallenge) {
+    return (
+      <div className="add-server-form">
+        <h2>Two-Factor Verification</h2>
+        <p className="subtitle">
+          {mfaChallenge.totpEnabled
+            ? "Enter the 6-digit code from your authenticator app, or one of your backup codes."
+            : "Use one of your registered security keys to finish logging in."}
+        </p>
+        {mfaChallenge.totpEnabled && (
+          <form onSubmit={handleMfaCodeSubmit}>
+            <label>
+              Code
+              <input
+                autoFocus
+                value={mfaCode}
+                onChange={(e) => setMfaCode(e.target.value)}
+                placeholder="123456 or XXXXX-XXXXX"
+              />
+            </label>
+            {mfaError && <p className="error">{mfaError}</p>}
+            <div className="modal-actions">
+              <button type="button" className="btn secondary" onClick={() => setStep("auth")}>
+                Back
+              </button>
+              <button type="submit" className="btn" disabled={mfaBusy || !mfaCode.trim()}>
+                {mfaBusy ? "…" : "Verify"}
+              </button>
+            </div>
+          </form>
+        )}
+        {mfaChallenge.webauthnCredentials.length > 0 && (
+          <>
+            {!mfaChallenge.totpEnabled && mfaError && <p className="error">{mfaError}</p>}
+            <div className="modal-actions">
+              {!mfaChallenge.totpEnabled && (
+                <button type="button" className="btn secondary" onClick={() => setStep("auth")}>
+                  Back
+                </button>
+              )}
+              <button type="button" className="btn secondary" disabled={mfaBusy} onClick={handleMfaWebauthn}>
+                {mfaBusy ? "…" : "Use a Security Key"}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     );
   }

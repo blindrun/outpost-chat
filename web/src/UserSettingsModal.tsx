@@ -1,9 +1,25 @@
 import { useEffect, useRef, useState } from "react";
-import { User, updatePassword, updateProfile, uploadFile, setAvatar } from "./api";
+import { startRegistration } from "@simplewebauthn/browser";
+import {
+  MfaStatus,
+  User,
+  confirmTotp,
+  deleteWebauthnCredential,
+  disableTotp,
+  getMfaStatus,
+  regenerateBackupCodes,
+  setupTotp,
+  updatePassword,
+  updateProfile,
+  uploadFile,
+  setAvatar,
+  webauthnRegisterOptions,
+  webauthnRegisterVerify,
+} from "./api";
 import { Modal } from "./Modal";
 import { AudioSettings, VoiceMode, loadAudioSettings, saveAudioSettings } from "./audioSettings";
 
-type Tab = "profile" | "password" | "voice";
+type Tab = "profile" | "password" | "security" | "voice";
 
 function ProfileTab({
   baseUrl,
@@ -150,6 +166,318 @@ function PasswordTab({ baseUrl, token }: { baseUrl: string; token: string }) {
         </button>
       </div>
     </form>
+  );
+}
+
+// A backup-codes list is only ever readable right after it's generated
+// (POST /mfa/totp/confirm or /mfa/backup-codes/regenerate) — shown once
+// here with an explicit acknowledgement before it's dismissed for good.
+function BackupCodesReveal({ codes, onDismiss }: { codes: string[]; onDismiss: () => void }) {
+  return (
+    <div className="backup-codes-reveal">
+      <p>
+        <strong>Save these backup codes somewhere safe.</strong> Each one can be used once, instead of your
+        authenticator app, if you ever lose access to it. They won't be shown again.
+      </p>
+      <div className="backup-codes-grid">
+        {codes.map((code) => (
+          <code key={code}>{code}</code>
+        ))}
+      </div>
+      <div className="modal-actions">
+        <button type="button" className="btn" onClick={onDismiss}>
+          I've saved these codes
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SecurityTab({ baseUrl, token }: { baseUrl: string; token: string }) {
+  const [status, setStatus] = useState<MfaStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const [setupData, setSetupData] = useState<{ secret: string; qrCodeDataUrl: string } | null>(null);
+  const [setupCode, setSetupCode] = useState("");
+  const [setupBusy, setSetupBusy] = useState(false);
+  const [revealCodes, setRevealCodes] = useState<string[] | null>(null);
+
+  const [disableOpen, setDisableOpen] = useState(false);
+  const [disablePassword, setDisablePassword] = useState("");
+  const [disableBusy, setDisableBusy] = useState(false);
+
+  const [regenOpen, setRegenOpen] = useState(false);
+  const [regenPassword, setRegenPassword] = useState("");
+  const [regenBusy, setRegenBusy] = useState(false);
+
+  const [addingKey, setAddingKey] = useState(false);
+  const [keyNickname, setKeyNickname] = useState("");
+  const [keyBusy, setKeyBusy] = useState(false);
+
+  const [removeTargetId, setRemoveTargetId] = useState<string | null>(null);
+  const [removePassword, setRemovePassword] = useState("");
+  const [removeBusy, setRemoveBusy] = useState(false);
+
+  function refresh() {
+    getMfaStatus(baseUrl, token)
+      .then(setStatus)
+      .catch((err) => setError(err.message));
+  }
+
+  useEffect(refresh, [baseUrl, token]);
+
+  async function handleStartTotpSetup() {
+    setError(null);
+    setSetupBusy(true);
+    try {
+      setSetupData(await setupTotp(baseUrl, token));
+      setSetupCode("");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSetupBusy(false);
+    }
+  }
+
+  async function handleConfirmTotp(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSetupBusy(true);
+    try {
+      const { backupCodes } = await confirmTotp(baseUrl, token, setupCode.trim());
+      setSetupData(null);
+      setRevealCodes(backupCodes);
+      refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSetupBusy(false);
+    }
+  }
+
+  async function handleDisableTotp(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setDisableBusy(true);
+    try {
+      await disableTotp(baseUrl, token, disablePassword);
+      setDisableOpen(false);
+      setDisablePassword("");
+      refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setDisableBusy(false);
+    }
+  }
+
+  async function handleRegenerateBackupCodes(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setRegenBusy(true);
+    try {
+      const { backupCodes } = await regenerateBackupCodes(baseUrl, token, regenPassword);
+      setRegenOpen(false);
+      setRegenPassword("");
+      setRevealCodes(backupCodes);
+      refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setRegenBusy(false);
+    }
+  }
+
+  async function handleAddKey(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setKeyBusy(true);
+    try {
+      const { options, challengeToken } = await webauthnRegisterOptions(baseUrl, token);
+      const response = await startRegistration({ optionsJSON: options });
+      await webauthnRegisterVerify(baseUrl, token, challengeToken, response, keyNickname.trim() || "Security Key");
+      setAddingKey(false);
+      setKeyNickname("");
+      refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setKeyBusy(false);
+    }
+  }
+
+  async function handleRemoveKey(e: React.FormEvent) {
+    e.preventDefault();
+    if (!removeTargetId) return;
+    setError(null);
+    setRemoveBusy(true);
+    try {
+      await deleteWebauthnCredential(baseUrl, token, removeTargetId, removePassword);
+      setRemoveTargetId(null);
+      setRemovePassword("");
+      refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setRemoveBusy(false);
+    }
+  }
+
+  if (revealCodes) {
+    return (
+      <div className="settings-section">
+        <BackupCodesReveal codes={revealCodes} onDismiss={() => setRevealCodes(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="settings-section">
+      {error && <p className="error">{error}</p>}
+
+      <h3>Authenticator App</h3>
+      {!status ? (
+        <p className="picker-empty">Loading…</p>
+      ) : !status.totpEnabled ? (
+        setupData ? (
+          <form onSubmit={handleConfirmTotp} className="totp-setup">
+            <p className="subtitle">Scan this with Google Authenticator, Authy, or any TOTP app, then enter the 6-digit code it shows.</p>
+            <img className="totp-qr" src={setupData.qrCodeDataUrl} alt="TOTP QR code" />
+            <p className="totp-secret">
+              Can't scan it? Enter this key manually: <code>{setupData.secret}</code>
+            </p>
+            <label>
+              Code
+              <input autoFocus value={setupCode} onChange={(e) => setSetupCode(e.target.value)} placeholder="123456" />
+            </label>
+            <div className="modal-actions">
+              <button type="button" className="btn secondary" onClick={() => setSetupData(null)}>
+                Cancel
+              </button>
+              <button type="submit" className="btn" disabled={setupBusy || setupCode.trim().length !== 6}>
+                {setupBusy ? "…" : "Confirm"}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <>
+            <p className="subtitle">Not enabled. Add a second factor with an authenticator app like Google Authenticator or Authy.</p>
+            <button type="button" className="btn secondary" onClick={handleStartTotpSetup} disabled={setupBusy}>
+              {setupBusy ? "…" : "Enable Authenticator App"}
+            </button>
+          </>
+        )
+      ) : (
+        <>
+          <p className="subtitle">
+            Enabled — {status.backupCodesRemaining} backup code{status.backupCodesRemaining === 1 ? "" : "s"} remaining.
+          </p>
+          {!regenOpen ? (
+            <button type="button" className="btn secondary" onClick={() => setRegenOpen(true)}>
+              Regenerate Backup Codes
+            </button>
+          ) : (
+            <form onSubmit={handleRegenerateBackupCodes} className="password-confirm-form">
+              <label>
+                Confirm password
+                <input
+                  type="password"
+                  autoFocus
+                  value={regenPassword}
+                  onChange={(e) => setRegenPassword(e.target.value)}
+                />
+              </label>
+              <div className="modal-actions">
+                <button type="button" className="btn secondary" onClick={() => setRegenOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn" disabled={regenBusy || !regenPassword}>
+                  {regenBusy ? "…" : "Regenerate"}
+                </button>
+              </div>
+            </form>
+          )}
+          {!disableOpen ? (
+            <button type="button" className="btn secondary danger" onClick={() => setDisableOpen(true)}>
+              Disable Authenticator App
+            </button>
+          ) : (
+            <form onSubmit={handleDisableTotp} className="password-confirm-form">
+              <label>
+                Confirm password
+                <input
+                  type="password"
+                  autoFocus
+                  value={disablePassword}
+                  onChange={(e) => setDisablePassword(e.target.value)}
+                />
+              </label>
+              <div className="modal-actions">
+                <button type="button" className="btn secondary" onClick={() => setDisableOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn secondary danger" disabled={disableBusy || !disablePassword}>
+                  {disableBusy ? "…" : "Disable"}
+                </button>
+              </div>
+            </form>
+          )}
+        </>
+      )}
+
+      <h3>Security Keys</h3>
+      <p className="subtitle">Hardware keys (YubiKey) or platform authenticators (Touch ID, Windows Hello).</p>
+      {status && status.webauthnCredentials.length > 0 && (
+        <ul className="member-list">
+          {status.webauthnCredentials.map((cred) => (
+            <li key={cred.id} className="member-row">
+              <span className="member-username">{cred.nickname}</span>
+              {removeTargetId === cred.id ? (
+                <form onSubmit={handleRemoveKey} className="password-confirm-form inline">
+                  <input
+                    type="password"
+                    autoFocus
+                    placeholder="password"
+                    value={removePassword}
+                    onChange={(e) => setRemovePassword(e.target.value)}
+                  />
+                  <button type="submit" className="text-btn danger" disabled={removeBusy || !removePassword}>
+                    confirm
+                  </button>
+                  <button type="button" className="text-btn" onClick={() => setRemoveTargetId(null)}>
+                    cancel
+                  </button>
+                </form>
+              ) : (
+                <button type="button" className="text-btn danger" onClick={() => setRemoveTargetId(cred.id)}>
+                  remove
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {addingKey ? (
+        <form onSubmit={handleAddKey} className="new-channel-form">
+          <input
+            autoFocus
+            placeholder="Nickname, e.g. YubiKey 5C"
+            value={keyNickname}
+            onChange={(e) => setKeyNickname(e.target.value)}
+          />
+          <button type="submit" className="btn" disabled={keyBusy}>
+            {keyBusy ? "…" : "Register"}
+          </button>
+          <button type="button" className="btn secondary" onClick={() => setAddingKey(false)}>
+            Cancel
+          </button>
+        </form>
+      ) : (
+        <button type="button" className="btn secondary" onClick={() => setAddingKey(true)}>
+          Add a Security Key
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -379,6 +707,9 @@ export function UserSettingsModal({
         <button className={tab === "password" ? "active" : ""} onClick={() => setTab("password")}>
           Password
         </button>
+        <button className={tab === "security" ? "active" : ""} onClick={() => setTab("security")}>
+          Security
+        </button>
         <button className={tab === "voice" ? "active" : ""} onClick={() => setTab("voice")}>
           Voice
         </button>
@@ -388,6 +719,7 @@ export function UserSettingsModal({
         <ProfileTab baseUrl={baseUrl} token={token} user={user} onSessionUpdate={onSessionUpdate} />
       )}
       {tab === "password" && <PasswordTab baseUrl={baseUrl} token={token} />}
+      {tab === "security" && <SecurityTab baseUrl={baseUrl} token={token} />}
       {tab === "voice" && <VoiceTab />}
 
       <div className="modal-actions">
