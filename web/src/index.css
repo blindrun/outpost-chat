@@ -366,19 +366,28 @@ button, input, select {
 .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
 .btn {
   background: var(--brand);
-  border: none;
-  border-radius: 3px;
-  padding: 0.55rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0.6rem 1.1rem;
   color: #fff;
   font-weight: 600;
   cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
-.btn:hover { background: var(--brand-hover); }
-.btn.secondary { background: transparent; color: var(--text-normal); }
-.btn.secondary:hover { text-decoration: underline; }
-.btn.secondary.danger { color: var(--red); }
-.btn.secondary.danger:hover { text-decoration: underline; }
-.btn:disabled { opacity: 0.5; cursor: default; }
+.btn:hover { background: var(--brand-hover); transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25); }
+.btn:active { transform: translateY(0); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15); }
+.btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.btn.secondary {
+  background: var(--interactive-hover);
+  border-color: var(--border-subtle);
+  color: var(--text-normal);
+  box-shadow: none;
+}
+.btn.secondary:hover { background: var(--interactive-active); border-color: var(--border-subtle); }
+.btn.secondary.danger { color: var(--red); border-color: rgba(230, 72, 63, 0.35); }
+.btn.secondary.danger:hover { background: rgba(230, 72, 63, 0.12); border-color: var(--red); }
+.btn:disabled { opacity: 0.5; cursor: default; transform: none; box-shadow: none; }
 
 /* ---------- Sidebar (channel list) ---------- */
 
@@ -407,7 +416,10 @@ button, input, select {
 .channel-category-row { display: flex; align-items: center; justify-content: space-between; }
 .channel-category-row .channel-category { padding-left: 0; }
 
-.channel-row { display: flex; flex-direction: column; align-items: stretch; }
+.channel-row { display: flex; flex-direction: column; align-items: stretch; border-radius: 6px; }
+.channel-row[draggable="true"] { cursor: grab; }
+.channel-row[draggable="true"]:active { cursor: grabbing; }
+.channel-row.drag-over { box-shadow: inset 0 2px 0 var(--brand); }
 .voice-channel-members { display: flex; flex-direction: column; gap: 0.35rem; padding: 0.3rem 0.5rem 0.5rem 2.2rem; }
 .voice-member-row { display: flex; align-items: center; gap: 0.5rem; }
 .voice-member-name { font-size: 0.85rem; color: var(--text-muted); }
@@ -590,10 +602,12 @@ button, input, select {
   cursor: pointer;
   font-size: 1rem;
   opacity: 0.7;
-  padding: 0.2rem 0.4rem;
-  border-radius: 4px;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  transition: opacity 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
 }
-.chat-header-icon-btn:hover { opacity: 1; background: var(--interactive-hover); }
+.chat-header-icon-btn:hover { opacity: 1; background: var(--interactive-hover); transform: translateY(-1px); }
+.chat-header-icon-btn:active { transform: translateY(0); }
 .chat-header-icon-btn.active { opacity: 1; background: var(--interactive-hover); color: var(--brand); }
 .chat-placeholder { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
 
@@ -712,8 +726,11 @@ button, input, select {
   cursor: pointer;
   padding: 0.35rem 0.5rem;
   font-size: 0.9rem;
+  border-radius: 6px;
+  transition: color 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
 }
-.toolbar-btn:hover { color: var(--text-normal); background: var(--interactive-hover); border-radius: 4px; }
+.toolbar-btn:hover { color: var(--text-normal); background: var(--interactive-hover); transform: translateY(-1px); }
+.toolbar-btn:active { transform: translateY(0); }
 
 .edit-form { display: flex; gap: 0.4rem; align-items: center; margin-top: 0.2rem; }
 .edit-form input {
@@ -870,13 +887,15 @@ button, input, select {
 .send-form button[type="submit"] {
   background: var(--brand);
   border: none;
-  border-radius: 4px;
-  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  padding: 0.45rem 1rem;
   color: #fff;
   font-weight: 600;
   cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease;
 }
-.send-form button[type="submit"]:hover { background: var(--brand-hover); }
+.send-form button[type="submit"]:hover { background: var(--brand-hover); transform: translateY(-1px); }
+.send-form button[type="submit"]:active { transform: translateY(0); }
 .composer-icon-btn {
   background: none;
   border: none;
@@ -885,7 +904,8 @@ button, input, select {
   font-size: 1.1rem;
   font-weight: 700;
   padding: 0.3rem 0.5rem;
-  border-radius: 4px;
+  border-radius: 6px;
+  transition: color 0.15s ease, background-color 0.15s ease;
 }
 .composer-icon-btn:hover { color: var(--text-normal); background: var(--interactive-hover); }
 

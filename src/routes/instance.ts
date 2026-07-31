@@ -6,6 +6,7 @@ import {
   hasPermission,
 } from "../util/permissions.js";
 import { createUniqueInviteCode, isInviteValid } from "../util/invites.js";
+import { broadcastAll } from "../gateway/rooms.js";
 
 const createInviteSchema = z.object({
   maxUses: z.number().int().min(1).max(1000).optional(),
@@ -24,6 +25,11 @@ const updateInstanceSettingsSchema = z.object({
 const createChannelSchema = z.object({
   name: z.string().min(2).max(64),
   type: z.enum(["TEXT", "VOICE"]).default("TEXT"),
+});
+
+const reorderChannelsSchema = z.object({
+  type: z.enum(["TEXT", "VOICE"]),
+  channelIds: z.array(z.string()).min(1),
 });
 
 const createRoleSchema = z.object({
@@ -206,6 +212,34 @@ export async function instanceRoutes(app: FastifyInstance) {
       data: { name: body.name, type: body.type },
     });
     return reply.status(201).send(channel);
+  });
+
+  // Reorders one channel-type list (text or voice) at a time, matching how
+  // the sidebar renders them as two separate sections — takes the full
+  // ordered list of that type's channel ids and assigns sequential
+  // positions, rather than a single move+insert-between-neighbors call, to
+  // avoid needing fractional positions or renumbering logic. Broadcasts the
+  // fresh full channel list so every connected client's sidebar reorders
+  // live, not just the admin who dragged it.
+  app.post("/channels/reorder", { onRequest: [app.authenticate] }, async (req, reply) => {
+    const { sub: userId } = req.user as { sub: string };
+    if (!(await hasPermission(userId, PERMISSIONS.MANAGE_CHANNELS))) {
+      return reply.status(403).send({ error: "missing MANAGE_CHANNELS permission" });
+    }
+    const body = reorderChannelsSchema.parse(req.body);
+
+    const existing = await prisma.channel.findMany({ where: { id: { in: body.channelIds }, type: body.type } });
+    if (existing.length !== body.channelIds.length) {
+      return reply.status(400).send({ error: "channelIds must all exist and match the given type" });
+    }
+
+    await prisma.$transaction(
+      body.channelIds.map((id, position) => prisma.channel.update({ where: { id }, data: { position } })),
+    );
+
+    const channels = await prisma.channel.findMany({ where: { type: { not: "THREAD" } }, orderBy: { position: "asc" } });
+    broadcastAll({ type: "CHANNELS_UPDATE", channels });
+    return reply.status(204).send();
   });
 
   // Create a role — requires MANAGE_ROLES (owner always has it).

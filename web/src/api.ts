@@ -249,6 +249,13 @@ export function createChannel(baseUrl: string, token: string, name: string, type
   });
 }
 
+export function reorderChannels(baseUrl: string, token: string, type: "TEXT" | "VOICE", channelIds: string[]) {
+  return request<void>(baseUrl, "/channels/reorder", token, {
+    method: "POST",
+    body: JSON.stringify({ type, channelIds }),
+  });
+}
+
 export function listMessages(baseUrl: string, token: string, channelId: string) {
   return request<Message[]>(baseUrl, `/channels/${channelId}/messages`, token);
 }
@@ -491,6 +498,7 @@ type GatewayEvent =
   | { type: "VOICE_STATE_UPDATE"; channelId: string; userIds: string[] }
   | { type: "THREAD_CREATE"; parentMessageId: string; thread: ThreadChannel }
   | { type: "FORCE_DISCONNECT"; reason: "kicked" | "banned" }
+  | { type: "CHANNELS_UPDATE"; channels: Channel[] }
   | { type: "ERROR"; error: string };
 
 export class Gateway {
