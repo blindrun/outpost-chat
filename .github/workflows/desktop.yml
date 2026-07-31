@@ -55,3 +55,49 @@ jobs:
             electron/release/latest*.yml
             electron/release/*.blockmap
           fail_on_unmatched_files: false
+
+  announce:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install announce script deps
+        working-directory: .github/scripts/announce-release
+        run: npm install
+
+      - name: Fetch release notes
+        id: notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # This workflow triggers on tag push, not a `release` event, so
+        # there's no github.event.release.body to read -- the release
+        # itself was only just created by the build job's upload step, so
+        # fetch its notes back via the API instead. EOF-delimited output
+        # handles multi-line release notes safely.
+        run: |
+          {
+            echo 'body<<RELEASE_NOTES_EOF'
+            gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" --json body -q .body
+            echo 'RELEASE_NOTES_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Post release announcement to X
+        working-directory: .github/scripts/announce-release
+        run: node post.js
+        env:
+          # Unset until the paid X API write tier is set up -- post.js
+          # no-ops (not a failure) while these are empty. Add as repo
+          # secrets (Settings -> Secrets and variables -> Actions) once
+          # the @useoutpost developer app exists.
+          TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
+          TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
+          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+          TWITTER_ACCESS_SECRET: ${{ secrets.TWITTER_ACCESS_SECRET }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}
+          RELEASE_NOTES: ${{ steps.notes.outputs.body }}
