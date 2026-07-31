@@ -9,6 +9,7 @@ import {
   createRole,
   listMembers,
   listRoles,
+  unbanMember,
   updateInstanceSettings,
   uploadFile,
 } from "./api";
@@ -225,11 +226,24 @@ function MembersTab({ baseUrl, token }: { baseUrl: string; token: string }) {
     }
   }
 
+  async function handleUnban(userId: string) {
+    setError(null);
+    try {
+      await unbanMember(baseUrl, token, userId);
+      refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  const activeMembers = members.filter((m) => !m.banned);
+  const bannedMembers = members.filter((m) => m.banned);
+
   return (
     <div className="settings-section">
       {error && <p className="error">{error}</p>}
       <ul className="member-list">
-        {members.map((m) => (
+        {activeMembers.map((m) => (
           <li key={m.userId} className="member-row">
             {m.avatarUrl ? (
               <img className="avatar" src={m.avatarUrl} alt="" />
@@ -255,6 +269,33 @@ function MembersTab({ baseUrl, token }: { baseUrl: string; token: string }) {
           </li>
         ))}
       </ul>
+
+      {/* Banned members are hidden from the regular member list sidebar
+          everyone sees — this is the one place their status is visible,
+          and the only place they can be unbanned from besides a profile
+          card (which most members can't open the Moderation section of
+          anyway). */}
+      {bannedMembers.length > 0 && (
+        <>
+          <h3>Banned</h3>
+          <ul className="member-list">
+            {bannedMembers.map((m) => (
+              <li key={m.userId} className="member-row banned">
+                {m.avatarUrl ? (
+                  <img className="avatar" src={m.avatarUrl} alt="" />
+                ) : (
+                  <span className="avatar avatar-placeholder">{m.username[0]?.toUpperCase()}</span>
+                )}
+                <span className="member-username">{m.username}</span>
+                <span className="banned-tag">Banned</span>
+                <button className="text-btn" onClick={() => handleUnban(m.userId)}>
+                  unban
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }
