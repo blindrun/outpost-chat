@@ -91,6 +91,17 @@
 
 * { box-sizing: border-box; }
 
+/* Locks the page itself to exactly the viewport height with no scroll of
+   its own — without this, .app's internal panes (server rail, channel
+   list, member list) each having their own `overflow-y: auto` doesn't
+   actually stop the whole page from scrolling as one unit too, which is
+   what made scrolling any one of them feel like it dragged the others
+   along with it. Every real scroll region lives inside .app instead. */
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   font-family: "gg sans", "Noto Sans", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
