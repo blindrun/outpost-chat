@@ -7,7 +7,6 @@ import {
 } from "../util/permissions.js";
 import { createUniqueInviteCode, isInviteValid } from "../util/invites.js";
 import { broadcastAll } from "../gateway/rooms.js";
-import { UPLOAD_CATEGORY_KEYS } from "../util/uploadCategories.js";
 
 const createInviteSchema = z.object({
   maxUses: z.number().int().min(1).max(1000).optional(),
@@ -21,7 +20,6 @@ const updateInstanceSettingsSchema = z.object({
   theme: z.enum(["business", "cyberpunk", "hacker", "esports"]).optional(),
   requireInviteToRegister: z.boolean().optional(),
   defaultChannelId: z.string().nullable().optional(),
-  enabledUploadCategories: z.array(z.enum(UPLOAD_CATEGORY_KEYS as [string, ...string[]])).optional(),
 });
 
 const createChannelSchema = z.object({
@@ -34,9 +32,16 @@ const reorderChannelsSchema = z.object({
   channelIds: z.array(z.string()).min(1),
 });
 
+const PERMISSION_KEYS = Object.values(PERMISSIONS) as [string, ...string[]];
+
 const createRoleSchema = z.object({
   name: z.string().min(1).max(32),
-  permissions: z.array(z.enum(["MANAGE_CHANNELS", "MANAGE_ROLES", "SEND_MESSAGES", "MODERATE_MEMBERS"])).default([]),
+  permissions: z.array(z.enum(PERMISSION_KEYS)).default([]),
+});
+
+const updateRoleSchema = z.object({
+  name: z.string().min(1).max(32).optional(),
+  permissions: z.array(z.enum(PERMISSION_KEYS)).optional(),
 });
 
 const assignRoleSchema = z.object({
@@ -80,7 +85,6 @@ export async function instanceRoutes(app: FastifyInstance) {
       turnstileSiteKey: process.env.TURNSTILE_SITE_KEY || null,
       defaultChannelId: settings.defaultChannelId,
       levelingEnabled: botSettings?.levelingEnabled ?? false,
-      enabledUploadCategories: settings.enabledUploadCategories,
     };
   });
 
@@ -108,7 +112,6 @@ export async function instanceRoutes(app: FastifyInstance) {
         ...(body.theme !== undefined ? { theme: body.theme } : {}),
         ...(body.requireInviteToRegister !== undefined ? { requireInviteToRegister: body.requireInviteToRegister } : {}),
         ...(body.defaultChannelId !== undefined ? { defaultChannelId: body.defaultChannelId } : {}),
-        ...(body.enabledUploadCategories !== undefined ? { enabledUploadCategories: body.enabledUploadCategories } : {}),
       },
       update: {
         ...(body.name !== undefined ? { name: body.name } : {}),
@@ -117,7 +120,6 @@ export async function instanceRoutes(app: FastifyInstance) {
         ...(body.theme !== undefined ? { theme: body.theme } : {}),
         ...(body.requireInviteToRegister !== undefined ? { requireInviteToRegister: body.requireInviteToRegister } : {}),
         ...(body.defaultChannelId !== undefined ? { defaultChannelId: body.defaultChannelId } : {}),
-        ...(body.enabledUploadCategories !== undefined ? { enabledUploadCategories: body.enabledUploadCategories } : {}),
       },
     });
     return updated;
@@ -274,6 +276,32 @@ export async function instanceRoutes(app: FastifyInstance) {
   // List roles — any authenticated user can see what roles exist.
   app.get("/roles", { onRequest: [app.authenticate] }, async () => {
     return prisma.role.findMany();
+  });
+
+  // Update an existing role's name/permissions — requires MANAGE_ROLES.
+  // The only way to change a role's permission set once created (there was
+  // previously no edit path at all, only create), which matters for
+  // @everyone specifically since it always exists and can't be recreated.
+  app.patch("/roles/:roleId", { onRequest: [app.authenticate] }, async (req, reply) => {
+    const { roleId } = req.params as { roleId: string };
+    const { sub: userId } = req.user as { sub: string };
+    const body = updateRoleSchema.parse(req.body ?? {});
+
+    if (!(await hasPermission(userId, PERMISSIONS.MANAGE_ROLES))) {
+      return reply.status(403).send({ error: "missing MANAGE_ROLES permission" });
+    }
+
+    const role = await prisma.role.findUnique({ where: { id: roleId } });
+    if (!role) return reply.status(404).send({ error: "role not found" });
+
+    const updated = await prisma.role.update({
+      where: { id: roleId },
+      data: {
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.permissions !== undefined ? { permissions: body.permissions } : {}),
+      },
+    });
+    return updated;
   });
 
   // Assign an existing role to a member — requires MANAGE_ROLES.

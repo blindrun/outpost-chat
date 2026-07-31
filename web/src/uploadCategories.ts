@@ -1,17 +1,21 @@
-// Mirrors src/util/uploadCategories.ts on the server — keep the keys and
-// extensions in sync. Used to build the attach-file <input accept> list and
-// to label the owner-facing toggles in instance settings.
+// Mirrors src/util/uploadCategories.ts on the server — keep the keys,
+// extensions, and permission names in sync. Used to build the attach-file
+// <input accept> list and to label the per-role permission checkboxes in
+// Instance Settings.
 export const UPLOAD_CATEGORIES = {
   documents: {
     label: "Documents",
+    permission: "UPLOAD_DOCUMENTS",
     extensions: [".pdf", ".txt", ".md", ".csv", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".odt", ".rtf"],
   },
   archives: {
     label: "Archives",
+    permission: "UPLOAD_ARCHIVES",
     extensions: [".zip", ".tar", ".gz", ".tgz", ".7z", ".rar"],
   },
   code: {
     label: "Code & scripts",
+    permission: "UPLOAD_CODE",
     extensions: [
       ".sh", ".py", ".js", ".ts", ".tsx", ".jsx", ".rb", ".go", ".rs", ".java", ".c", ".cpp", ".h",
       ".php", ".sql", ".json", ".yaml", ".yml", ".toml", ".ini", ".env.example", ".xml", ".html", ".css",
@@ -22,12 +26,10 @@ export const UPLOAD_CATEGORIES = {
 export type UploadCategory = keyof typeof UPLOAD_CATEGORIES;
 export const UPLOAD_CATEGORY_KEYS = Object.keys(UPLOAD_CATEGORIES) as UploadCategory[];
 
-// Builds the file input's `accept` list: images plus whatever extra
-// categories this instance has opted into.
-export function buildAcceptAttribute(enabledCategories: string[]): string {
-  const extensions = enabledCategories.flatMap(
-    (cat) => UPLOAD_CATEGORIES[cat as UploadCategory]?.extensions ?? [],
-  );
+// Builds the file input's `accept` list: images plus whatever categories
+// the current user's roles grant them permission to upload.
+export function buildAcceptAttribute(myCategories: UploadCategory[]): string {
+  const extensions = myCategories.flatMap((cat) => UPLOAD_CATEGORIES[cat]?.extensions ?? []);
   return ["image/*", ...extensions].join(",");
 }
 

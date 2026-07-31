@@ -6,6 +6,7 @@ import {
   InstanceInfo,
   Member,
   Message,
+  Permission,
   Role,
   User,
   createChannel,
@@ -35,7 +36,7 @@ import { SearchPanel } from "./SearchPanel";
 import { PinnedMessagesPanel } from "./PinnedMessagesPanel";
 import { LeaderboardPanel } from "./LeaderboardPanel";
 import { FriendsPanel } from "./FriendsPanel";
-import { buildAcceptAttribute } from "./uploadCategories";
+import { buildAcceptAttribute, UPLOAD_CATEGORIES, UPLOAD_CATEGORY_KEYS } from "./uploadCategories";
 
 // Matches a trailing "@partial" token in the text up to the cursor — used to
 // drive the mention-autocomplete popover. Must be at the start of the text
@@ -763,15 +764,14 @@ function App() {
   }
   const memberUsernames = new Set(members.map((m) => m.username));
   const currentMember = members.find((m) => m.userId === session.user.id);
-  const canManageChannels =
-    session.user.isOwner ||
-    (currentMember?.roles.some((r) => roles.find((role) => role.id === r.id)?.permissions.includes("MANAGE_CHANNELS")) ?? false);
-  const canManageRoles =
-    session.user.isOwner ||
-    (currentMember?.roles.some((r) => roles.find((role) => role.id === r.id)?.permissions.includes("MANAGE_ROLES")) ?? false);
-  const canModerate =
-    session.user.isOwner ||
-    (currentMember?.roles.some((r) => roles.find((role) => role.id === r.id)?.permissions.includes("MODERATE_MEMBERS")) ?? false);
+  const isOwner = session.user.isOwner;
+  const hasPerm = (permission: Permission): boolean =>
+    isOwner ||
+    (currentMember?.roles.some((r) => roles.find((role) => role.id === r.id)?.permissions.includes(permission)) ?? false);
+  const canManageChannels = hasPerm("MANAGE_CHANNELS");
+  const canManageRoles = hasPerm("MANAGE_ROLES");
+  const canModerate = hasPerm("MODERATE_MEMBERS");
+  const myUploadCategories = UPLOAD_CATEGORY_KEYS.filter((cat) => hasPerm(UPLOAD_CATEGORIES[cat].permission));
   const mentionMatches =
     mentionQuery !== null
       ? members.filter((m) => m.username.toLowerCase().startsWith(mentionQuery.toLowerCase())).slice(0, 8)
@@ -1308,7 +1308,7 @@ function App() {
                   {uploadingAttachment ? "…" : "📎"}
                   <input
                     type="file"
-                    accept={buildAcceptAttribute(instanceInfo?.enabledUploadCategories ?? [])}
+                    accept={buildAcceptAttribute(myUploadCategories)}
                     hidden
                     onChange={handleAttachmentSelect}
                     disabled={uploadingAttachment}

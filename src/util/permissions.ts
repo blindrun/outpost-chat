@@ -5,6 +5,12 @@ export const PERMISSIONS = {
   MANAGE_ROLES: "MANAGE_ROLES",
   SEND_MESSAGES: "SEND_MESSAGES",
   MODERATE_MEMBERS: "MODERATE_MEMBERS",
+  // Gate which curated non-image attachment categories a role's members can
+  // upload — see util/uploadCategories.ts for what each one allows. Images
+  // are never gated; there's no permission for those.
+  UPLOAD_DOCUMENTS: "UPLOAD_DOCUMENTS",
+  UPLOAD_ARCHIVES: "UPLOAD_ARCHIVES",
+  UPLOAD_CODE: "UPLOAD_CODE",
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
