@@ -764,9 +764,6 @@ function App() {
       <aside className="sidebar">
         <div className="sidebar-header">
           <span>{instanceInfo?.name ?? activeInstance.label}</span>
-          <button className="gear-btn" title="Friends" onClick={() => setFriendsOpen(true)}>
-            👤
-          </button>
           {session.user.isOwner && (
             <button className="gear-btn" title="Instance Settings" onClick={() => setInstanceSettingsOpen(true)}>
               ⚙️
@@ -1253,6 +1250,7 @@ function App() {
           token={session.token}
           onlineUserIds={onlineUserIds}
           onSelectMember={setViewingProfileUserId}
+          onOpenFriends={() => setFriendsOpen(true)}
           refreshKey={memberListRefreshKey}
         />
       )}

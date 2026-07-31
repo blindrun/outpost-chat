@@ -1178,6 +1178,15 @@ button, input, select {
   flex-direction: column;
   gap: 1rem;
 }
+.member-sidebar-header { display: flex; justify-content: flex-end; gap: 0.3rem; margin: -0.4rem -0.2rem -0.4rem 0; }
+.member-sidebar-search {
+  background: var(--bg-input);
+  border: none;
+  border-radius: 4px;
+  padding: 0.4rem 0.6rem;
+  color: var(--text-normal);
+  font-size: 0.85rem;
+}
 .member-group h4 {
   margin: 0 0 0.4rem 0.4rem;
   font-size: 0.7rem;
