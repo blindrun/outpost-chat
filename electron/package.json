@@ -2,7 +2,7 @@
   "name": "outpost-desktop",
   "productName": "Outpost",
   "desktopName": "outpost.desktop",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "private": true,
   "main": "main.js",
   "homepage": "https://github.com/blindrun/outpost-chat",
