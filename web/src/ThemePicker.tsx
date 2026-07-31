@@ -8,20 +8,17 @@ const THEMES: { value: Theme; label: string; blurb: string; swatch: string }[] =
 ];
 
 export function ThemePicker({ value, onChange }: { value: Theme; onChange: (theme: Theme) => void }) {
+  const active = THEMES.find((t) => t.value === value);
   return (
     <div className="theme-picker">
-      {THEMES.map((t) => (
-        <button
-          type="button"
-          key={t.value}
-          className={`theme-card ${value === t.value ? "active" : ""}`}
-          onClick={() => onChange(t.value)}
-        >
-          <span className="theme-swatch" style={{ background: t.swatch }} />
-          <span className="theme-card-label">{t.label}</span>
-          <span className="theme-card-blurb">{t.blurb}</span>
-        </button>
-      ))}
+      <select value={value} onChange={(e) => onChange(e.target.value as Theme)}>
+        {THEMES.map((t) => (
+          <option key={t.value} value={t.value}>
+            {t.label} — {t.blurb}
+          </option>
+        ))}
+      </select>
+      {active && <span className="theme-swatch" style={{ background: active.swatch }} />}
     </div>
   );
 }

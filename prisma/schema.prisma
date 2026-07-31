@@ -122,13 +122,17 @@ model Warning {
 }
 
 model InstanceSettings {
-  id                      String  @id @default("singleton")
-  name                    String  @default("Outpost")
+  id                      String   @id @default("singleton")
+  name                    String   @default("Outpost")
   description             String?
   iconUrl                 String?
-  theme                   String  @default("business")
-  requireInviteToRegister Boolean @default(false)
+  theme                   String   @default("business")
+  requireInviteToRegister Boolean  @default(false)
   defaultChannelId        String?
+  // Non-image upload categories the owner has opted into for message
+  // attachments — see src/util/uploadCategories.ts for what each key
+  // allows. Images are always allowed regardless of this list.
+  enabledUploadCategories String[] @default([])
 }
 
 // One-time code an admin reads off the server console (like TeamSpeak's

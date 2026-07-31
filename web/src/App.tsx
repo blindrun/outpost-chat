@@ -35,6 +35,7 @@ import { SearchPanel } from "./SearchPanel";
 import { PinnedMessagesPanel } from "./PinnedMessagesPanel";
 import { LeaderboardPanel } from "./LeaderboardPanel";
 import { FriendsPanel } from "./FriendsPanel";
+import { buildAcceptAttribute } from "./uploadCategories";
 
 // Matches a trailing "@partial" token in the text up to the cursor — used to
 // drive the mention-autocomplete popover. Must be at the start of the text
@@ -1307,7 +1308,7 @@ function App() {
                   {uploadingAttachment ? "…" : "📎"}
                   <input
                     type="file"
-                    accept="image/*"
+                    accept={buildAcceptAttribute(instanceInfo?.enabledUploadCategories ?? [])}
                     hidden
                     onChange={handleAttachmentSelect}
                     disabled={uploadingAttachment}

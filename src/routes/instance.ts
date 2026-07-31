@@ -7,6 +7,7 @@ import {
 } from "../util/permissions.js";
 import { createUniqueInviteCode, isInviteValid } from "../util/invites.js";
 import { broadcastAll } from "../gateway/rooms.js";
+import { UPLOAD_CATEGORY_KEYS } from "../util/uploadCategories.js";
 
 const createInviteSchema = z.object({
   maxUses: z.number().int().min(1).max(1000).optional(),
@@ -20,6 +21,7 @@ const updateInstanceSettingsSchema = z.object({
   theme: z.enum(["business", "cyberpunk", "hacker", "esports"]).optional(),
   requireInviteToRegister: z.boolean().optional(),
   defaultChannelId: z.string().nullable().optional(),
+  enabledUploadCategories: z.array(z.enum(UPLOAD_CATEGORY_KEYS as [string, ...string[]])).optional(),
 });
 
 const createChannelSchema = z.object({
@@ -78,6 +80,7 @@ export async function instanceRoutes(app: FastifyInstance) {
       turnstileSiteKey: process.env.TURNSTILE_SITE_KEY || null,
       defaultChannelId: settings.defaultChannelId,
       levelingEnabled: botSettings?.levelingEnabled ?? false,
+      enabledUploadCategories: settings.enabledUploadCategories,
     };
   });
 
@@ -105,6 +108,7 @@ export async function instanceRoutes(app: FastifyInstance) {
         ...(body.theme !== undefined ? { theme: body.theme } : {}),
         ...(body.requireInviteToRegister !== undefined ? { requireInviteToRegister: body.requireInviteToRegister } : {}),
         ...(body.defaultChannelId !== undefined ? { defaultChannelId: body.defaultChannelId } : {}),
+        ...(body.enabledUploadCategories !== undefined ? { enabledUploadCategories: body.enabledUploadCategories } : {}),
       },
       update: {
         ...(body.name !== undefined ? { name: body.name } : {}),
@@ -113,6 +117,7 @@ export async function instanceRoutes(app: FastifyInstance) {
         ...(body.theme !== undefined ? { theme: body.theme } : {}),
         ...(body.requireInviteToRegister !== undefined ? { requireInviteToRegister: body.requireInviteToRegister } : {}),
         ...(body.defaultChannelId !== undefined ? { defaultChannelId: body.defaultChannelId } : {}),
+        ...(body.enabledUploadCategories !== undefined ? { enabledUploadCategories: body.enabledUploadCategories } : {}),
       },
     });
     return updated;

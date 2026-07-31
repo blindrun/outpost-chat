@@ -1,4 +1,12 @@
 :root {
+  /* Every theme here (including the other three below) is dark-only — no
+     light variant exists — so this is a blanket hint, not per-theme. Without
+     it, browsers render native widgets (the opened <select> option list,
+     scrollbars) with light OS-default chrome regardless of our own
+     background/color on the closed element, which is what actually made the
+     dropdown list unreadable even after giving the select itself a dark
+     background. */
+  color-scheme: dark;
   --bg-rail: #1a140f;
   --bg-sidebar: #211a16;
   --bg-primary: #291f19;
@@ -203,23 +211,9 @@ button, input, select {
 }
 .claim-banner p { margin: 0; }
 
-.theme-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
-.theme-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.3rem;
-  background: var(--bg-input);
-  border: 2px solid transparent;
-  border-radius: 6px;
-  padding: 0.7rem;
-  cursor: pointer;
-  text-align: left;
-}
-.theme-card.active { border-color: var(--brand); }
-.theme-swatch { width: 100%; height: 24px; border-radius: 4px; }
-.theme-card-label { font-weight: 700; color: var(--header-primary); font-size: 0.85rem; }
-.theme-card-blurb { font-size: 0.7rem; color: var(--text-muted); }
+.theme-picker { display: flex; align-items: center; gap: 0.5rem; }
+.theme-picker select { flex: 1; }
+.theme-swatch { width: 20px; height: 20px; border-radius: 4px; flex-shrink: 0; }
 
 .error { color: var(--red); font-size: 0.8rem; margin: 0; }
 .force-disconnect-notice { margin-bottom: 0.8rem; font-size: 0.9rem; text-align: center; }
@@ -313,7 +307,7 @@ button, input, select {
 }
 .server-icon img { width: 100%; height: 100%; object-fit: cover; }
 .server-icon:hover, .server-icon.active { border-radius: 16px; }
-.server-icon.active { background: var(--brand); }
+.server-icon.active { background: var(--brand); color: #fff; }
 .server-icon.action { background: var(--bg-sidebar); color: var(--green); font-size: 1.4rem; }
 .server-icon.action:hover { background: var(--green); color: #fff; }
 
@@ -390,7 +384,7 @@ button, input, select {
   font-weight: 600;
 }
 .modal-tabs button.active { background: var(--brand); color: #fff; }
-.modal input:not([type="checkbox"]), .modal textarea {
+.modal input:not([type="checkbox"]), .modal textarea, .modal select {
   width: 100%;
   background: var(--bg-input);
   border: 1px solid transparent;
@@ -402,7 +396,7 @@ button, input, select {
   color: inherit;
   resize: vertical;
 }
-.modal input:focus, .modal textarea:focus { border-color: var(--brand); }
+.modal input:focus, .modal textarea:focus, .modal select:focus { border-color: var(--brand); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
 .btn {
   background: var(--brand);
@@ -768,6 +762,37 @@ button, input, select {
 .edited-tag { font-size: 0.65rem; color: var(--text-faint); }
 .pinned-badge { font-size: 0.75rem; }
 .mention { background: rgba(255, 138, 82, 0.18); color: var(--brand); border-radius: 3px; padding: 0 0.2rem; font-weight: 600; }
+.inline-code {
+  background: var(--bg-floating);
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+  padding: 0.05rem 0.35rem;
+  font-family: ui-monospace, "SF Mono", "Courier New", monospace;
+  font-size: 0.85em;
+  color: var(--text-normal);
+}
+.code-block {
+  display: block;
+  background: var(--bg-floating);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  margin: 0.3rem 0;
+  padding: 0.6rem 0.75rem;
+  overflow-x: auto;
+  font-family: ui-monospace, "SF Mono", "Courier New", monospace;
+  font-size: 0.85em;
+  line-height: 1.45;
+  white-space: pre;
+}
+.code-block code { color: var(--text-normal); background: none; border: none; padding: 0; }
+.code-block-lang {
+  color: var(--text-faint);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.35rem;
+  font-family: inherit;
+}
 
 .reply-preview {
   display: flex;
@@ -857,6 +882,21 @@ button, input, select {
 .thread-badge:hover { background: var(--interactive-hover); }
 
 .message-attachment { max-width: 320px; max-height: 320px; border-radius: 8px; margin-top: 0.4rem; display: block; }
+.message-file-attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+  padding: 0.4rem 0.7rem;
+  background: var(--bg-floating);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  color: var(--text-normal);
+  text-decoration: none;
+  font-size: 0.85rem;
+  max-width: 320px;
+}
+.message-file-attachment:hover { background: var(--bg-modifier-hover); color: var(--brand); }
 
 .presence-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-faint); display: inline-block; flex-shrink: 0; }
 .presence-dot.online { background: var(--green); }
@@ -1184,6 +1224,7 @@ button, input, select {
 }
 
 .permission-checkboxes { display: flex; flex-direction: column; gap: 0.3rem; }
+.settings-hint { color: var(--text-muted); font-size: 0.8rem; margin: -0.3rem 0 0.4rem; }
 .checkbox-label {
   display: flex;
   flex-direction: row;

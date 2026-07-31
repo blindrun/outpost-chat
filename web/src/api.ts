@@ -100,6 +100,7 @@ export interface InstanceInfo {
   turnstileSiteKey: string | null;
   defaultChannelId: string | null;
   levelingEnabled: boolean;
+  enabledUploadCategories: string[];
 }
 
 export interface Gif {
@@ -482,6 +483,7 @@ export function updateInstanceSettings(
     theme?: Theme;
     requireInviteToRegister?: boolean;
     defaultChannelId?: string | null;
+    enabledUploadCategories?: string[];
   },
 ) {
   return request<InstanceInfo>(baseUrl, "/instance/settings", token, {
