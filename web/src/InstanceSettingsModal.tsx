@@ -18,6 +18,7 @@ import { InvitePanel } from "./InvitePanel";
 import { WebhooksPanel } from "./WebhooksPanel";
 import { BotSettingsPanel } from "./BotSettingsPanel";
 import { ThemePicker } from "./ThemePicker";
+import { UPLOAD_CATEGORIES, UPLOAD_CATEGORY_KEYS, UploadCategory } from "./uploadCategories";
 
 const ALL_PERMISSIONS: Permission[] = ["MANAGE_CHANNELS", "MANAGE_ROLES", "SEND_MESSAGES", "MODERATE_MEMBERS"];
 
@@ -41,12 +42,24 @@ function GeneralTab({
   const [theme, setTheme] = useState(instanceInfo.theme);
   const [requireInvite, setRequireInvite] = useState(instanceInfo.requireInviteToRegister);
   const [defaultChannelId, setDefaultChannelId] = useState(instanceInfo.defaultChannelId ?? "");
+  const [uploadCategories, setUploadCategories] = useState<Set<UploadCategory>>(
+    new Set(instanceInfo.enabledUploadCategories as UploadCategory[]),
+  );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [iconUploading, setIconUploading] = useState(false);
   const [iconError, setIconError] = useState<string | null>(null);
 
   const textChannels = channels.filter((c) => c.type === "TEXT");
+
+  function toggleUploadCategory(cat: UploadCategory) {
+    setUploadCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -59,6 +72,7 @@ function GeneralTab({
         theme,
         requireInviteToRegister: requireInvite,
         defaultChannelId: defaultChannelId || null,
+        enabledUploadCategories: [...uploadCategories],
       });
       onUpdated(updated);
     } catch (err) {
@@ -122,6 +136,16 @@ function GeneralTab({
           ))}
         </select>
       </label>
+      <h3>Message Attachments</h3>
+      <p className="settings-hint">Images are always allowed. Enable additional file types members can attach to messages:</p>
+      <div className="permission-checkboxes">
+        {UPLOAD_CATEGORY_KEYS.map((cat) => (
+          <label key={cat} className="checkbox-label">
+            <input type="checkbox" checked={uploadCategories.has(cat)} onChange={() => toggleUploadCategory(cat)} />
+            {UPLOAD_CATEGORIES[cat].label}
+          </label>
+        ))}
+      </div>
       <h3>Theme</h3>
       <ThemePicker value={theme} onChange={setTheme} />
       {error && <p className="error">{error}</p>}

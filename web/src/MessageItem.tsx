@@ -1,9 +1,12 @@
 import { useState } from "react";
 import { Message } from "./api";
 import { EmojiPicker } from "./EmojiPicker";
+import { attachmentFilename, isImageAttachment } from "./uploadCategories";
 
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🎉"];
-const MENTION_PATTERN = /@([a-zA-Z0-9_]+)/g;
+const MENTION_OR_INLINE_CODE_PATTERN = /@([a-zA-Z0-9_]+)|`([^`\n]+)`/g;
+// ```lang\n...\n``` — lang is optional, kept only for the header label.
+const CODE_BLOCK_PATTERN = /```([a-zA-Z0-9_+-]*)\n?([\s\S]*?)```/g;
 
 function formatTimestamp(iso: string): string {
   const date = new Date(iso);
@@ -34,28 +37,66 @@ function initials(name: string): string {
 // Only highlights @tokens that match a real member username — a plain "@"
 // followed by text that isn't anyone here stays as ordinary text, since
 // there's no backend concept of a real mention/ping to back up styling it
-// otherwise.
+// otherwise. Also handles `inline code` spans within the same pass.
+function renderInline(text: string, memberUsernames: Set<string>, keyPrefix: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+  MENTION_OR_INLINE_CODE_PATTERN.lastIndex = 0;
+  while ((match = MENTION_OR_INLINE_CODE_PATTERN.exec(text))) {
+    if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+    const username = match[1];
+    const inlineCode = match[2];
+    if (username !== undefined) {
+      if (memberUsernames.has(username)) {
+        parts.push(
+          <span key={`${keyPrefix}-${key++}`} className="mention">
+            @{username}
+          </span>,
+        );
+      } else {
+        parts.push(match[0]);
+      }
+    } else {
+      parts.push(
+        <code key={`${keyPrefix}-${key++}`} className="inline-code">
+          {inlineCode}
+        </code>,
+      );
+    }
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+  return parts;
+}
+
+// Splits out ```fenced``` code blocks first (rendered as <pre><code>,
+// whitespace preserved verbatim, no mention/inline-code parsing inside),
+// then runs mention/inline-code highlighting over everything in between.
 function renderContent(content: string, memberUsernames: Set<string>): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
   let key = 0;
-  MENTION_PATTERN.lastIndex = 0;
-  while ((match = MENTION_PATTERN.exec(content))) {
-    if (match.index > lastIndex) parts.push(content.slice(lastIndex, match.index));
-    const username = match[1];
-    if (memberUsernames.has(username)) {
-      parts.push(
-        <span key={key++} className="mention">
-          @{username}
-        </span>,
-      );
-    } else {
-      parts.push(match[0]);
+  CODE_BLOCK_PATTERN.lastIndex = 0;
+  while ((match = CODE_BLOCK_PATTERN.exec(content))) {
+    if (match.index > lastIndex) {
+      parts.push(...renderInline(content.slice(lastIndex, match.index), memberUsernames, `pre${key}`));
     }
+    const lang = match[1];
+    const code = match[2].replace(/\n$/, "");
+    parts.push(
+      <pre key={`code${key++}`} className="code-block">
+        {lang && <div className="code-block-lang">{lang}</div>}
+        <code>{code}</code>
+      </pre>,
+    );
     lastIndex = match.index + match[0].length;
   }
-  if (lastIndex < content.length) parts.push(content.slice(lastIndex));
+  if (lastIndex < content.length) {
+    parts.push(...renderInline(content.slice(lastIndex), memberUsernames, `post${key}`));
+  }
   return parts;
 }
 
@@ -202,7 +243,19 @@ export function MessageItem({
         )}
 
         {message.attachmentUrl && (
-          <img className="message-attachment" src={message.attachmentUrl} alt="attachment" />
+          isImageAttachment(message.attachmentUrl) ? (
+            <img className="message-attachment" src={message.attachmentUrl} alt="attachment" />
+          ) : (
+            <a
+              className="message-file-attachment"
+              href={message.attachmentUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              download
+            >
+              📎 {attachmentFilename(message.attachmentUrl)}
+            </a>
+          )
         )}
 
         {pickerOpen && (
