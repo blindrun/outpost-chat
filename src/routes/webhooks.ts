@@ -42,6 +42,10 @@ export async function webhookRoutes(app: FastifyInstance) {
     const { channelId } = req.params as { channelId: string };
     const channel = await prisma.channel.findUnique({ where: { id: channelId } });
     if (!channel) return reply.status(404).send({ error: "channel not found" });
+    // Webhook execution broadcasts to every connected user (see below) —
+    // pointing one at a DM channel would leak that private conversation
+    // instance-wide the moment it fires.
+    if (channel.type === "DM") return reply.status(400).send({ error: "cannot create a webhook in a direct message" });
 
     const body = createWebhookSchema.parse(req.body);
     const webhook = await prisma.webhook.create({

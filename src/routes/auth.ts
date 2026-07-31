@@ -1,12 +1,21 @@
 import type { FastifyInstance } from "fastify";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import type { AuthenticatorTransportFuture } from "@simplewebauthn/server";
+import { generateAuthenticationOptions, verifyAuthenticationResponse } from "@simplewebauthn/server";
 import { prisma } from "../plugins/db.js";
 import { EVERYONE_ROLE_NAME, DEFAULT_EVERYONE_PERMISSIONS } from "../util/permissions.js";
 import { isInviteValid } from "../util/invites.js";
 import { postSystemMessage } from "../util/bot.js";
 import { consumeClaimCode } from "../util/claim.js";
 import { verifyTurnstileToken } from "../util/turnstile.js";
+import {
+  verifyTotpCode,
+  findMatchingBackupCode,
+  signMfaPendingToken,
+  verifyMfaPendingToken,
+  getRpConfig,
+} from "../util/mfa.js";
 
 const registerSchema = z.object({
   username: z.string().min(3).max(32),
@@ -31,6 +40,20 @@ const updateProfileSchema = z.object({
 const updatePasswordSchema = z.object({
   currentPassword: z.string(),
   newPassword: z.string().min(8),
+});
+
+const mfaVerifyCodeSchema = z.object({
+  mfaToken: z.string(),
+  code: z.string().min(6).max(11),
+});
+
+const mfaWebauthnOptionsSchema = z.object({
+  mfaToken: z.string(),
+});
+
+const mfaWebauthnVerifySchema = z.object({
+  mfaToken: z.string(),
+  response: z.any(),
 });
 
 export function toPublicUser(user: {
@@ -176,6 +199,144 @@ export async function authRoutes(app: FastifyInstance) {
     if (user.banned) {
       return reply.status(403).send({ error: "this account has been banned" });
     }
+
+    const webauthnCredentials = await prisma.webauthnCredential.findMany({
+      where: { userId: user.id },
+      select: { id: true, nickname: true },
+    });
+    if (user.totpEnabled || webauthnCredentials.length > 0) {
+      // Password checked out, but the account has a second factor — hold
+      // off on the real session token until POST /auth/mfa/verify-code or
+      // the webauthn options/verify pair succeeds.
+      return reply.send({
+        mfaRequired: true,
+        mfaToken: signMfaPendingToken(app, user.id),
+        totpEnabled: user.totpEnabled,
+        webauthnCredentials,
+      });
+    }
+
+    const token = app.jwt.sign({ sub: user.id, username: user.username });
+    return reply.send({ token, user: toPublicUser(user) });
+  });
+
+  // Second step of login for an MFA-enabled account — a 6-digit TOTP code
+  // or one of the account's unused backup codes, either is accepted here.
+  app.post("/auth/mfa/verify-code", async (req, reply) => {
+    const body = mfaVerifyCodeSchema.parse(req.body);
+
+    let userId: string;
+    try {
+      ({ userId } = verifyMfaPendingToken(app, body.mfaToken));
+    } catch {
+      return reply.status(401).send({ error: "invalid or expired login session — please log in again" });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return reply.status(401).send({ error: "invalid credentials" });
+    if (user.banned) return reply.status(403).send({ error: "this account has been banned" });
+
+    let ok = false;
+    if (user.totpEnabled && user.totpSecret) {
+      ok = await verifyTotpCode(user.totpSecret, body.code);
+    }
+    if (!ok && user.backupCodes.length > 0) {
+      const idx = await findMatchingBackupCode(user.backupCodes, body.code);
+      if (idx >= 0) {
+        ok = true;
+        const remaining = [...user.backupCodes];
+        remaining.splice(idx, 1);
+        await prisma.user.update({ where: { id: user.id }, data: { backupCodes: remaining } });
+      }
+    }
+    if (!ok) return reply.status(401).send({ error: "invalid code" });
+
+    const token = app.jwt.sign({ sub: user.id, username: user.username });
+    return reply.send({ token, user: toPublicUser(user) });
+  });
+
+  // WebAuthn as the second factor — options then verify, same two-step
+  // shape as the management endpoints in routes/mfa.ts, but scoped to the
+  // mfa-pending token instead of a real session (the user isn't logged in
+  // yet). No server-side challenge store: the challenge rides inside a
+  // freshly re-signed mfa-pending token that the client echoes back.
+  app.post("/auth/mfa/webauthn/options", async (req, reply) => {
+    const body = mfaWebauthnOptionsSchema.parse(req.body);
+
+    let userId: string;
+    try {
+      ({ userId } = verifyMfaPendingToken(app, body.mfaToken));
+    } catch {
+      return reply.status(401).send({ error: "invalid or expired login session — please log in again" });
+    }
+
+    const credentials = await prisma.webauthnCredential.findMany({ where: { userId } });
+    if (credentials.length === 0) {
+      return reply.status(400).send({ error: "no security keys registered on this account" });
+    }
+
+    const { rpID } = getRpConfig(req);
+    const options = await generateAuthenticationOptions({
+      rpID,
+      allowCredentials: credentials.map((c) => ({
+        id: c.credentialId,
+        transports: c.transports as AuthenticatorTransportFuture[],
+      })),
+      userVerification: "preferred",
+    });
+
+    return reply.send({ options, mfaToken: signMfaPendingToken(app, userId, options.challenge) });
+  });
+
+  app.post("/auth/mfa/webauthn/verify", async (req, reply) => {
+    const body = mfaWebauthnVerifySchema.parse(req.body);
+
+    let userId: string;
+    let challenge: string | undefined;
+    try {
+      ({ userId, webauthnChallenge: challenge } = verifyMfaPendingToken(app, body.mfaToken));
+    } catch {
+      return reply.status(401).send({ error: "invalid or expired login session — please log in again" });
+    }
+    if (!challenge) {
+      return reply.status(400).send({ error: "no active security-key challenge — request options first" });
+    }
+
+    const credentialId = body.response?.id;
+    const stored = credentialId
+      ? await prisma.webauthnCredential.findFirst({ where: { userId, credentialId } })
+      : null;
+    if (!stored) return reply.status(401).send({ error: "unrecognized security key" });
+
+    const { rpID, origin } = getRpConfig(req);
+    let verification;
+    try {
+      verification = await verifyAuthenticationResponse({
+        response: body.response,
+        expectedChallenge: challenge,
+        expectedOrigin: origin,
+        expectedRPID: rpID,
+        credential: {
+          id: stored.credentialId,
+          publicKey: new Uint8Array(stored.publicKey),
+          counter: stored.counter,
+          transports: stored.transports as AuthenticatorTransportFuture[],
+        },
+      });
+    } catch {
+      return reply.status(401).send({ error: "security key verification failed" });
+    }
+    if (!verification.verified) {
+      return reply.status(401).send({ error: "security key verification failed" });
+    }
+
+    await prisma.webauthnCredential.update({
+      where: { id: stored.id },
+      data: { counter: verification.authenticationInfo.newCounter },
+    });
+
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (user.banned) return reply.status(403).send({ error: "this account has been banned" });
 
     const token = app.jwt.sign({ sub: user.id, username: user.username });
     return reply.send({ token, user: toPublicUser(user) });

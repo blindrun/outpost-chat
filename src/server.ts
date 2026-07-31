@@ -19,6 +19,9 @@ import { webhookRoutes } from "./routes/webhooks.js";
 import { botRoutes } from "./routes/bot.js";
 import { moderationRoutes } from "./routes/moderation.js";
 import { threadRoutes } from "./routes/threads.js";
+import { friendRoutes } from "./routes/friends.js";
+import { dmRoutes } from "./routes/dms.js";
+import { mfaRoutes } from "./routes/mfa.js";
 import { gatewayRoutes } from "./gateway/index.js";
 import { ensureBucket } from "./plugins/storage.js";
 import { ensureClaimCode } from "./util/claim.js";
@@ -29,7 +32,13 @@ declare module "fastify" {
   }
 }
 
-const app = Fastify({ logger: true });
+// Needed for WebAuthn's rpID/origin derivation (see util/mfa.ts) to see the
+// real client-facing protocol via X-Forwarded-Proto when this app sits
+// behind the documented Caddy reverse proxy — without it req.protocol
+// always reports "http" even over a real HTTPS deployment. Also fixes
+// req.ip (used by Turnstile's remoteip check) reporting the proxy's own
+// address instead of the real visitor's for every production request.
+const app = Fastify({ logger: true, trustProxy: true });
 
 // @fastify/cors defaults `methods` to "GET,HEAD,POST" only — PATCH/DELETE/PUT
 // need to be listed explicitly or the browser's preflight silently blocks them.
@@ -56,10 +65,21 @@ await ensureClaimCode(app.log);
 app.decorate("authenticate", async (req, reply) => {
   try {
     await req.jwtVerify();
+    // Every special-purpose short-lived token this app issues (the
+    // MFA-pending token from POST /auth/login, the WebAuthn
+    // registration-challenge token from POST /mfa/webauthn/register/options
+    // — see util/mfa.ts) carries a `purpose` claim; a real session token
+    // never does. Rejecting on presence rather than a specific value means
+    // any future purpose-tagged token is automatically excluded here too,
+    // not just the ones this check happens to know about today.
+    const { sub, purpose } = req.user as { sub: string; purpose?: string };
+    if (purpose) {
+      reply.status(401).send({ error: "unauthorized" });
+      return;
+    }
     // Tokens never expire, so a ban has to be checked live on every
     // request rather than only at login — otherwise a banned user's
     // already-issued JWT would keep working indefinitely.
-    const { sub } = req.user as { sub: string };
     const user = await prisma.user.findUnique({ where: { id: sub }, select: { banned: true } });
     if (user?.banned) {
       reply.status(403).send({ error: "banned" });
@@ -82,6 +102,9 @@ app.register(webhookRoutes);
 app.register(botRoutes);
 app.register(moderationRoutes);
 app.register(threadRoutes);
+app.register(friendRoutes);
+app.register(dmRoutes);
+app.register(mfaRoutes);
 app.register(gatewayRoutes);
 
 // Serves the built web client (single-container deployment: this backend is

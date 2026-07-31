@@ -218,6 +218,8 @@ button, input, select {
 .link:hover { text-decoration: underline; }
 .text-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0; font-size: 0.78rem; text-align: left; }
 .text-btn:hover { color: var(--text-normal); text-decoration: underline; }
+.text-btn.danger { color: var(--red); }
+.text-btn.danger:hover { color: var(--red); }
 
 /* ---------- App shell ---------- */
 
@@ -225,6 +227,18 @@ button, input, select {
   display: grid;
   grid-template-columns: 72px 240px 1fr 240px;
   height: 100vh;
+}
+/* Grid items default to min-height: auto, which lets their content grow
+   past the row's 100vh height instead of respecting it — the row (and the
+   whole page) grows instead, breaking every pane's own `overflow-y: auto`
+   scroll further down (sidebar-scroll, .messages, .member-sidebar). This is
+   the actual fix for that: bound every top-level pane to the grid row's
+   real height so their internal scroll regions engage instead. */
+.server-rail,
+.sidebar,
+.chat-pane,
+.member-sidebar {
+  min-height: 0;
 }
 .app.member-list-collapsed { grid-template-columns: 72px 240px 1fr; }
 
@@ -409,7 +423,17 @@ button, input, select {
   cursor: pointer;
 }
 .sidebar-header:hover { background: var(--interactive-hover); }
-.sidebar-scroll { flex: 1; overflow-y: auto; padding: 0.5rem; }
+.sidebar-scroll { flex: 1; min-height: 0; padding: 0.5rem; display: flex; flex-direction: column; overflow: hidden; }
+/* Each category (DMs / Text / Voice) is its own flex column so its list can
+   scroll independently instead of one long page-level scroll — Text
+   Channels gets the lion's share of the space (flex: 1) since it's usually
+   the longest list; DMs/Voice cap out and scroll on their own past that. */
+.channel-section { display: flex; flex-direction: column; min-height: 0; flex-shrink: 0; }
+.text-channel-section { flex: 1 1 auto; min-height: 80px; }
+.channel-section-list { overflow-y: auto; min-height: 0; }
+.text-channel-section .channel-section-list { flex: 1; }
+.dm-section .channel-section-list,
+.voice-channel-section .channel-section-list { max-height: 200px; }
 .sidebar-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-muted); text-align: center; padding: 1rem; }
 
 .channel-category { color: var(--text-muted); font-size: 0.7rem; font-weight: 700; text-transform: uppercase; padding: 0.9rem 0.5rem 0.2rem; letter-spacing: 0.02em; }
@@ -460,6 +484,8 @@ button, input, select {
 .channel-btn .channel-icon { color: var(--text-faint); flex-shrink: 0; }
 .channel-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .channel-btn:hover { background: var(--interactive-hover); color: var(--text-normal); }
+.channel-btn .dm-avatar { width: 20px; height: 20px; font-size: 0.7rem; flex-shrink: 0; }
+.channel-btn .presence-dot { margin-left: auto; flex-shrink: 0; }
 .channel-btn.active { background: var(--interactive-active); color: #fff; }
 
 .add-channel-btn {
@@ -486,6 +512,9 @@ button, input, select {
   padding: 0.3rem 0.5rem;
   color: var(--text-normal);
 }
+.friends-add-form { padding: 0 0 0.6rem; }
+.friends-add-form input { padding: 0.45rem 0.6rem; }
+
 /* User panel (bottom of sidebar) */
 .user-panel {
   background: #232428;
@@ -1079,6 +1108,26 @@ button, input, select {
 .char-counter { align-self: flex-end; font-size: 0.7rem; color: var(--text-faint); margin-top: -0.4rem; }
 .settings-avatar-row { display: flex; align-items: center; gap: 1rem; }
 .success { color: var(--green); font-size: 0.8rem; margin: 0; }
+
+.totp-setup { display: flex; flex-direction: column; gap: 0.6rem; align-items: flex-start; }
+.totp-qr { width: 180px; height: 180px; border-radius: 6px; background: #fff; padding: 8px; }
+.totp-secret { font-size: 0.8rem; color: var(--text-muted); }
+.totp-secret code { background: var(--bg-input); padding: 0.15rem 0.4rem; border-radius: 3px; }
+
+.backup-codes-reveal { display: flex; flex-direction: column; gap: 0.7rem; }
+.backup-codes-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.4rem;
+  background: var(--bg-input);
+  padding: 0.8rem;
+  border-radius: 6px;
+}
+.backup-codes-grid code { font-size: 0.85rem; text-align: center; }
+
+.password-confirm-form { display: flex; flex-direction: column; gap: 0.5rem; }
+.password-confirm-form.inline { flex-direction: row; align-items: center; gap: 0.4rem; }
+.password-confirm-form.inline input { background: var(--bg-input); border: none; border-radius: 3px; padding: 0.2rem 0.4rem; color: var(--text-normal); font-size: 0.8rem; width: 120px; }
 
 .role-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.3rem; }
 .role-list li {

@@ -30,8 +30,81 @@ model User {
   // request, not just at login) since tokens here have no expiry.
   banned       Boolean   @default(false)
 
+  // TOTP (Google Authenticator / Authy style). totpSecret is set as soon as
+  // setup starts but totpEnabled stays false until the user proves they can
+  // generate a valid code with it (POST /mfa/totp/confirm) — an unconfirmed
+  // secret just sits there unused if they abandon setup. Stored in plain
+  // text (not hashed, unlike passwordHash) because the server has to
+  // recompute the expected code from it on every login, same tradeoff every
+  // TOTP implementation makes.
+  totpSecret  String?
+  totpEnabled Boolean  @default(false)
+  // bcrypt-hashed one-time recovery codes, generated alongside TOTP
+  // confirmation — each is removed from the array the moment it's used.
+  backupCodes String[] @default([])
+
   memberRoles UserRole[]
   warnings    Warning[]
+
+  dmParticipants      DMParticipant[]
+  friendshipsSent     Friendship[]    @relation("FriendshipRequester")
+  friendshipsReceived Friendship[]    @relation("FriendshipAddressee")
+  webauthnCredentials WebauthnCredential[]
+}
+
+// A registered security key / platform authenticator (YubiKey, Touch ID,
+// Windows Hello, ...) — a user can have several. counter is the
+// authenticator's own signature counter, used to detect cloned credentials
+// (a real assertion's counter must strictly increase each time).
+model WebauthnCredential {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentialId String   @unique
+  publicKey    Bytes
+  counter      Int      @default(0)
+  transports   String[] @default([])
+  // User-assigned label ("YubiKey 5C", "MacBook Touch ID") shown in the
+  // security-key management list — otherwise indistinguishable entries.
+  nickname     String
+  createdAt    DateTime @default(now())
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  BLOCKED
+}
+
+// One row per unordered pair, regardless of status — app logic always
+// queries both directions before creating one, so there's never a
+// requester->addressee row *and* an addressee->requester row for the same
+// pair. requesterId/addresseeId record who sent the original request (kept
+// even after acceptance, for history); blockedById is separate because
+// either party can block regardless of who originally requested.
+model Friendship {
+  id          String           @id @default(uuid())
+  requesterId String
+  requester   User             @relation("FriendshipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addresseeId String
+  addressee   User             @relation("FriendshipAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+  status      FriendshipStatus @default(PENDING)
+  blockedById String?
+  createdAt   DateTime         @default(now())
+  respondedAt DateTime?
+
+  @@unique([requesterId, addresseeId])
+}
+
+// Join row for a DM channel's two participants — a DM is just a Channel
+// with type DM and exactly two of these instead of role-based access.
+model DMParticipant {
+  channelId String
+  channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([channelId, userId])
 }
 
 // One row per warning (automod-triggered or a moderator's manual !-style
@@ -83,6 +156,7 @@ enum ChannelType {
   TEXT
   VOICE
   THREAD
+  DM
 }
 
 model Channel {
@@ -102,6 +176,7 @@ model Channel {
   reactionRoles    ReactionRole[]
   reactionRoleMenu ReactionRoleMenu?
   parentMessage    Message?           @relation("MessageThread", fields: [parentMessageId], references: [id])
+  dmParticipants   DMParticipant[]
 }
 
 // A channel-scoped bearer token that lets an external service post messages

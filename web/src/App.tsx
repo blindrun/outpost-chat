@@ -16,6 +16,7 @@ import {
   listMembers,
   listMessages,
   listRoles,
+  openDM,
   reorderChannels,
   uploadFile,
 } from "./api";
@@ -33,6 +34,7 @@ import { ProfileCard } from "./ProfileCard";
 import { SearchPanel } from "./SearchPanel";
 import { PinnedMessagesPanel } from "./PinnedMessagesPanel";
 import { LeaderboardPanel } from "./LeaderboardPanel";
+import { FriendsPanel } from "./FriendsPanel";
 
 // Matches a trailing "@partial" token in the text up to the cursor — used to
 // drive the mention-autocomplete popover. Must be at the start of the text
@@ -167,6 +169,8 @@ function App() {
   const [userSettingsOpen, setUserSettingsOpen] = useState(false);
   const [viewingProfileUserId, setViewingProfileUserId] = useState<string | null>(null);
   const [instanceSettingsOpen, setInstanceSettingsOpen] = useState(false);
+  const [friendsOpen, setFriendsOpen] = useState(false);
+  const [friendsRefreshKey, setFriendsRefreshKey] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [pinsOpen, setPinsOpen] = useState(false);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
@@ -258,7 +262,7 @@ function App() {
 
     const unsubscribe = gateway.on((event) => {
       if (event.type === "READY") {
-        setChannels(event.channels);
+        setChannels([...event.channels, ...event.dmChannels]);
         setOnlineUserIds(new Set(event.onlineUserIds));
         setVoiceState(event.voiceState);
       } else if (event.type === "VOICE_STATE_UPDATE") {
@@ -322,11 +326,23 @@ function App() {
           ),
         }));
       } else if (event.type === "CHANNELS_UPDATE") {
-        // The server only returns TEXT/VOICE channels here (THREAD
+        // The server only returns TEXT/VOICE channels here (THREAD and DM
         // channels are deliberately excluded, same as READY) — keep
-        // whichever thread channels this client already knows about
+        // whichever thread/DM channels this client already knows about
         // locally rather than dropping them.
-        setChannels((prev) => [...event.channels, ...prev.filter((c) => c.type === "THREAD")]);
+        setChannels((prev) => [...event.channels, ...prev.filter((c) => c.type === "THREAD" || c.type === "DM")]);
+      } else if (event.type === "DM_CHANNEL_CREATE") {
+        setChannels((prev) => (prev.some((c) => c.id === event.channel.id) ? prev : [...prev, event.channel]));
+      } else if (
+        event.type === "FRIEND_REQUEST_RECEIVED" ||
+        event.type === "FRIEND_REQUEST_ACCEPTED" ||
+        event.type === "FRIEND_REMOVED"
+      ) {
+        // The panel (if open) re-fetches GET /friends off this bump rather
+        // than each event hand-patching local state — request/accept/block
+        // all have side effects on more than one list at once, so a full
+        // refetch is simpler and this fires rarely enough that it's cheap.
+        setFriendsRefreshKey((k) => k + 1);
       } else if (event.type === "FORCE_DISCONNECT") {
         // Kick or ban landed on this exact client — drop the stored session
         // for this instance (not the whole bookmark, unlike Leave Server)
@@ -558,6 +574,18 @@ function App() {
     }
   }
 
+  async function handleOpenDM(userId: string) {
+    if (!activeInstance || !session) return;
+    try {
+      const dm = await openDM(activeInstance.baseUrl, session.token, userId);
+      setChannels((prev) => (prev.some((c) => c.id === dm.id) ? prev : [...prev, dm]));
+      setSelectedChannelId(dm.id);
+      setFriendsOpen(false);
+    } catch (err) {
+      setChannelError((err as Error).message);
+    }
+  }
+
   function handleTyping() {
     if (selectedChannelId) gatewayRef.current?.sendTyping(selectedChannelId);
   }
@@ -659,6 +687,11 @@ function App() {
 
   const textChannels = channels.filter((c) => c.type === "TEXT");
   const voiceChannels = channels.filter((c) => c.type === "VOICE");
+  const dmChannels = channels.filter((c): c is Channel & { type: "DM"; otherUserId: string } => c.type === "DM") as (Channel & {
+    otherUserId: string;
+    otherUsername: string;
+    otherAvatarUrl: string | null;
+  })[];
 
   return (
     <div className={`app ${memberListOpen ? "" : "member-list-collapsed"}`}>
@@ -731,6 +764,9 @@ function App() {
       <aside className="sidebar">
         <div className="sidebar-header">
           <span>{instanceInfo?.name ?? activeInstance.label}</span>
+          <button className="gear-btn" title="Friends" onClick={() => setFriendsOpen(true)}>
+            👤
+          </button>
           {session.user.isOwner && (
             <button className="gear-btn" title="Instance Settings" onClick={() => setInstanceSettingsOpen(true)}>
               ⚙️
@@ -738,54 +774,85 @@ function App() {
           )}
         </div>
         <div className="sidebar-scroll">
-          <div className="channel-category-row">
-            <span className="channel-category">Text Channels</span>
-            <button className="add-channel-btn" title="Add a text channel" onClick={() => toggleCreatingChannel("TEXT")}>
-              +
-            </button>
-          </div>
-          {creatingChannelType === "TEXT" && (
-            <form onSubmit={handleCreateChannel} className="new-channel-form">
-              <input
-                autoFocus
-                placeholder="channel name"
-                value={newChannelName}
-                onChange={(e) => setNewChannelName(e.target.value)}
-                onKeyDown={(e) => e.key === "Escape" && setCreatingChannelType(null)}
-              />
-            </form>
+          {dmChannels.length > 0 && (
+            <div className="channel-section dm-section">
+              <div className="channel-category-row">
+                <span className="channel-category">Direct Messages</span>
+              </div>
+              <div className="channel-section-list">
+                {dmChannels.map((dm) => (
+                  <div className="channel-row" key={dm.id}>
+                    <button
+                      className={`channel-btn ${dm.id === selectedChannelId ? "active" : ""}`}
+                      onClick={() => setSelectedChannelId(dm.id)}
+                    >
+                      {dm.otherAvatarUrl ? (
+                        <img className="avatar dm-avatar" src={dm.otherAvatarUrl} alt="" />
+                      ) : (
+                        <span className="avatar avatar-placeholder dm-avatar">{dm.otherUsername[0]?.toUpperCase()}</span>
+                      )}
+                      <span>{dm.otherUsername}</span>
+                      <span className={`presence-dot ${onlineUserIds.has(dm.otherUserId) ? "online" : ""}`} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
-          {textChannels.map((channel) => (
-            <div
-              className={`channel-row ${dragOverChannelId === channel.id ? "drag-over" : ""}`}
-              key={channel.id}
-              draggable={canManageChannels}
-              onDragStart={() => setDraggedChannelId(channel.id)}
-              onDragOver={(e) => {
-                if (!canManageChannels || !draggedChannelId) return;
-                e.preventDefault();
-                setDragOverChannelId(channel.id);
-              }}
-              onDragLeave={() => setDragOverChannelId((id) => (id === channel.id ? null : id))}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (draggedChannelId) handleChannelDrop("TEXT", draggedChannelId, channel.id);
-              }}
-              onDragEnd={() => {
-                setDraggedChannelId(null);
-                setDragOverChannelId(null);
-              }}
-            >
-              <button
-                className={`channel-btn ${channel.id === selectedChannelId ? "active" : ""}`}
-                onClick={() => setSelectedChannelId(channel.id)}
-              >
-                <span className="channel-icon">#</span>
-                <span>{channel.name}</span>
+
+          <div className="channel-section text-channel-section">
+            <div className="channel-category-row">
+              <span className="channel-category">Text Channels</span>
+              <button className="add-channel-btn" title="Add a text channel" onClick={() => toggleCreatingChannel("TEXT")}>
+                +
               </button>
             </div>
-          ))}
+            {creatingChannelType === "TEXT" && (
+              <form onSubmit={handleCreateChannel} className="new-channel-form">
+                <input
+                  autoFocus
+                  placeholder="channel name"
+                  value={newChannelName}
+                  onChange={(e) => setNewChannelName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Escape" && setCreatingChannelType(null)}
+                />
+              </form>
+            )}
+            <div className="channel-section-list">
+              {textChannels.map((channel) => (
+                <div
+                  className={`channel-row ${dragOverChannelId === channel.id ? "drag-over" : ""}`}
+                  key={channel.id}
+                  draggable={canManageChannels}
+                  onDragStart={() => setDraggedChannelId(channel.id)}
+                  onDragOver={(e) => {
+                    if (!canManageChannels || !draggedChannelId) return;
+                    e.preventDefault();
+                    setDragOverChannelId(channel.id);
+                  }}
+                  onDragLeave={() => setDragOverChannelId((id) => (id === channel.id ? null : id))}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (draggedChannelId) handleChannelDrop("TEXT", draggedChannelId, channel.id);
+                  }}
+                  onDragEnd={() => {
+                    setDraggedChannelId(null);
+                    setDragOverChannelId(null);
+                  }}
+                >
+                  <button
+                    className={`channel-btn ${channel.id === selectedChannelId ? "active" : ""}`}
+                    onClick={() => setSelectedChannelId(channel.id)}
+                  >
+                    <span className="channel-icon">#</span>
+                    <span>{channel.name}</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
 
+          <div className="channel-section voice-channel-section">
           <div className="channel-category-row">
             <span className="channel-category">Voice Channels</span>
             <button className="add-channel-btn" title="Add a voice channel" onClick={() => toggleCreatingChannel("VOICE")}>
@@ -803,6 +870,7 @@ function App() {
               />
             </form>
           )}
+          <div className="channel-section-list">
           {voiceChannels.map((channel) => {
             const connectedUserIds = voiceState[channel.id] ?? [];
             const isMyChannel = voice.activeChannel?.id === channel.id;
@@ -864,6 +932,8 @@ function App() {
               </div>
             );
           })}
+          </div>
+          </div>
 
           {channelError && <p className="error">{channelError}</p>}
         </div>
@@ -983,6 +1053,15 @@ function App() {
       {leaderboardOpen && (
         <LeaderboardPanel baseUrl={activeInstance.baseUrl} token={session.token} onClose={() => setLeaderboardOpen(false)} />
       )}
+      {friendsOpen && (
+        <FriendsPanel
+          baseUrl={activeInstance.baseUrl}
+          token={session.token}
+          refreshKey={friendsRefreshKey}
+          onMessage={handleOpenDM}
+          onClose={() => setFriendsOpen(false)}
+        />
+      )}
 
       <main className="chat-pane">
         {selectedChannel ? (
@@ -1004,28 +1083,32 @@ function App() {
                   <span className="channel-icon">🧵</span>
                 </>
               ) : (
-                <span className="channel-icon">#</span>
+                <span className="channel-icon">{selectedChannel.type === "DM" ? "💬" : "#"}</span>
               )}
               {selectedChannel.name}
-              <button type="button" className="chat-header-icon-btn" title="Pinned Messages" onClick={() => setPinsOpen(true)}>
-                📌
-              </button>
-              <button type="button" className="chat-header-icon-btn" title="Search" onClick={() => setSearchOpen(true)}>
-                🔍
-              </button>
-              {instanceInfo?.levelingEnabled && (
-                <button type="button" className="chat-header-icon-btn" title="Leaderboard" onClick={() => setLeaderboardOpen(true)}>
-                  🏆
-                </button>
+              {selectedChannel.type !== "DM" && (
+                <>
+                  <button type="button" className="chat-header-icon-btn" title="Pinned Messages" onClick={() => setPinsOpen(true)}>
+                    📌
+                  </button>
+                  <button type="button" className="chat-header-icon-btn" title="Search" onClick={() => setSearchOpen(true)}>
+                    🔍
+                  </button>
+                  {instanceInfo?.levelingEnabled && (
+                    <button type="button" className="chat-header-icon-btn" title="Leaderboard" onClick={() => setLeaderboardOpen(true)}>
+                      🏆
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className={`chat-header-icon-btn ${memberListOpen ? "active" : ""}`}
+                    title={memberListOpen ? "Hide Member List" : "Show Member List"}
+                    onClick={() => setMemberListOpen((v) => !v)}
+                  >
+                    👥
+                  </button>
+                </>
               )}
-              <button
-                type="button"
-                className={`chat-header-icon-btn ${memberListOpen ? "active" : ""}`}
-                title={memberListOpen ? "Hide Member List" : "Show Member List"}
-                onClick={() => setMemberListOpen((v) => !v)}
-              >
-                👥
-              </button>
             </div>
             <div className="messages">
               {channelMessages.map((m, i) => {
@@ -1132,7 +1215,7 @@ function App() {
                   onKeyDown={(e) => {
                     if (e.key === "Escape" && mentionQuery !== null) setMentionQuery(null);
                   }}
-                  placeholder={`Message #${selectedChannel.name}`}
+                  placeholder={selectedChannel.type === "DM" ? `Message @${selectedChannel.name}` : `Message #${selectedChannel.name}`}
                 />
                 <button
                   type="button"
@@ -1160,7 +1243,7 @@ function App() {
           <div className="chat-placeholder">Select a channel</div>
         )}
       </main>
-      {memberListOpen && (
+      {memberListOpen && selectedChannel?.type !== "DM" && (
         <MemberList
           baseUrl={activeInstance.baseUrl}
           token={session.token}

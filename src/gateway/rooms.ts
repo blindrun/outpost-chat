@@ -71,6 +71,19 @@ export function broadcastAll(payload: unknown, exclude?: WebSocket) {
   }
 }
 
+// Scoped broadcast for DM messages and friend-request notifications — unlike
+// broadcastAll, only the given users' own sockets (all of them, for
+// multi-tab/device) receive it. A user with no live connection simply
+// misses it; they'll see the current state on their next REST fetch/READY.
+export function sendToUsers(userIds: string[], payload: unknown, exclude?: WebSocket) {
+  const data = JSON.stringify(payload);
+  const idSet = new Set(userIds);
+  for (const [socket, meta] of connections) {
+    if (socket === exclude || !idSet.has(meta.userId)) continue;
+    if (socket.readyState === socket.OPEN) socket.send(data);
+  }
+}
+
 // Separate from the LiveKit room itself — this is "who's connected to which
 // voice channel" at the app level, so the sidebar can show it for *every*
 // voice channel, not just the one the current client happens to be in
