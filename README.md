@@ -108,6 +108,10 @@ npm run dev    # builds the web client for Electron, then launches it
 npm run dist   # produces an installer for your current platform
 ```
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
