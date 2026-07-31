@@ -24,6 +24,18 @@ export function MemberList({
   const [error, setError] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => ({
+    Online: localStorage.getItem("memberListCollapsed:Online") === "true",
+    Offline: localStorage.getItem("memberListCollapsed:Offline") === "true",
+  }));
+
+  function toggleCollapsed(title: string) {
+    setCollapsed((prev) => {
+      const next = !prev[title];
+      localStorage.setItem(`memberListCollapsed:${title}`, String(next));
+      return { ...prev, [title]: next };
+    });
+  }
 
   useEffect(() => {
     listMembers(baseUrl, token)
@@ -43,25 +55,30 @@ export function MemberList({
 
   function renderGroup(title: string, list: Member[]) {
     if (list.length === 0) return null;
+    const isCollapsed = collapsed[title];
     return (
       <div className="member-group">
-        <h4>
-          {title} — {list.length}
-        </h4>
-        {list.map((m) => (
-          <button key={m.userId} type="button" className="member-list-entry" onClick={() => onSelectMember(m.userId)}>
-            {m.avatarUrl ? (
-              <img className="avatar" src={m.avatarUrl} alt="" />
-            ) : (
-              <span className="avatar avatar-placeholder">{m.username[0]?.toUpperCase()}</span>
-            )}
-            <span className="member-list-info">
-              <span className="member-list-name">{m.username}</span>
-              {m.roles.length > 0 && <span className="member-list-roles">{m.roles.map((r) => r.name).join(", ")}</span>}
-            </span>
-            <span className={`presence-dot ${onlineUserIds.has(m.userId) ? "online" : "offline"}`} />
-          </button>
-        ))}
+        <button type="button" className="member-group-toggle" onClick={() => toggleCollapsed(title)}>
+          <span className={`category-chevron ${isCollapsed ? "collapsed" : ""}`}>▾</span>
+          <h4>
+            {title} — {list.length}
+          </h4>
+        </button>
+        {!isCollapsed &&
+          list.map((m) => (
+            <button key={m.userId} type="button" className="member-list-entry" onClick={() => onSelectMember(m.userId)}>
+              {m.avatarUrl ? (
+                <img className="avatar" src={m.avatarUrl} alt="" />
+              ) : (
+                <span className="avatar avatar-placeholder">{m.username[0]?.toUpperCase()}</span>
+              )}
+              <span className="member-list-info">
+                <span className="member-list-name">{m.username}</span>
+                {m.roles.length > 0 && <span className="member-list-roles">{m.roles.map((r) => r.name).join(", ")}</span>}
+              </span>
+              <span className={`presence-dot ${onlineUserIds.has(m.userId) ? "online" : "offline"}`} />
+            </button>
+          ))}
       </div>
     );
   }

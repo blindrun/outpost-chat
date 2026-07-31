@@ -163,6 +163,28 @@ function App() {
   const [openPicker, setOpenPicker] = useState<"emoji" | "gif" | null>(null);
   const [voiceDetailsOpen, setVoiceDetailsOpen] = useState(false);
   const [memberListOpen, setMemberListOpen] = useState(() => localStorage.getItem("memberListOpen") === "true");
+  const [textChannelsCollapsed, setTextChannelsCollapsed] = useState(
+    () => localStorage.getItem("textChannelsCollapsed") === "true",
+  );
+  const [voiceChannelsCollapsed, setVoiceChannelsCollapsed] = useState(
+    () => localStorage.getItem("voiceChannelsCollapsed") === "true",
+  );
+
+  function toggleTextChannelsCollapsed() {
+    setTextChannelsCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("textChannelsCollapsed", String(next));
+      return next;
+    });
+  }
+
+  function toggleVoiceChannelsCollapsed() {
+    setVoiceChannelsCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("voiceChannelsCollapsed", String(next));
+      return next;
+    });
+  }
   useEffect(() => {
     localStorage.setItem("memberListOpen", String(memberListOpen));
   }, [memberListOpen]);
@@ -213,6 +235,31 @@ function App() {
     // dependency array) keeps eslint's exhaustive-deps reasoning honest.
     void currentMessages;
   }, [selectedChannelId, messages]);
+
+  // A message with an image/GIF attachment lands in the DOM before its
+  // <img> has actually loaded, so scrollHeight above is measured before
+  // the attachment has any real height — the scroll-to-bottom math runs
+  // too early and nothing re-checks once the image finishes loading and
+  // pushes the container taller. `load` doesn't bubble, but it does fire
+  // during the capture phase at ancestors, so a single capture-phase
+  // listener on the container catches every attachment's load without
+  // needing MessageItem to know anything about scrolling.
+  //
+  // Re-attaches on every selectedChannelId change (not just once on
+  // mount) because .messages only exists in the DOM once a channel is
+  // actually selected — on first load selectedChannel is null, so
+  // messagesContainerRef.current is still null the one time an
+  // empty-deps effect would have run, and it would never have gotten
+  // another chance to attach the listener at all.
+  useEffect(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    function handleContentLoad() {
+      if (stickToBottomRef.current) el!.scrollTop = el!.scrollHeight;
+    }
+    el.addEventListener("load", handleContentLoad, true);
+    return () => el.removeEventListener("load", handleContentLoad, true);
+  }, [selectedChannelId]);
 
   const activeInstance = instances.find((i) => i.id === activeInstanceId) ?? null;
 
@@ -846,7 +893,10 @@ function App() {
 
           <div className="channel-section text-channel-section">
             <div className="channel-category-row">
-              <span className="channel-category">Text Channels</span>
+              <button type="button" className="channel-category-toggle" onClick={toggleTextChannelsCollapsed}>
+                <span className={`category-chevron ${textChannelsCollapsed ? "collapsed" : ""}`}>▾</span>
+                <span className="channel-category">Text Channels</span>
+              </button>
               <button className="add-channel-btn" title="Add a text channel" onClick={() => toggleCreatingChannel("TEXT")}>
                 +
               </button>
@@ -862,6 +912,7 @@ function App() {
                 />
               </form>
             )}
+            {!textChannelsCollapsed && (
             <div className="channel-section-list">
               {textChannels.map((channel) => (
                 <div
@@ -894,11 +945,15 @@ function App() {
                 </div>
               ))}
             </div>
+            )}
           </div>
 
           <div className="channel-section voice-channel-section">
           <div className="channel-category-row">
-            <span className="channel-category">Voice Channels</span>
+            <button type="button" className="channel-category-toggle" onClick={toggleVoiceChannelsCollapsed}>
+              <span className={`category-chevron ${voiceChannelsCollapsed ? "collapsed" : ""}`}>▾</span>
+              <span className="channel-category">Voice Channels</span>
+            </button>
             <button className="add-channel-btn" title="Add a voice channel" onClick={() => toggleCreatingChannel("VOICE")}>
               +
             </button>
@@ -914,6 +969,7 @@ function App() {
               />
             </form>
           )}
+          {!voiceChannelsCollapsed && (
           <div className="channel-section-list">
           {voiceChannels.map((channel) => {
             const connectedUserIds = voiceState[channel.id] ?? [];
@@ -977,6 +1033,7 @@ function App() {
             );
           })}
           </div>
+          )}
           </div>
 
           {channelError && <p className="error">{channelError}</p>}
