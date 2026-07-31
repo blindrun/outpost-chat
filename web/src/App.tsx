@@ -179,6 +179,14 @@ function App() {
   const gatewayRef = useRef<Gateway | null>(null);
   const typingTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const micPromptedRef = useRef(false);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  // Whether the view should auto-scroll to the newest message — true unless
+  // the user has scrolled up to read history, matching the usual chat-app
+  // convention of not yanking someone back down mid-read. Reset to true on
+  // every channel switch. A ref (not state) since it's only ever read
+  // inside the scroll-follow effect, not rendered.
+  const stickToBottomRef = useRef(true);
+  const prevChannelIdRef = useRef<string | null>(null);
 
   const activeInstance = instances.find((i) => i.id === activeInstanceId) ?? null;
 
@@ -669,6 +677,28 @@ function App() {
   const selectedChannel = channels.find((c) => c.id === selectedChannelId) ?? null;
   const channelMessages = selectedChannelId ? messages[selectedChannelId] ?? [] : [];
   const typingLabel = selectedChannelId ? typingByChannel[selectedChannelId] : null;
+
+  // Follows new messages to the bottom, but only when the user was already
+  // there — switching channels always jumps to the bottom of that
+  // channel's most recent history regardless of where the previous
+  // channel's scroll position was left.
+  useEffect(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const channelChanged = prevChannelIdRef.current !== selectedChannelId;
+    prevChannelIdRef.current = selectedChannelId;
+    if (channelChanged) stickToBottomRef.current = true;
+    if (channelChanged || stickToBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [channelMessages, selectedChannelId]);
+
+  function handleMessagesScroll() {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    stickToBottomRef.current = distanceFromBottom < 100;
+  }
   const memberUsernames = new Set(members.map((m) => m.username));
   const currentMember = members.find((m) => m.userId === session.user.id);
   const canManageChannels =
@@ -1111,7 +1141,7 @@ function App() {
                 </>
               )}
             </div>
-            <div className="messages">
+            <div className="messages" ref={messagesContainerRef} onScroll={handleMessagesScroll}>
               {channelMessages.map((m, i) => {
                 const prev = channelMessages[i - 1];
                 const grouped =
