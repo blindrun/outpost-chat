@@ -16,6 +16,7 @@ import {
   listMembers,
   listMessages,
   listRoles,
+  reorderChannels,
   uploadFile,
 } from "./api";
 import { VoicePanel } from "./VoicePanel";
@@ -146,6 +147,8 @@ function App() {
   const [draft, setDraft] = useState("");
   const [newChannelName, setNewChannelName] = useState("");
   const [creatingChannelType, setCreatingChannelType] = useState<"TEXT" | "VOICE" | null>(null);
+  const [draggedChannelId, setDraggedChannelId] = useState<string | null>(null);
+  const [dragOverChannelId, setDragOverChannelId] = useState<string | null>(null);
   const [channelError, setChannelError] = useState<string | null>(null);
   const [gatewayGeneration, setGatewayGeneration] = useState(0);
   const [pendingAttachment, setPendingAttachment] = useState<{ url: string; name: string } | null>(null);
@@ -317,6 +320,12 @@ function App() {
               : m,
           ),
         }));
+      } else if (event.type === "CHANNELS_UPDATE") {
+        // The server only returns TEXT/VOICE channels here (THREAD
+        // channels are deliberately excluded, same as READY) — keep
+        // whichever thread channels this client already knows about
+        // locally rather than dropping them.
+        setChannels((prev) => [...event.channels, ...prev.filter((c) => c.type === "THREAD")]);
       } else if (event.type === "FORCE_DISCONNECT") {
         // Kick or ban landed on this exact client — drop the stored session
         // for this instance (not the whole bookmark, unlike Leave Server)
@@ -490,6 +499,34 @@ function App() {
     setChannelError(null);
     setNewChannelName("");
     setCreatingChannelType((prev) => (prev === type ? null : type));
+  }
+
+  // Drops draggedId right before targetId within its own type's list —
+  // text and voice channels reorder independently, matching how the
+  // sidebar renders them as two separate sections. Updates local state
+  // immediately (the drag needs to feel instant) and persists via the
+  // reorder endpoint; other connected clients pick up the real order from
+  // its CHANNELS_UPDATE broadcast rather than this optimistic update.
+  async function handleChannelDrop(type: "TEXT" | "VOICE", draggedId: string, targetId: string) {
+    setDraggedChannelId(null);
+    setDragOverChannelId(null);
+    if (draggedId === targetId || !activeInstance || !session) return;
+
+    const sameType = channels.filter((c) => c.type === type);
+    const otherTypes = channels.filter((c) => c.type !== type);
+    const withoutDragged = sameType.filter((c) => c.id !== draggedId);
+    const targetIndex = withoutDragged.findIndex((c) => c.id === targetId);
+    const dragged = sameType.find((c) => c.id === draggedId);
+    if (!dragged || targetIndex === -1) return;
+
+    const reordered = [...withoutDragged.slice(0, targetIndex), dragged, ...withoutDragged.slice(targetIndex)];
+    setChannels([...otherTypes, ...reordered]);
+
+    try {
+      await reorderChannels(activeInstance.baseUrl, session.token, type, reordered.map((c) => c.id));
+    } catch (err) {
+      setChannelError((err as Error).message);
+    }
   }
 
   function handleSend(e: React.FormEvent) {
@@ -718,7 +755,26 @@ function App() {
             </form>
           )}
           {textChannels.map((channel) => (
-            <div className="channel-row" key={channel.id}>
+            <div
+              className={`channel-row ${dragOverChannelId === channel.id ? "drag-over" : ""}`}
+              key={channel.id}
+              draggable={canManageChannels}
+              onDragStart={() => setDraggedChannelId(channel.id)}
+              onDragOver={(e) => {
+                if (!canManageChannels || !draggedChannelId) return;
+                e.preventDefault();
+                setDragOverChannelId(channel.id);
+              }}
+              onDragLeave={() => setDragOverChannelId((id) => (id === channel.id ? null : id))}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (draggedChannelId) handleChannelDrop("TEXT", draggedChannelId, channel.id);
+              }}
+              onDragEnd={() => {
+                setDraggedChannelId(null);
+                setDragOverChannelId(null);
+              }}
+            >
               <button
                 className={`channel-btn ${channel.id === selectedChannelId ? "active" : ""}`}
                 onClick={() => setSelectedChannelId(channel.id)}
@@ -750,7 +806,26 @@ function App() {
             const connectedUserIds = voiceState[channel.id] ?? [];
             const isMyChannel = voice.activeChannel?.id === channel.id;
             return (
-              <div className="channel-row" key={channel.id}>
+              <div
+                className={`channel-row ${dragOverChannelId === channel.id ? "drag-over" : ""}`}
+                key={channel.id}
+                draggable={canManageChannels}
+                onDragStart={() => setDraggedChannelId(channel.id)}
+                onDragOver={(e) => {
+                  if (!canManageChannels || !draggedChannelId) return;
+                  e.preventDefault();
+                  setDragOverChannelId(channel.id);
+                }}
+                onDragLeave={() => setDragOverChannelId((id) => (id === channel.id ? null : id))}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (draggedChannelId) handleChannelDrop("VOICE", draggedChannelId, channel.id);
+                }}
+                onDragEnd={() => {
+                  setDraggedChannelId(null);
+                  setDragOverChannelId(null);
+                }}
+              >
                 <button
                   className={`channel-btn ${isMyChannel ? "active" : ""}`}
                   onClick={() => {

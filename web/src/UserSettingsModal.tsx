@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { User, updatePassword, updateProfile, uploadFile, setAvatar } from "./api";
 import { Modal } from "./Modal";
-import { AudioSettings, loadAudioSettings, saveAudioSettings } from "./audioSettings";
+import { AudioSettings, VoiceMode, loadAudioSettings, saveAudioSettings } from "./audioSettings";
 
 type Tab = "profile" | "password" | "voice";
 
@@ -308,24 +308,12 @@ function VoiceTab() {
       </label>
       {devicesError && <p className="error">{devicesError}</p>}
 
-      <h3>Input Mode</h3>
-      <label className="checkbox-label">
-        <input
-          type="radio"
-          name="voice-mode"
-          checked={settings.mode === "vad"}
-          onChange={() => update({ mode: "vad" })}
-        />
-        Voice Activity (automatic)
-      </label>
-      <label className="checkbox-label">
-        <input
-          type="radio"
-          name="voice-mode"
-          checked={settings.mode === "ptt"}
-          onChange={() => update({ mode: "ptt" })}
-        />
-        Push to Talk
+      <label>
+        Input Mode
+        <select value={settings.mode} onChange={(e) => update({ mode: e.target.value as VoiceMode })}>
+          <option value="vad">Voice Activity (automatic)</option>
+          <option value="ptt">Push to Talk</option>
+        </select>
       </label>
 
       {settings.mode === "ptt" && (
