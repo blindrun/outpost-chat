@@ -6,6 +6,7 @@ import { EVERYONE_ROLE_NAME, DEFAULT_EVERYONE_PERMISSIONS } from "../util/permis
 import { isInviteValid } from "../util/invites.js";
 import { postSystemMessage } from "../util/bot.js";
 import { consumeClaimCode } from "../util/claim.js";
+import { verifyTurnstileToken } from "../util/turnstile.js";
 
 const registerSchema = z.object({
   username: z.string().min(3).max(32),
@@ -13,6 +14,7 @@ const registerSchema = z.object({
   password: z.string().min(8),
   inviteCode: z.string().optional(),
   claimCode: z.string().optional(),
+  turnstileToken: z.string().optional(),
 });
 
 const loginSchema = z.object({
@@ -57,6 +59,15 @@ export async function authRoutes(app: FastifyInstance) {
     });
     if (existing) {
       return reply.status(409).send({ error: "username or email already taken" });
+    }
+
+    // Turnstile only guards real public sign-up, not the very first
+    // (owner-bootstrap) account — that one's gated by a claim code the
+    // self-hoster reads off their own server console, not something a bot
+    // could ever reach.
+    const isFirstUser = (await prisma.user.count()) === 0;
+    if (!isFirstUser && !(await verifyTurnstileToken(body.turnstileToken, req.ip))) {
+      return reply.status(400).send({ error: "captcha verification failed" });
     }
 
     try {

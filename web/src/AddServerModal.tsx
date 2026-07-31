@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Instance, Session } from "./App";
 import { InstanceInfo, Theme, getInstanceInfo, login, register, updateInstanceSettings } from "./api";
 import { ThemePicker } from "./ThemePicker";
+import { TurnstileWidget } from "./TurnstileWidget";
 
 type Step = "address" | "connecting" | "auth" | "theme" | "intro";
 
@@ -65,6 +66,7 @@ export function AddServerModal({
   const [password, setPassword] = useState("");
   const [inviteCode, setInviteCode] = useState(initialInviteCode ?? "");
   const [claimCode, setClaimCode] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   // A fresh (no-owner) instance shows a "Claim This Server" banner first —
   // the actual account-creation form only appears once that's clicked, so
   // nobody stumbles into becoming the owner without realizing a claim code
@@ -139,6 +141,7 @@ export function AddServerModal({
               password,
               inviteCode || undefined,
               !info?.hasOwner ? claimCode || undefined : undefined,
+              turnstileToken || undefined,
             );
 
       const instance: Instance = { id: crypto.randomUUID(), label: label.trim() || info?.name || address, baseUrl };
@@ -287,6 +290,13 @@ export function AddServerModal({
               <input value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} />
             </label>
           )}
+          {/* Only real public registration needs this — the very first
+              (owner-bootstrap) account is exempt server-side too, since a
+              bot can't reach a claim code printed on the self-hoster's own
+              console. */}
+          {authMode === "register" && info?.hasOwner && info.turnstileSiteKey && (
+            <TurnstileWidget siteKey={info.turnstileSiteKey} onVerify={setTurnstileToken} />
+          )}
           {authError && <p className="error">{authError}</p>}
           <div className="modal-actions">
             <button
@@ -296,7 +306,11 @@ export function AddServerModal({
             >
               Back
             </button>
-            <button type="submit" className="btn" disabled={authing}>
+            <button
+              type="submit"
+              className="btn"
+              disabled={authing || (authMode === "register" && !!info?.turnstileSiteKey && !turnstileToken)}
+            >
               {authing ? "…" : info?.hasOwner ? (authMode === "login" ? "Log In" : "Register") : "Claim Server"}
             </button>
           </div>

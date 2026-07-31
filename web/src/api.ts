@@ -41,6 +41,7 @@ export interface InstanceInfo {
   requireInviteToRegister: boolean;
   hasOwner: boolean;
   gifSearchEnabled: boolean;
+  turnstileSiteKey: string | null;
   defaultChannelId: string | null;
   levelingEnabled: boolean;
 }
@@ -207,6 +208,7 @@ export function register(
   password: string,
   inviteCode?: string,
   claimCode?: string,
+  turnstileToken?: string,
 ) {
   return request<{ token: string; user: User }>(baseUrl, "/auth/register", null, {
     method: "POST",
@@ -216,6 +218,7 @@ export function register(
       password,
       ...(inviteCode ? { inviteCode } : {}),
       ...(claimCode ? { claimCode } : {}),
+      ...(turnstileToken ? { turnstileToken } : {}),
     }),
   });
 }

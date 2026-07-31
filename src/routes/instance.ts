@@ -67,6 +67,11 @@ export async function instanceRoutes(app: FastifyInstance) {
       requireInviteToRegister: settings.requireInviteToRegister,
       hasOwner,
       gifSearchEnabled: !!process.env.GIPHY_API_KEY,
+      // The site key (unlike TURNSTILE_SECRET_KEY) is meant to be public —
+      // it's embedded in every page load that shows the widget. Opt-in
+      // per instance, same pattern as gifSearchEnabled: only set when the
+      // self-hoster has actually configured Cloudflare Turnstile.
+      turnstileSiteKey: process.env.TURNSTILE_SITE_KEY ?? null,
       defaultChannelId: settings.defaultChannelId,
       levelingEnabled: botSettings?.levelingEnabled ?? false,
     };

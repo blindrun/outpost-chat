@@ -157,6 +157,7 @@ button, input, select {
 .add-server-form h2 { font-size: 1.5rem; text-align: center; margin: 0 0 0.25rem; color: var(--header-primary); }
 .add-server-form .subtitle { text-align: center; color: var(--text-muted); margin: -0.5rem 0 0.5rem; font-size: 0.9rem; }
 .add-server-form form { display: flex; flex-direction: column; gap: 1rem; }
+.turnstile-widget { margin: 0.4rem 0; }
 .intro-dots { display: flex; justify-content: center; gap: 0.4rem; }
 .intro-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--border-subtle); }
 .intro-dots span.active { background: var(--brand); }
