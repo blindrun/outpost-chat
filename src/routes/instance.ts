@@ -71,7 +71,11 @@ export async function instanceRoutes(app: FastifyInstance) {
       // it's embedded in every page load that shows the widget. Opt-in
       // per instance, same pattern as gifSearchEnabled: only set when the
       // self-hoster has actually configured Cloudflare Turnstile.
-      turnstileSiteKey: process.env.TURNSTILE_SITE_KEY ?? null,
+      // Docker Compose's ${VAR:-} substitution passes through an actual
+      // empty string when the var is absent from .env, not an unset env
+      // var — `|| null` (not `??`) normalizes that back to "not
+      // configured" the same as if it were never set at all.
+      turnstileSiteKey: process.env.TURNSTILE_SITE_KEY || null,
       defaultChannelId: settings.defaultChannelId,
       levelingEnabled: botSettings?.levelingEnabled ?? false,
     };
