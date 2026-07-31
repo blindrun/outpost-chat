@@ -692,18 +692,61 @@ type GatewayEvent =
   | { type: "FRIEND_REQUEST_RECEIVED"; user: FriendUser }
   | { type: "FRIEND_REQUEST_ACCEPTED"; user: FriendUser }
   | { type: "FRIEND_REMOVED"; userId: string }
+  // Synthesized locally by the Gateway class itself, not sent by the
+  // server — "reconnecting" fires on any drop worth retrying (a deploy,
+  // a network blip); "disconnected" only for a rejection retrying can't
+  // fix (invalid token, banned), matching FORCE_DISCONNECT's own handling.
+  | { type: "CONNECTION_STATE"; state: "connected" | "reconnecting" | "disconnected" }
   | { type: "ERROR"; error: string };
+
+// WebSocket close codes the gateway uses for a rejection retrying won't
+// fix (see src/gateway/index.ts) — anything else (a deploy recreating the
+// container, a network blip, a laptop sleep/wake) is worth reconnecting
+// from automatically instead of leaving the tab silently dead.
+const NON_RETRYABLE_CLOSE_CODES = new Set([4001, 4003]);
 
 export class Gateway {
   private ws: WebSocket;
+  private baseUrl: string;
+  private token: string;
   private listeners = new Set<(event: GatewayEvent) => void>();
+  private closedByCaller = false;
+  private reconnectAttempt = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(baseUrl: string, token: string) {
-    this.ws = new WebSocket(`${toWsUrl(baseUrl)}/gateway?token=${token}`);
-    this.ws.onmessage = (raw) => {
+    this.baseUrl = baseUrl;
+    this.token = token;
+    this.ws = this.connect();
+  }
+
+  private connect(): WebSocket {
+    const ws = new WebSocket(`${toWsUrl(this.baseUrl)}/gateway?token=${this.token}`);
+    ws.onmessage = (raw) => {
       const event = JSON.parse(raw.data) as GatewayEvent;
       for (const listener of this.listeners) listener(event);
     };
+    ws.onopen = () => {
+      this.reconnectAttempt = 0;
+      for (const listener of this.listeners) listener({ type: "CONNECTION_STATE", state: "connected" });
+    };
+    ws.onclose = (event) => {
+      if (this.closedByCaller) return;
+      if (NON_RETRYABLE_CLOSE_CODES.has(event.code)) {
+        for (const listener of this.listeners) listener({ type: "CONNECTION_STATE", state: "disconnected" });
+        return;
+      }
+      for (const listener of this.listeners) listener({ type: "CONNECTION_STATE", state: "reconnecting" });
+      // Exponential backoff up to 30s, uncapped attempt count — the tab
+      // keeps trying for as long as it's open, same expectation any
+      // real-time app (Slack, Discord itself) sets.
+      const delay = Math.min(1000 * 2 ** this.reconnectAttempt, 30_000);
+      this.reconnectAttempt++;
+      this.reconnectTimer = setTimeout(() => {
+        this.ws = this.connect();
+      }, delay);
+    };
+    return ws;
   }
 
   on(listener: (event: GatewayEvent) => void) {
@@ -752,6 +795,8 @@ export class Gateway {
   }
 
   close() {
+    this.closedByCaller = true;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.ws.close();
   }
 }

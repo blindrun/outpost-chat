@@ -158,6 +158,7 @@ function App() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [composerNotice, setComposerNotice] = useState<string | null>(null);
   const [forceDisconnectReason, setForceDisconnectReason] = useState<"kicked" | "banned" | null>(null);
+  const [connectionState, setConnectionState] = useState<"connected" | "reconnecting" | "disconnected">("connected");
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [openPicker, setOpenPicker] = useState<"emoji" | "gif" | null>(null);
   const [voiceDetailsOpen, setVoiceDetailsOpen] = useState(false);
@@ -264,6 +265,7 @@ function App() {
 
     const gateway = new Gateway(activeInstance.baseUrl, session.token);
     gatewayRef.current = gateway;
+    setConnectionState("connected");
 
     listMembers(activeInstance.baseUrl, session.token).then(setMembers).catch(() => {});
     listRoles(activeInstance.baseUrl, session.token).then(setRoles).catch(() => {});
@@ -361,6 +363,8 @@ function App() {
         if (activeInstanceId) localStorage.removeItem(`session:${activeInstanceId}`);
         setSession(null);
         setForceDisconnectReason(event.reason);
+      } else if (event.type === "CONNECTION_STATE") {
+        setConnectionState(event.state);
       } else if (event.type === "ERROR") {
         // Surfaces gateway-level rejections a user needs to see, chiefly
         // automod's own "banned word (warning N/M)" / mute messages — these
@@ -725,6 +729,9 @@ function App() {
 
   return (
     <div className={`app ${memberListOpen ? "" : "member-list-collapsed"}`}>
+      {connectionState === "reconnecting" && (
+        <div className="connection-banner">Reconnecting…</div>
+      )}
       <nav className="server-rail">
         {instances.map((instance) => (
           <div key={instance.id} className={`server-icon-wrapper ${instance.id === activeInstanceId ? "active" : ""}`}>
