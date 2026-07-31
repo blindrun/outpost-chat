@@ -11,6 +11,7 @@ import {
   listRoles,
   unbanMember,
   updateInstanceSettings,
+  updateRole,
   uploadFile,
 } from "./api";
 import { Modal } from "./Modal";
@@ -18,9 +19,16 @@ import { InvitePanel } from "./InvitePanel";
 import { WebhooksPanel } from "./WebhooksPanel";
 import { BotSettingsPanel } from "./BotSettingsPanel";
 import { ThemePicker } from "./ThemePicker";
-import { UPLOAD_CATEGORIES, UPLOAD_CATEGORY_KEYS, UploadCategory } from "./uploadCategories";
 
-const ALL_PERMISSIONS: Permission[] = ["MANAGE_CHANNELS", "MANAGE_ROLES", "SEND_MESSAGES", "MODERATE_MEMBERS"];
+const ALL_PERMISSIONS: Permission[] = [
+  "MANAGE_CHANNELS",
+  "MANAGE_ROLES",
+  "SEND_MESSAGES",
+  "MODERATE_MEMBERS",
+  "UPLOAD_DOCUMENTS",
+  "UPLOAD_ARCHIVES",
+  "UPLOAD_CODE",
+];
 
 type Tab = "general" | "roles" | "members" | "invites" | "webhooks" | "bot";
 
@@ -42,24 +50,12 @@ function GeneralTab({
   const [theme, setTheme] = useState(instanceInfo.theme);
   const [requireInvite, setRequireInvite] = useState(instanceInfo.requireInviteToRegister);
   const [defaultChannelId, setDefaultChannelId] = useState(instanceInfo.defaultChannelId ?? "");
-  const [uploadCategories, setUploadCategories] = useState<Set<UploadCategory>>(
-    new Set(instanceInfo.enabledUploadCategories as UploadCategory[]),
-  );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [iconUploading, setIconUploading] = useState(false);
   const [iconError, setIconError] = useState<string | null>(null);
 
   const textChannels = channels.filter((c) => c.type === "TEXT");
-
-  function toggleUploadCategory(cat: UploadCategory) {
-    setUploadCategories((prev) => {
-      const next = new Set(prev);
-      if (next.has(cat)) next.delete(cat);
-      else next.add(cat);
-      return next;
-    });
-  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -72,7 +68,6 @@ function GeneralTab({
         theme,
         requireInviteToRegister: requireInvite,
         defaultChannelId: defaultChannelId || null,
-        enabledUploadCategories: [...uploadCategories],
       });
       onUpdated(updated);
     } catch (err) {
@@ -136,16 +131,6 @@ function GeneralTab({
           ))}
         </select>
       </label>
-      <h3>Message Attachments</h3>
-      <p className="settings-hint">Images are always allowed. Enable additional file types members can attach to messages:</p>
-      <div className="permission-checkboxes">
-        {UPLOAD_CATEGORY_KEYS.map((cat) => (
-          <label key={cat} className="checkbox-label">
-            <input type="checkbox" checked={uploadCategories.has(cat)} onChange={() => toggleUploadCategory(cat)} />
-            {UPLOAD_CATEGORIES[cat].label}
-          </label>
-        ))}
-      </div>
       <h3>Theme</h3>
       <ThemePicker value={theme} onChange={setTheme} />
       {error && <p className="error">{error}</p>}
@@ -158,8 +143,85 @@ function GeneralTab({
   );
 }
 
+function PermissionCheckboxes({
+  selected,
+  onToggle,
+}: {
+  selected: Set<Permission>;
+  onToggle: (perm: Permission) => void;
+}) {
+  return (
+    <div className="permission-checkboxes">
+      {ALL_PERMISSIONS.map((perm) => (
+        <label key={perm} className="checkbox-label">
+          <input type="checkbox" checked={selected.has(perm)} onChange={() => onToggle(perm)} />
+          {perm}
+        </label>
+      ))}
+    </div>
+  );
+}
+
+function EditRoleRow({
+  baseUrl,
+  token,
+  role,
+  onDone,
+}: {
+  baseUrl: string;
+  token: string;
+  role: Role;
+  onDone: () => void;
+}) {
+  const [name, setName] = useState(role.name);
+  const [permissions, setPermissions] = useState<Set<Permission>>(new Set(role.permissions));
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  function togglePermission(perm: Permission) {
+    setPermissions((prev) => {
+      const next = new Set(prev);
+      if (next.has(perm)) next.delete(perm);
+      else next.add(perm);
+      return next;
+    });
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setError(null);
+    setSaving(true);
+    try {
+      await updateRole(baseUrl, token, role.id, { name: name.trim(), permissions: [...permissions] });
+      onDone();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSave} className="settings-section role-edit-form">
+      <input value={name} onChange={(e) => setName(e.target.value)} />
+      <PermissionCheckboxes selected={permissions} onToggle={togglePermission} />
+      {error && <p className="error">{error}</p>}
+      <div className="modal-actions">
+        <button type="button" className="btn secondary" onClick={onDone}>
+          Cancel
+        </button>
+        <button type="submit" className="btn" disabled={saving}>
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function RolesTab({ baseUrl, token }: { baseUrl: string; token: string }) {
   const [roles, setRoles] = useState<Role[]>([]);
+  const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [permissions, setPermissions] = useState<Set<Permission>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -196,24 +258,34 @@ function RolesTab({ baseUrl, token }: { baseUrl: string; token: string }) {
   return (
     <div className="settings-section">
       <ul className="role-list">
-        {roles.map((role) => (
-          <li key={role.id}>
-            <strong>{role.name}</strong>
-            <span className="invite-meta">{role.permissions.join(", ") || "no permissions"}</span>
-          </li>
-        ))}
+        {roles.map((role) =>
+          editingRoleId === role.id ? (
+            <li key={role.id}>
+              <EditRoleRow
+                baseUrl={baseUrl}
+                token={token}
+                role={role}
+                onDone={() => {
+                  setEditingRoleId(null);
+                  refresh();
+                }}
+              />
+            </li>
+          ) : (
+            <li key={role.id} className="role-row">
+              <strong>{role.name}</strong>
+              <span className="invite-meta">{role.permissions.join(", ") || "no permissions"}</span>
+              <button className="text-btn" onClick={() => setEditingRoleId(role.id)}>
+                edit
+              </button>
+            </li>
+          ),
+        )}
       </ul>
       <form onSubmit={handleCreate} className="settings-section">
         <h3>New Role</h3>
         <input placeholder="role name" value={name} onChange={(e) => setName(e.target.value)} />
-        <div className="permission-checkboxes">
-          {ALL_PERMISSIONS.map((perm) => (
-            <label key={perm} className="checkbox-label">
-              <input type="checkbox" checked={permissions.has(perm)} onChange={() => togglePermission(perm)} />
-              {perm}
-            </label>
-          ))}
-        </div>
+        <PermissionCheckboxes selected={permissions} onToggle={togglePermission} />
         {error && <p className="error">{error}</p>}
         <div className="modal-actions">
           <button type="submit" className="btn">

@@ -100,7 +100,6 @@ export interface InstanceInfo {
   turnstileSiteKey: string | null;
   defaultChannelId: string | null;
   levelingEnabled: boolean;
-  enabledUploadCategories: string[];
 }
 
 export interface Gif {
@@ -169,7 +168,14 @@ export interface SearchResult extends Message {
   channelName: string;
 }
 
-export type Permission = "MANAGE_CHANNELS" | "MANAGE_ROLES" | "SEND_MESSAGES" | "MODERATE_MEMBERS";
+export type Permission =
+  | "MANAGE_CHANNELS"
+  | "MANAGE_ROLES"
+  | "SEND_MESSAGES"
+  | "MODERATE_MEMBERS"
+  | "UPLOAD_DOCUMENTS"
+  | "UPLOAD_ARCHIVES"
+  | "UPLOAD_CODE";
 
 export interface Role {
   id: string;
@@ -483,7 +489,6 @@ export function updateInstanceSettings(
     theme?: Theme;
     requireInviteToRegister?: boolean;
     defaultChannelId?: string | null;
-    enabledUploadCategories?: string[];
   },
 ) {
   return request<InstanceInfo>(baseUrl, "/instance/settings", token, {
@@ -508,6 +513,18 @@ export function createRole(baseUrl: string, token: string, name: string, permiss
   return request<Role>(baseUrl, "/roles", token, {
     method: "POST",
     body: JSON.stringify({ name, permissions }),
+  });
+}
+
+export function updateRole(
+  baseUrl: string,
+  token: string,
+  roleId: string,
+  updates: { name?: string; permissions?: Permission[] },
+) {
+  return request<Role>(baseUrl, `/roles/${roleId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify(updates),
   });
 }
 

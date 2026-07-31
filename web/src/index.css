@@ -1222,6 +1222,9 @@ button, input, select {
   padding: 0.4rem 0.6rem;
   font-size: 0.85rem;
 }
+.role-list li.role-row { flex-direction: row; align-items: center; gap: 0.6rem; }
+.role-list li.role-row .invite-meta { flex: 1; }
+.role-edit-form { background: var(--bg-input); border-radius: 4px; padding: 0.6rem; border-bottom: none; }
 
 .permission-checkboxes { display: flex; flex-direction: column; gap: 0.3rem; }
 .settings-hint { color: var(--text-muted); font-size: 0.8rem; margin: -0.3rem 0 0.4rem; }
