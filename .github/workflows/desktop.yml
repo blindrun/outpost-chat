@@ -43,9 +43,17 @@ jobs:
           # electron-builder from failing when it can't find one.
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
+      - name: Extract this version's changelog section
+        shell: bash
+        # A relative path (not /tmp or ${{ runner.temp }}) so this works the
+        # same across bash on Linux/macOS and Git Bash on Windows, where
+        # runner.temp is a backslash Windows path bash can't redirect into.
+        run: bash .github/scripts/extract-changelog.sh "${{ github.ref_name }}" > release-notes.md
+
       - name: Upload release artifacts
         uses: softprops/action-gh-release@v2
         with:
+          body_path: release-notes.md
           files: |
             electron/release/*.dmg
             electron/release/*.exe
