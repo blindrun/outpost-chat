@@ -27,7 +27,9 @@ export function MemberList({
       .catch((err) => setError(err.message));
   }, [baseUrl, token, refreshKey]);
 
-  const banned = members.filter((m) => m.banned);
+  // Banned members are deliberately excluded here — that's not
+  // information every regular member needs to see. An owner manages bans
+  // from Instance Settings > Members instead (see InstanceSettingsModal).
   const active = members.filter((m) => !m.banned);
   const online = active.filter((m) => onlineUserIds.has(m.userId));
   const offline = active.filter((m) => !onlineUserIds.has(m.userId));
@@ -40,12 +42,7 @@ export function MemberList({
           {title} — {list.length}
         </h4>
         {list.map((m) => (
-          <button
-            key={m.userId}
-            type="button"
-            className={`member-list-entry ${m.banned ? "banned" : ""}`}
-            onClick={() => onSelectMember(m.userId)}
-          >
+          <button key={m.userId} type="button" className="member-list-entry" onClick={() => onSelectMember(m.userId)}>
             {m.avatarUrl ? (
               <img className="avatar" src={m.avatarUrl} alt="" />
             ) : (
@@ -53,13 +50,9 @@ export function MemberList({
             )}
             <span className="member-list-info">
               <span className="member-list-name">{m.username}</span>
-              {m.banned ? (
-                <span className="member-list-banned-tag">Banned</span>
-              ) : (
-                m.roles.length > 0 && <span className="member-list-roles">{m.roles.map((r) => r.name).join(", ")}</span>
-              )}
+              {m.roles.length > 0 && <span className="member-list-roles">{m.roles.map((r) => r.name).join(", ")}</span>}
             </span>
-            {!m.banned && <span className={`presence-dot ${onlineUserIds.has(m.userId) ? "online" : "offline"}`} />}
+            <span className={`presence-dot ${onlineUserIds.has(m.userId) ? "online" : "offline"}`} />
           </button>
         ))}
       </div>
@@ -71,7 +64,6 @@ export function MemberList({
       {error && <p className="error">{error}</p>}
       {renderGroup("Online", online)}
       {renderGroup("Offline", offline)}
-      {renderGroup("Banned", banned)}
     </aside>
   );
 }
