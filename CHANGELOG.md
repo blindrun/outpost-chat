@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.9 — 2026-07-31
+
+- Fixed the message composer being a single-line input that couldn't actually hold a multi-line message — Enter always sent immediately with no way to insert a line break, and pasting multi-line text (like a script) had its line breaks silently stripped. This made the v0.2.7 code-block feature unreachable in practice. Now Enter sends and **Shift+Enter** adds a line break, and the composer grows with your message as you type.
+
 ## v0.2.8 — 2026-07-31
 
 - File-type upload permissions (below, v0.2.7) are now granted per role instead of one instance-wide switch — a role can be given permission to attach documents, archives, and/or code files independently, same as any other permission like Manage Channels. Images are unaffected either way and remain uploadable by everyone regardless of role.
