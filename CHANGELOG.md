@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.10 — 2026-08-01
+
+- Fixed Voice Channels appearing at the very bottom of the sidebar with a large empty gap above it — it now sits directly under Text Channels as expected.
+
 ## v0.2.9 — 2026-07-31
 
 - Fixed the message composer being a single-line input that couldn't actually hold a multi-line message — Enter always sent immediately with no way to insert a line break, and pasting multi-line text (like a script) had its line breaks silently stripped. This made the v0.2.7 code-block feature unreachable in practice. Now Enter sends and **Shift+Enter** adds a line break, and the composer grows with your message as you type.
