@@ -344,3 +344,18 @@ model UserRole {
 
   @@id([userId, roleId])
 }
+
+// A server-uploaded emoji, usable in message text as :name: (see
+// renderInline in MessageItem.tsx) — not usable as a message *reaction* in
+// this version, unlike Discord's; reactions have their own short-string
+// constraint and render as plain text, not an image, so supporting custom
+// emoji there is a separate, bigger change. name is stored lowercased and
+// unique so :Party: and :party: can't both exist as confusingly-different
+// emoji.
+model CustomEmoji {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  imageUrl  String
+  createdBy String
+  createdAt DateTime @default(now())
+}

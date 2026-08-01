@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.12 — 2026-08-01
+
+- **Custom server emoji.** Upload your own emoji from Instance Settings → Emoji, then use it in a message as `:name:` — it renders inline as the real image. Shows up first in the emoji picker under a new "Server" tab. Not usable as a message reaction yet, only in message text.
+
 ## v0.2.11 — 2026-08-01
 
 - **Channel-level permission overrides.** A channel can now be restricted to specific roles — hidden from the sidebar and inaccessible (REST, live gateway events, and voice join) to anyone without one of those roles. Manage it from Instance Settings → Channels. Previously every channel was visible and joinable by anyone on the instance.

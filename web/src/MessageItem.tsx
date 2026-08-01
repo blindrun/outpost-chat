@@ -4,7 +4,10 @@ import { EmojiPicker } from "./EmojiPicker";
 import { attachmentFilename, isImageAttachment } from "./uploadCategories";
 
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🎉"];
-const MENTION_OR_INLINE_CODE_PATTERN = /@([a-zA-Z0-9_]+)|`([^`\n]+)`/g;
+// Group 3 (custom emoji shortcode) must match the NAME_PATTERN the backend
+// validates against in customEmoji.ts, minus the length bound (client-side
+// rendering doesn't need to enforce that, only the create endpoint does).
+const MENTION_OR_INLINE_CODE_PATTERN = /@([a-zA-Z0-9_]+)|`([^`\n]+)`|:([a-zA-Z0-9_]+):/g;
 // ```lang\n...\n``` — lang is optional, kept only for the header label.
 const CODE_BLOCK_PATTERN = /```([a-zA-Z0-9_+-]*)\n?([\s\S]*?)```/g;
 
@@ -37,8 +40,15 @@ function initials(name: string): string {
 // Only highlights @tokens that match a real member username — a plain "@"
 // followed by text that isn't anyone here stays as ordinary text, since
 // there's no backend concept of a real mention/ping to back up styling it
-// otherwise. Also handles `inline code` spans within the same pass.
-function renderInline(text: string, memberUsernames: Set<string>, keyPrefix: string): React.ReactNode[] {
+// otherwise. Also handles `inline code` spans and :name: custom-emoji
+// shortcodes within the same pass — an unmatched :name: (no custom emoji
+// by that name) stays as ordinary text too, same as an unmatched @mention.
+function renderInline(
+  text: string,
+  memberUsernames: Set<string>,
+  customEmojiByName: Map<string, string>,
+  keyPrefix: string,
+): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -48,12 +58,22 @@ function renderInline(text: string, memberUsernames: Set<string>, keyPrefix: str
     if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
     const username = match[1];
     const inlineCode = match[2];
+    const emojiName = match[3];
     if (username !== undefined) {
       if (memberUsernames.has(username)) {
         parts.push(
           <span key={`${keyPrefix}-${key++}`} className="mention">
             @{username}
           </span>,
+        );
+      } else {
+        parts.push(match[0]);
+      }
+    } else if (emojiName !== undefined) {
+      const imageUrl = customEmojiByName.get(emojiName);
+      if (imageUrl) {
+        parts.push(
+          <img key={`${keyPrefix}-${key++}`} src={imageUrl} alt={`:${emojiName}:`} title={`:${emojiName}:`} className="custom-emoji-inline" />,
         );
       } else {
         parts.push(match[0]);
@@ -72,9 +92,10 @@ function renderInline(text: string, memberUsernames: Set<string>, keyPrefix: str
 }
 
 // Splits out ```fenced``` code blocks first (rendered as <pre><code>,
-// whitespace preserved verbatim, no mention/inline-code parsing inside),
-// then runs mention/inline-code highlighting over everything in between.
-function renderContent(content: string, memberUsernames: Set<string>): React.ReactNode[] {
+// whitespace preserved verbatim, no mention/inline-code/emoji parsing
+// inside), then runs mention/inline-code/emoji highlighting over everything
+// in between.
+function renderContent(content: string, memberUsernames: Set<string>, customEmojiByName: Map<string, string>): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -82,7 +103,7 @@ function renderContent(content: string, memberUsernames: Set<string>): React.Rea
   CODE_BLOCK_PATTERN.lastIndex = 0;
   while ((match = CODE_BLOCK_PATTERN.exec(content))) {
     if (match.index > lastIndex) {
-      parts.push(...renderInline(content.slice(lastIndex, match.index), memberUsernames, `pre${key}`));
+      parts.push(...renderInline(content.slice(lastIndex, match.index), memberUsernames, customEmojiByName, `pre${key}`));
     }
     const lang = match[1];
     const code = match[2].replace(/\n$/, "");
@@ -95,7 +116,7 @@ function renderContent(content: string, memberUsernames: Set<string>): React.Rea
     lastIndex = match.index + match[0].length;
   }
   if (lastIndex < content.length) {
-    parts.push(...renderInline(content.slice(lastIndex), memberUsernames, `post${key}`));
+    parts.push(...renderInline(content.slice(lastIndex), memberUsernames, customEmojiByName, `post${key}`));
   }
   return parts;
 }
@@ -108,6 +129,7 @@ export function MessageItem({
   canModerate,
   memberUsernames,
   usernameByUserId,
+  customEmojiByName,
   onEdit,
   onDelete,
   onReact,
@@ -131,6 +153,8 @@ export function MessageItem({
   // pill — reactions only carry userId (see prisma schema), same reasoning
   // as authorUsername needing a separate hydration step for messages.
   usernameByUserId: Map<string, string>;
+  // name (no colons) -> image URL, for rendering :name: shortcodes inline.
+  customEmojiByName: Map<string, string>;
   onEdit: (messageId: string, content: string) => void;
   onDelete: (messageId: string) => void;
   onReact: (messageId: string, emoji: string) => void;
@@ -242,7 +266,7 @@ export function MessageItem({
         ) : (
           message.content && (
             <div className="message-content">
-              {renderContent(message.content, memberUsernames)}
+              {renderContent(message.content, memberUsernames, customEmojiByName)}
               {message.editedAt && <span className="edited-tag"> (edited)</span>}
             </div>
           )
