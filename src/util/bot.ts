@@ -1,5 +1,5 @@
 import { prisma } from "../plugins/db.js";
-import { broadcastAll } from "../gateway/rooms.js";
+import { broadcastToChannel } from "../gateway/channelBroadcast.js";
 
 export async function getBotSettings() {
   return prisma.botSettings.upsert({ where: { id: "singleton" }, create: {}, update: {} });
@@ -14,7 +14,7 @@ export async function postSystemMessage(channelId: string, content: string) {
     prisma.message.create({ data: { channelId, content, isSystemBot: true } }),
     getBotSettings(),
   ]);
-  broadcastAll({
+  await broadcastToChannel(channelId, {
     type: "MESSAGE_CREATE",
     message: { ...message, authorUsername: settings.name, authorAvatarUrl: settings.avatarUrl, isSystemBot: true },
   });
@@ -26,7 +26,7 @@ async function editSystemMessage(messageId: string, content: string) {
     prisma.message.update({ where: { id: messageId }, data: { content, editedAt: new Date() } }),
     getBotSettings(),
   ]);
-  broadcastAll({
+  await broadcastToChannel(message.channelId, {
     type: "MESSAGE_UPDATE",
     message: { ...message, authorUsername: settings.name, authorAvatarUrl: settings.avatarUrl, isSystemBot: true },
   });

@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { prisma } from "../plugins/db.js";
 import { PERMISSIONS, hasPermission } from "../util/permissions.js";
-import { broadcastAll } from "../gateway/rooms.js";
+import { broadcastToChannel } from "../gateway/channelBroadcast.js";
 
 const createWebhookSchema = z.object({
   name: z.string().min(1).max(64),
@@ -104,7 +104,7 @@ export async function webhookRoutes(app: FastifyInstance) {
       },
     });
 
-    broadcastAll({
+    await broadcastToChannel(webhook.channelId, {
       type: "MESSAGE_CREATE",
       message: {
         ...message,

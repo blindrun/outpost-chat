@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../plugins/db.js";
-import { broadcastAll } from "../gateway/rooms.js";
+import { canAccessChannel } from "../util/permissions.js";
+import { broadcastToChannel } from "../gateway/channelBroadcast.js";
 
 const createThreadSchema = z.object({
   name: z.string().min(1).max(64).optional(),
@@ -35,6 +36,7 @@ export async function threadRoutes(app: FastifyInstance) {
   app.addHook("onRequest", app.authenticate);
 
   app.post("/messages/:messageId/thread", async (req, reply) => {
+    const { sub: userId } = req.user as { sub: string };
     const { messageId } = req.params as { messageId: string };
     const body = createThreadSchema.parse(req.body ?? {});
 
@@ -43,21 +45,36 @@ export async function threadRoutes(app: FastifyInstance) {
     if (message.channel.type !== "TEXT") {
       return reply.status(400).send({ error: "threads can only be started from a text channel message" });
     }
+    if (!(await canAccessChannel(userId, message.channel))) {
+      return reply.status(404).send({ error: "message not found" });
+    }
     if (message.thread) return reply.status(409).send({ error: "this message already has a thread" });
 
     const name = body.name?.trim() || `Thread: ${message.content.slice(0, 40) || "attachment"}`;
+    // Inherits the parent channel's restriction at creation time — there's
+    // no separate UI to restrict a thread on its own, so this is the only
+    // way a thread under a restricted channel doesn't leak back open to
+    // everyone.
     const thread = await prisma.channel.create({
-      data: { name, type: "THREAD", parentChannelId: message.channelId, parentMessageId: message.id },
+      data: {
+        name,
+        type: "THREAD",
+        parentChannelId: message.channelId,
+        parentMessageId: message.id,
+        restrictedToRoleIds: message.channel.restrictedToRoleIds,
+      },
     });
 
-    broadcastAll({ type: "THREAD_CREATE", parentMessageId: message.id, thread: serializeThread(thread) });
+    await broadcastToChannel(message.channelId, { type: "THREAD_CREATE", parentMessageId: message.id, thread: serializeThread(thread) });
     return reply.status(201).send(serializeThread(thread));
   });
 
   app.get("/messages/:messageId/thread", async (req, reply) => {
+    const { sub: userId } = req.user as { sub: string };
     const { messageId } = req.params as { messageId: string };
     const thread = await prisma.channel.findUnique({ where: { parentMessageId: messageId } });
     if (!thread) return reply.status(404).send({ error: "no thread on this message" });
+    if (!(await canAccessChannel(userId, thread))) return reply.status(404).send({ error: "no thread on this message" });
     return serializeThread(thread);
   });
 }

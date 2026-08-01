@@ -32,3 +32,33 @@ export async function hasPermission(userId: string, permission: Permission): Pro
 
   return userRoles.some((ur) => ur.role.permissions.includes(permission));
 }
+
+// Channel-level visibility, separate from the instance-wide Permission
+// system above — a channel with an empty restrictedToRoleIds is visible to
+// everyone (today's default for every channel); a non-empty one is visible
+// only to the owner or a member holding at least one of the listed roles.
+// Filters a whole list at once so callers building a channel list (READY,
+// CHANNELS_UPDATE, /messages/search's instance-wide case) only need one
+// user/role lookup instead of one per channel.
+export async function filterVisibleChannels<T extends { restrictedToRoleIds: string[] }>(
+  userId: string,
+  channels: T[],
+): Promise<T[]> {
+  if (channels.every((c) => c.restrictedToRoleIds.length === 0)) return channels;
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (user?.isOwner) return channels;
+
+  const userRoles = await prisma.userRole.findMany({ where: { userId }, select: { roleId: true } });
+  const roleIdSet = new Set(userRoles.map((ur) => ur.roleId));
+
+  return channels.filter(
+    (c) => c.restrictedToRoleIds.length === 0 || c.restrictedToRoleIds.some((id) => roleIdSet.has(id)),
+  );
+}
+
+export async function canAccessChannel(userId: string, channel: { restrictedToRoleIds: string[] }): Promise<boolean> {
+  if (channel.restrictedToRoleIds.length === 0) return true;
+  const [visible] = await filterVisibleChannels(userId, [channel]);
+  return !!visible;
+}

@@ -342,8 +342,17 @@ export function AddServerModal({
             </label>
           )}
           <label>
-            Email
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            {authMode === "login" ? "Username or Email" : "Email"}
+            {authMode === "login" ? (
+              // Deliberately type="text", not type="email" — the backend
+              // now accepts either a username or an email for login (see
+              // POST /auth/login), but an email-typed input's built-in HTML5
+              // validation would silently block submitting a bare username
+              // before this handler even runs.
+              <input value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />
+            ) : (
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            )}
           </label>
           <label>
             Password

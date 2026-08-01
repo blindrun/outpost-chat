@@ -13,7 +13,8 @@ import {
   voiceChannelMembers,
   allVoiceState,
 } from "./rooms.js";
-import { PERMISSIONS, hasPermission } from "../util/permissions.js";
+import { PERMISSIONS, canAccessChannel, filterVisibleChannels, hasPermission } from "../util/permissions.js";
+import { broadcastToChannel } from "./channelBroadcast.js";
 import { hydrateAuthors, hydrateReplyPreviews } from "../routes/messages.js";
 import { areFriends } from "../util/friends.js";
 import {
@@ -110,14 +111,19 @@ export async function gatewayRoutes(app: FastifyInstance) {
       };
     });
 
+    const allChannels = await prisma.channel.findMany({
+      // THREAD channels are intentionally excluded — they aren't
+      // top-level sidebar entries, the client only learns about one when
+      // it's created/opened (via THREAD_CREATE or fetching a message's
+      // thread directly).
+      where: { type: { notIn: ["THREAD", "DM"] } },
+      orderBy: { position: "asc" },
+    });
+
     socket.send(
       JSON.stringify({
         type: "READY",
-        // THREAD channels are intentionally excluded — they aren't
-        // top-level sidebar entries, the client only learns about one when
-        // it's created/opened (via THREAD_CREATE or fetching a message's
-        // thread directly).
-        channels: await prisma.channel.findMany({ where: { type: { notIn: ["THREAD", "DM"] } }, orderBy: { position: "asc" } }),
+        channels: await filterVisibleChannels(userId, allChannels),
         dmChannels,
         onlineUserIds: allOnlineUserIds(),
         voiceState: allVoiceState(),
@@ -167,6 +173,9 @@ export async function gatewayRoutes(app: FastifyInstance) {
             sendError("you can no longer message this user");
             return;
           }
+        } else if (!(await canAccessChannel(userId, channel))) {
+          sendError("channel not found");
+          return;
         }
 
         if (parsed.type === "MESSAGE_SEND") {
@@ -225,7 +234,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
           if (dmMembers) {
             sendToUsers(dmMembers, outgoing);
           } else {
-            broadcastAll(outgoing);
+            await broadcastToChannel(parsed.channelId, outgoing);
           }
 
           // Fire-and-forget on purpose — commands/leveling/level-up
@@ -243,7 +252,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
           if (dmMembers) {
             sendToUsers(dmMembers, outgoing, socket);
           } else {
-            broadcastAll(outgoing, socket);
+            await broadcastToChannel(parsed.channelId, outgoing, socket);
           }
         }
         return;
@@ -266,6 +275,9 @@ export async function gatewayRoutes(app: FastifyInstance) {
             sendError("message not found");
             return;
           }
+        } else if (!(await canAccessChannel(userId, message.channel))) {
+          sendError("message not found");
+          return;
         }
 
         if (parsed.type === "MESSAGE_EDIT") {
@@ -287,7 +299,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
             message: { ...hydrated, authorUsername: username, authorAvatarUrl: author?.avatarUrl ?? null },
           };
           if (dmMembers) sendToUsers(dmMembers, outgoing);
-          else broadcastAll(outgoing);
+          else await broadcastToChannel(message.channelId, outgoing);
         } else {
           // DMs have no moderator override — a server moderator has no
           // standing power over a private 1:1 conversation, so only the
@@ -304,7 +316,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
             channelId: message.channelId,
           };
           if (dmMembers) sendToUsers(dmMembers, outgoing);
-          else broadcastAll(outgoing);
+          else await broadcastToChannel(message.channelId, outgoing);
         }
         return;
       }
@@ -323,6 +335,9 @@ export async function gatewayRoutes(app: FastifyInstance) {
             sendError("message not found");
             return;
           }
+        } else if (!(await canAccessChannel(userId, message.channel))) {
+          sendError("message not found");
+          return;
         } else if (!(await hasPermission(userId, PERMISSIONS.MANAGE_CHANNELS))) {
           sendError("missing MANAGE_CHANNELS permission");
           return;
@@ -342,7 +357,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
           message: { ...hydrated, authorUsername: hydratedAuthor[0]?.authorUsername, authorAvatarUrl: hydratedAuthor[0]?.authorAvatarUrl },
         };
         if (dmMembers) sendToUsers(dmMembers, outgoing);
-        else broadcastAll(outgoing);
+        else await broadcastToChannel(message.channelId, outgoing);
         return;
       }
 
@@ -363,6 +378,9 @@ export async function gatewayRoutes(app: FastifyInstance) {
             sendError("message not found");
             return;
           }
+        } else if (!(await canAccessChannel(userId, message.channel))) {
+          sendError("message not found");
+          return;
         }
 
         if (parsed.type === "REACTION_ADD") {
@@ -380,7 +398,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
             emoji: parsed.emoji,
           };
           if (dmMembers) sendToUsers(dmMembers, outgoing);
-          else broadcastAll(outgoing);
+          else await broadcastToChannel(message.channelId, outgoing);
           // Reaction roles are a server-wide feature tied to real
           // channels/roles — not applicable inside a DM.
           if (!dmMembers) {
@@ -400,7 +418,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
             emoji: parsed.emoji,
           };
           if (dmMembers) sendToUsers(dmMembers, outgoing);
-          else broadcastAll(outgoing);
+          else await broadcastToChannel(message.channelId, outgoing);
           if (!dmMembers) {
             handleReactionRoleToggle(userId, message.id, parsed.emoji, false).catch((err) =>
               app.log.error(err, "reaction-role toggle failed"),
@@ -411,16 +429,26 @@ export async function gatewayRoutes(app: FastifyInstance) {
       }
 
       if (parsed.type === "VOICE_JOIN") {
+        const voiceChannel = await prisma.channel.findUnique({ where: { id: parsed.channelId } });
+        if (!voiceChannel || voiceChannel.type !== "VOICE") {
+          sendError("channel not found");
+          return;
+        }
+        if (!(await canAccessChannel(userId, voiceChannel))) {
+          sendError("channel not found");
+          return;
+        }
+
         const { prevChannelId, changed } = joinVoiceChannel(userId, parsed.channelId);
         if (!changed) return;
         if (prevChannelId) {
-          broadcastAll({
+          await broadcastToChannel(prevChannelId, {
             type: "VOICE_STATE_UPDATE",
             channelId: prevChannelId,
             userIds: voiceChannelMembers(prevChannelId),
           });
         }
-        broadcastAll({
+        await broadcastToChannel(parsed.channelId, {
           type: "VOICE_STATE_UPDATE",
           channelId: parsed.channelId,
           userIds: voiceChannelMembers(parsed.channelId),
@@ -431,7 +459,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
       if (parsed.type === "VOICE_LEAVE") {
         const leftChannelId = leaveVoiceChannel(userId);
         if (leftChannelId) {
-          broadcastAll({
+          await broadcastToChannel(leftChannelId, {
             type: "VOICE_STATE_UPDATE",
             channelId: leftChannelId,
             userIds: voiceChannelMembers(leftChannelId),
@@ -447,11 +475,11 @@ export async function gatewayRoutes(app: FastifyInstance) {
         broadcastAll({ type: "PRESENCE_UPDATE", userId: result.meta.userId, status: "offline" });
         const leftChannelId = leaveVoiceChannel(result.meta.userId);
         if (leftChannelId) {
-          broadcastAll({
+          broadcastToChannel(leftChannelId, {
             type: "VOICE_STATE_UPDATE",
             channelId: leftChannelId,
             userIds: voiceChannelMembers(leftChannelId),
-          });
+          }).catch((err) => app.log.error(err, "failed to broadcast voice state on disconnect"));
         }
       }
     });
