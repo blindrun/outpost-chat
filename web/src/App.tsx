@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Channel,
+  CustomEmoji,
   Gateway,
   Gif,
   InstanceInfo,
@@ -14,6 +15,7 @@ import {
   getCurrentUser,
   getInstanceInfo,
   getThread,
+  listCustomEmoji,
   listMembers,
   listMessages,
   listRoles,
@@ -147,6 +149,7 @@ function App() {
   // voice-channel avatars.
   const [members, setMembers] = useState<Member[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
+  const [customEmoji, setCustomEmoji] = useState<CustomEmoji[]>([]);
   const [typingByChannel, setTypingByChannel] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState("");
   const [newChannelName, setNewChannelName] = useState("");
@@ -381,6 +384,7 @@ function App() {
 
     listMembers(activeInstance.baseUrl, session.token).then(setMembers).catch(() => {});
     listRoles(activeInstance.baseUrl, session.token).then(setRoles).catch(() => {});
+    listCustomEmoji(activeInstance.baseUrl, session.token).then(setCustomEmoji).catch(() => {});
 
     const unsubscribe = gateway.on((event) => {
       if (event.type === "READY") {
@@ -825,6 +829,12 @@ function App() {
   }
   const memberUsernames = new Set(members.map((m) => m.username));
   const usernameByUserId = new Map(members.map((m) => [m.userId, m.username]));
+  const customEmojiByName = new Map(customEmoji.map((e) => [e.name, e.imageUrl]));
+
+  function refreshCustomEmoji() {
+    if (!activeInstance || !session) return;
+    listCustomEmoji(activeInstance.baseUrl, session.token).then(setCustomEmoji).catch(() => {});
+  }
   const currentMember = members.find((m) => m.userId === session.user.id);
   const isOwner = session.user.isOwner;
   const hasPerm = (permission: Permission): boolean =>
@@ -1204,6 +1214,8 @@ function App() {
             document.documentElement.dataset.theme = updated.theme;
           }}
           onChannelUpdated={(channel) => setChannels((prev) => prev.map((c) => (c.id === channel.id ? channel : c)))}
+          customEmoji={customEmoji}
+          onCustomEmojiChanged={refreshCustomEmoji}
         />
       )}
       {searchOpen && (
@@ -1303,6 +1315,7 @@ function App() {
                   canModerate={canManageChannels}
                   memberUsernames={memberUsernames}
                   usernameByUserId={usernameByUserId}
+                  customEmojiByName={customEmojiByName}
                   onEdit={(id, content) => gatewayRef.current?.editMessage(id, content)}
                   onDelete={(id) => gatewayRef.current?.deleteMessage(id)}
                   onReact={(id, emoji) => gatewayRef.current?.addReaction(id, emoji)}
@@ -1353,7 +1366,7 @@ function App() {
               {openPicker && (
                 <div className="picker-popover">
                   {openPicker === "emoji" ? (
-                    <EmojiPicker onSelect={handleEmojiSelect} />
+                    <EmojiPicker onSelect={handleEmojiSelect} customEmoji={customEmoji} />
                   ) : (
                     <GifPicker baseUrl={activeInstance.baseUrl} token={session.token} onSelect={handleGifSelect} />
                   )}

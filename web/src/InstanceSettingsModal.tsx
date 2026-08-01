@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   Channel,
+  CustomEmoji,
   InstanceInfo,
   Member,
   Permission,
@@ -19,6 +20,7 @@ import { InvitePanel } from "./InvitePanel";
 import { WebhooksPanel } from "./WebhooksPanel";
 import { BotSettingsPanel } from "./BotSettingsPanel";
 import { ChannelsPanel } from "./ChannelsPanel";
+import { EmojiSettingsPanel } from "./EmojiSettingsPanel";
 import { ThemePicker } from "./ThemePicker";
 
 const ALL_PERMISSIONS: Permission[] = [
@@ -31,7 +33,7 @@ const ALL_PERMISSIONS: Permission[] = [
   "UPLOAD_CODE",
 ];
 
-type Tab = "general" | "roles" | "members" | "channels" | "invites" | "webhooks" | "bot";
+type Tab = "general" | "roles" | "members" | "channels" | "invites" | "webhooks" | "bot" | "emoji";
 
 function GeneralTab({
   baseUrl,
@@ -405,6 +407,8 @@ export function InstanceSettingsModal({
   onClose,
   onUpdated,
   onChannelUpdated,
+  customEmoji,
+  onCustomEmojiChanged,
 }: {
   baseUrl: string;
   token: string;
@@ -413,6 +417,8 @@ export function InstanceSettingsModal({
   onClose: () => void;
   onUpdated: (info: InstanceInfo) => void;
   onChannelUpdated: (channel: Channel) => void;
+  customEmoji: CustomEmoji[];
+  onCustomEmojiChanged: () => void;
 }) {
   const [tab, setTab] = useState<Tab>("general");
 
@@ -441,6 +447,9 @@ export function InstanceSettingsModal({
         <button className={tab === "bot" ? "active" : ""} onClick={() => setTab("bot")}>
           Bot
         </button>
+        <button className={tab === "emoji" ? "active" : ""} onClick={() => setTab("emoji")}>
+          Emoji
+        </button>
       </div>
 
       {tab === "general" && (
@@ -454,6 +463,9 @@ export function InstanceSettingsModal({
       {tab === "invites" && <InvitePanel baseUrl={baseUrl} token={token} />}
       {tab === "webhooks" && <WebhooksPanel baseUrl={baseUrl} token={token} channels={channels} />}
       {tab === "bot" && <BotSettingsPanel baseUrl={baseUrl} token={token} channels={channels} />}
+      {tab === "emoji" && (
+        <EmojiSettingsPanel baseUrl={baseUrl} token={token} customEmoji={customEmoji} onChanged={onCustomEmojiChanged} />
+      )}
 
       <div className="modal-actions">
         <button className="btn secondary" onClick={onClose}>

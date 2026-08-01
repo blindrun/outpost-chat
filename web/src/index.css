@@ -764,6 +764,7 @@ button, input, select {
 .edited-tag { font-size: 0.65rem; color: var(--text-faint); }
 .pinned-badge { font-size: 0.75rem; }
 .mention { background: rgba(255, 138, 82, 0.18); color: var(--brand); border-radius: 3px; padding: 0 0.2rem; font-weight: 600; }
+.custom-emoji-inline { width: 1.4em; height: 1.4em; object-fit: contain; vertical-align: middle; }
 .inline-code {
   background: var(--bg-floating);
   border: 1px solid var(--border-subtle);
@@ -1087,6 +1088,7 @@ button, input, select {
   line-height: 1;
 }
 .picker-emoji:hover { background: var(--interactive-hover); }
+.picker-emoji-custom img { width: 22px; height: 22px; object-fit: contain; display: block; }
 .picker-empty { color: var(--text-faint); font-size: 0.8rem; grid-column: 1 / -1; text-align: center; padding: 1rem 0; }
 .gif-grid {
   display: flex;
@@ -1237,6 +1239,7 @@ button, input, select {
   font-size: 0.85rem;
 }
 .role-list li.role-row { flex-direction: row; align-items: center; gap: 0.6rem; }
+.custom-emoji-preview { width: 24px; height: 24px; object-fit: contain; flex-shrink: 0; }
 .role-list li.role-row .invite-meta { flex: 1; }
 .role-list li.role-row.channel-permission-row { flex-direction: column; align-items: stretch; gap: 0.3rem; }
 .channel-permission-row .permission-checkboxes { flex-direction: row; flex-wrap: wrap; gap: 0.6rem; }

@@ -122,6 +122,14 @@ export interface Webhook {
   createdAt: string;
 }
 
+export interface CustomEmoji {
+  id: string;
+  name: string;
+  imageUrl: string;
+  createdBy: string;
+  createdAt: string;
+}
+
 export interface Invite {
   id: string;
   code: string;
@@ -548,6 +556,21 @@ export function assignRole(baseUrl: string, token: string, userId: string, roleI
 
 export function unassignRole(baseUrl: string, token: string, userId: string, roleId: string) {
   return request<void>(baseUrl, `/members/${userId}/roles/${roleId}`, token, { method: "DELETE" });
+}
+
+export function listCustomEmoji(baseUrl: string, token: string) {
+  return request<CustomEmoji[]>(baseUrl, "/custom-emoji", token);
+}
+
+export function createCustomEmoji(baseUrl: string, token: string, name: string, imageUrl: string) {
+  return request<CustomEmoji>(baseUrl, "/custom-emoji", token, {
+    method: "POST",
+    body: JSON.stringify({ name, imageUrl }),
+  });
+}
+
+export function deleteCustomEmoji(baseUrl: string, token: string, id: string) {
+  return request<void>(baseUrl, `/custom-emoji/${id}`, token, { method: "DELETE" });
 }
 
 export function listWebhooks(baseUrl: string, token: string, channelId: string) {
