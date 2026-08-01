@@ -47,8 +47,15 @@ const clientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("MESSAGE_DELETE"), messageId: z.string() }),
   z.object({ type: z.literal("MESSAGE_PIN"), messageId: z.string() }),
   z.object({ type: z.literal("MESSAGE_UNPIN"), messageId: z.string() }),
-  z.object({ type: z.literal("REACTION_ADD"), messageId: z.string(), emoji: z.string().min(1).max(8) }),
-  z.object({ type: z.literal("REACTION_REMOVE"), messageId: z.string(), emoji: z.string().min(1).max(8) }),
+  // max 34, not 8 — a unicode reaction is always well under that, but a
+  // custom-emoji reaction is stored as its literal ":name:" shortcode (see
+  // customEmoji.ts's NAME_PATTERN: up to 32 chars + the two colons). Not
+  // validated against the real CustomEmoji table here, same as a unicode
+  // reaction was never validated against a real emoji list — an unknown
+  // shortcode just renders as plain text client-side, same graceful
+  // fallback as an unmatched :name: in a message body.
+  z.object({ type: z.literal("REACTION_ADD"), messageId: z.string(), emoji: z.string().min(1).max(34) }),
+  z.object({ type: z.literal("REACTION_REMOVE"), messageId: z.string(), emoji: z.string().min(1).max(34) }),
   z.object({ type: z.literal("VOICE_JOIN"), channelId: z.string() }),
   z.object({ type: z.literal("VOICE_LEAVE") }),
 ]);

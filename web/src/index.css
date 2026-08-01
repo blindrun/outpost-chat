@@ -864,9 +864,13 @@ button, input, select {
   font-size: 0.8rem;
   cursor: pointer;
   color: var(--text-normal);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 .reaction-pill:hover { border-color: var(--brand); }
 .reaction-pill.mine { border-color: var(--brand); background: rgba(88, 101, 242, 0.22); }
+.reaction-emoji-img { width: 14px; height: 14px; object-fit: contain; }
 
 .thread-badge {
   display: flex;
