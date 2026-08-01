@@ -18,6 +18,7 @@ import { Modal } from "./Modal";
 import { InvitePanel } from "./InvitePanel";
 import { WebhooksPanel } from "./WebhooksPanel";
 import { BotSettingsPanel } from "./BotSettingsPanel";
+import { ChannelsPanel } from "./ChannelsPanel";
 import { ThemePicker } from "./ThemePicker";
 
 const ALL_PERMISSIONS: Permission[] = [
@@ -30,7 +31,7 @@ const ALL_PERMISSIONS: Permission[] = [
   "UPLOAD_CODE",
 ];
 
-type Tab = "general" | "roles" | "members" | "invites" | "webhooks" | "bot";
+type Tab = "general" | "roles" | "members" | "channels" | "invites" | "webhooks" | "bot";
 
 function GeneralTab({
   baseUrl,
@@ -403,6 +404,7 @@ export function InstanceSettingsModal({
   channels,
   onClose,
   onUpdated,
+  onChannelUpdated,
 }: {
   baseUrl: string;
   token: string;
@@ -410,6 +412,7 @@ export function InstanceSettingsModal({
   channels: Channel[];
   onClose: () => void;
   onUpdated: (info: InstanceInfo) => void;
+  onChannelUpdated: (channel: Channel) => void;
 }) {
   const [tab, setTab] = useState<Tab>("general");
 
@@ -425,6 +428,9 @@ export function InstanceSettingsModal({
         </button>
         <button className={tab === "members" ? "active" : ""} onClick={() => setTab("members")}>
           Members
+        </button>
+        <button className={tab === "channels" ? "active" : ""} onClick={() => setTab("channels")}>
+          Channels
         </button>
         <button className={tab === "invites" ? "active" : ""} onClick={() => setTab("invites")}>
           Invites
@@ -442,6 +448,9 @@ export function InstanceSettingsModal({
       )}
       {tab === "roles" && <RolesTab baseUrl={baseUrl} token={token} />}
       {tab === "members" && <MembersTab baseUrl={baseUrl} token={token} />}
+      {tab === "channels" && (
+        <ChannelsPanel baseUrl={baseUrl} token={token} channels={channels} onChannelUpdated={onChannelUpdated} />
+      )}
       {tab === "invites" && <InvitePanel baseUrl={baseUrl} token={token} />}
       {tab === "webhooks" && <WebhooksPanel baseUrl={baseUrl} token={token} channels={channels} />}
       {tab === "bot" && <BotSettingsPanel baseUrl={baseUrl} token={token} channels={channels} />}

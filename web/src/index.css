@@ -1089,8 +1089,8 @@ button, input, select {
 .picker-emoji:hover { background: var(--interactive-hover); }
 .picker-empty { color: var(--text-faint); font-size: 0.8rem; grid-column: 1 / -1; text-align: center; padding: 1rem 0; }
 .gif-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.4rem;
   overflow-y: auto;
   max-height: 260px;
@@ -1104,7 +1104,13 @@ button, input, select {
   overflow: hidden;
   line-height: 0;
 }
-.gif-thumb img { width: 100%; height: 100px; object-fit: cover; display: block; }
+/* previewUrl is Giphy's fixed_height_small asset — already exactly 100px
+   tall with each GIF's own native width, so a bare height (no object-fit,
+   no forced width) renders it at true size/aspect ratio with no upscale
+   blur and no cropping. A flex-wrap row (not a fixed-column grid) is what
+   lets thumbnails of different native widths sit next to each other
+   without being squeezed into equal-width cells. */
+.gif-thumb img { height: 100px; width: auto; display: block; }
 .gif-thumb:hover { outline: 2px solid var(--brand); }
 .picker-attribution { color: var(--text-faint); font-size: 0.65rem; text-align: right; margin: 0; }
 
@@ -1232,6 +1238,8 @@ button, input, select {
 }
 .role-list li.role-row { flex-direction: row; align-items: center; gap: 0.6rem; }
 .role-list li.role-row .invite-meta { flex: 1; }
+.role-list li.role-row.channel-permission-row { flex-direction: column; align-items: stretch; gap: 0.3rem; }
+.channel-permission-row .permission-checkboxes { flex-direction: row; flex-wrap: wrap; gap: 0.6rem; }
 .role-edit-form { background: var(--bg-input); border-radius: 4px; padding: 0.6rem; border-bottom: none; }
 
 .permission-checkboxes { display: flex; flex-direction: column; gap: 0.3rem; }

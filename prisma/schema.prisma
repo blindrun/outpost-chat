@@ -170,6 +170,14 @@ model Channel {
   // so opening a thread doesn't need an extra join back through Message.
   parentChannelId String?
   parentMessageId String? @unique
+  // Empty = visible to everyone (today's behavior, and every channel's
+  // default). Non-empty = hidden from anyone without at least one of these
+  // roles, checked both when the channel list is built (REST/READY) and on
+  // every gateway event scoped to this channel, so a restricted channel's
+  // messages never reach a socket that can't see it either. A THREAD
+  // inherits its parent channel's value at creation time (no separate UI
+  // to restrict a thread on its own).
+  restrictedToRoleIds String[] @default([])
 
   messages         Message[]
   webhooks         Webhook[]

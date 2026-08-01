@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.2.11 — 2026-08-01
+
+- **Channel-level permission overrides.** A channel can now be restricted to specific roles — hidden from the sidebar and inaccessible (REST, live gateway events, and voice join) to anyone without one of those roles. Manage it from Instance Settings → Channels. Previously every channel was visible and joinable by anyone on the instance.
+- **Login with your username**, not just your email — the login form only ever accepted an email address, which was an easy trap since usernames are what you actually see everywhere else in the app.
+- The Direct Messages sidebar section is now collapsible, matching Text/Voice Channels.
+- The green presence dot next to a channel/DM now means **unread**, not online — it only appears when a message has arrived since you last had that channel open, and now shows on text channels too, not just DMs.
+- Hovering a message reaction now shows who reacted with it.
+- Fixed blurry, badly-cropped GIF picker thumbnails — they were being upscaled from a 100px-wide source image and then force-cropped into a fixed-height box, which mangled anything not close to that exact aspect ratio (especially portrait GIFs). Thumbnails now render at their true size with no cropping.
+
 ## v0.2.10 — 2026-08-01
 
 - Fixed Voice Channels appearing at the very bottom of the sidebar with a large empty gap above it — it now sits directly under Text Channels as expected.

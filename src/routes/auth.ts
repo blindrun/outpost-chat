@@ -26,8 +26,11 @@ const registerSchema = z.object({
   turnstileToken: z.string().optional(),
 });
 
+// "login" accepts either an email or a username — the login form only has
+// one identity field, and forcing an email address there was a real
+// avoidable gap (most people's muscle memory types their username first).
 const loginSchema = z.object({
-  email: z.string().email(),
+  login: z.string().min(1),
   password: z.string(),
 });
 
@@ -186,7 +189,7 @@ export async function authRoutes(app: FastifyInstance) {
   app.post("/auth/login", async (req, reply) => {
     const body = loginSchema.parse(req.body);
 
-    const user = await prisma.user.findUnique({ where: { email: body.email } });
+    const user = await prisma.user.findFirst({ where: { OR: [{ email: body.login }, { username: body.login }] } });
     if (!user) {
       return reply.status(401).send({ error: "invalid credentials" });
     }

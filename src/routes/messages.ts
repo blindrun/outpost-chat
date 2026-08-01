@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../plugins/db.js";
+import { canAccessChannel, filterVisibleChannels } from "../util/permissions.js";
 
 const historyQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
@@ -113,25 +114,39 @@ export async function messageRoutes(app: FastifyInstance) {
   // Simple case-insensitive substring search across this instance's whole
   // message history, not just whatever's currently loaded in the client —
   // every TEXT/VOICE/THREAD channel is readable by any authenticated user
-  // here (no private channels), so no extra access check is needed beyond
-  // authentication. DM channels are the one exception: excluded from the
-  // instance-wide search entirely, and only searchable directly (via
-  // channelId) by their two participants.
+  // *without a restriction*, so a channelId-scoped search checks that
+  // channel's own access, and the instance-wide case narrows the query to
+  // just the channels the searcher can currently see. DM channels are the
+  // one exception: excluded from the instance-wide search entirely, and
+  // only searchable directly (via channelId) by their two participants.
   app.get("/messages/search", async (req, reply) => {
     const { sub: userId } = req.user as { sub: string };
     const query = searchQuerySchema.parse(req.query);
     if (query.channelId) {
       const channel = await prisma.channel.findUnique({ where: { id: query.channelId } });
       if (!channel) return reply.status(404).send({ error: "channel not found" });
-      if (channel.type === "DM" && !(await assertDmAccess(channel.id, userId))) {
-        return reply.status(403).send({ error: "not a participant in this channel" });
+      if (channel.type === "DM") {
+        if (!(await assertDmAccess(channel.id, userId))) {
+          return reply.status(403).send({ error: "not a participant in this channel" });
+        }
+      } else if (!(await canAccessChannel(userId, channel))) {
+        return reply.status(403).send({ error: "you don't have access to this channel" });
       }
+    }
+
+    let visibleChannelIds: string[] | undefined;
+    if (!query.channelId) {
+      const nonDmChannels = await prisma.channel.findMany({
+        where: { type: { not: "DM" } },
+        select: { id: true, restrictedToRoleIds: true },
+      });
+      visibleChannelIds = (await filterVisibleChannels(userId, nonDmChannels)).map((c) => c.id);
     }
 
     const messages = await prisma.message.findMany({
       where: {
         content: { contains: query.q, mode: "insensitive" },
-        ...(query.channelId ? { channelId: query.channelId } : { channel: { type: { not: "DM" } } }),
+        ...(query.channelId ? { channelId: query.channelId } : { channelId: { in: visibleChannelIds } }),
       },
       orderBy: { createdAt: "desc" },
       take: query.limit,
@@ -150,8 +165,12 @@ export async function messageRoutes(app: FastifyInstance) {
 
     const channel = await prisma.channel.findUnique({ where: { id: channelId } });
     if (!channel) return reply.status(404).send({ error: "channel not found" });
-    if (channel.type === "DM" && !(await assertDmAccess(channelId, userId))) {
-      return reply.status(403).send({ error: "not a participant in this channel" });
+    if (channel.type === "DM") {
+      if (!(await assertDmAccess(channelId, userId))) {
+        return reply.status(403).send({ error: "not a participant in this channel" });
+      }
+    } else if (!(await canAccessChannel(userId, channel))) {
+      return reply.status(403).send({ error: "you don't have access to this channel" });
     }
 
     let beforeDate: Date | undefined;
@@ -184,17 +203,21 @@ export async function messageRoutes(app: FastifyInstance) {
       .reverse();
   });
 
-  // Pinned messages for a channel — any authenticated user can view them
-  // (same "no private channels" reasoning as search) except DMs, gated the
-  // same way as history above; pinning/unpinning itself happens over the
+  // Pinned messages for a channel — gated the same way as history above
+  // (DM participants, or channel visibility for everything else); pinning/
+  // unpinning itself happens over the
   // gateway, not here.
   app.get("/channels/:channelId/pins", async (req, reply) => {
     const { sub: userId } = req.user as { sub: string };
     const { channelId } = req.params as { channelId: string };
     const channel = await prisma.channel.findUnique({ where: { id: channelId } });
     if (!channel) return reply.status(404).send({ error: "channel not found" });
-    if (channel.type === "DM" && !(await assertDmAccess(channelId, userId))) {
-      return reply.status(403).send({ error: "not a participant in this channel" });
+    if (channel.type === "DM") {
+      if (!(await assertDmAccess(channelId, userId))) {
+        return reply.status(403).send({ error: "not a participant in this channel" });
+      }
+    } else if (!(await canAccessChannel(userId, channel))) {
+      return reply.status(403).send({ error: "you don't have access to this channel" });
     }
 
     const messages = await prisma.message.findMany({

@@ -171,6 +171,9 @@ function App() {
   const [voiceChannelsCollapsed, setVoiceChannelsCollapsed] = useState(
     () => localStorage.getItem("voiceChannelsCollapsed") === "true",
   );
+  const [dmChannelsCollapsed, setDmChannelsCollapsed] = useState(
+    () => localStorage.getItem("dmChannelsCollapsed") === "true",
+  );
 
   function toggleTextChannelsCollapsed() {
     setTextChannelsCollapsed((prev) => {
@@ -187,6 +190,32 @@ function App() {
       return next;
     });
   }
+
+  function toggleDmChannelsCollapsed() {
+    setDmChannelsCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("dmChannelsCollapsed", String(next));
+      return next;
+    });
+  }
+
+  // Session-only "has a message arrived here since I last had it open" set —
+  // not persisted (a fresh page load starts clean), and not based on a
+  // server-tracked read cursor at all; it just flips on for a channel/DM the
+  // moment a MESSAGE_CREATE lands anywhere but the currently open one, and
+  // clears the moment that channel/DM is selected. Deliberately reuses the
+  // same green presence-dot styling, just re-keyed off "unread" instead of
+  // "online" (see the sidebar rows below).
+  const [unreadChannelIds, setUnreadChannelIds] = useState<Set<string>>(new Set());
+  // The gateway's connect effect only re-runs on [session, activeInstance,
+  // gatewayGeneration] (see below) — it does NOT re-run when
+  // selectedChannelId changes, so its MESSAGE_CREATE handler would otherwise
+  // close over a stale, connect-time value of selectedChannelId forever.
+  // Mirrored into a ref so the handler always reads the current selection.
+  const selectedChannelIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    selectedChannelIdRef.current = selectedChannelId;
+  }, [selectedChannelId]);
   useEffect(() => {
     localStorage.setItem("memberListOpen", String(memberListOpen));
   }, [memberListOpen]);
@@ -365,6 +394,14 @@ function App() {
           ...prev,
           [event.message.channelId]: [...(prev[event.message.channelId] ?? []), event.message],
         }));
+        if (
+          event.message.channelId !== selectedChannelIdRef.current &&
+          event.message.authorId !== session.user.id
+        ) {
+          setUnreadChannelIds((prev) =>
+            prev.has(event.message.channelId) ? prev : new Set(prev).add(event.message.channelId),
+          );
+        }
       } else if (event.type === "MESSAGE_UPDATE") {
         setMessages((prev) => ({
           ...prev,
@@ -495,6 +532,21 @@ function App() {
       .then((history) => setMessages((prev) => ({ ...prev, [selectedChannelId]: history })))
       .catch(console.error);
   }, [session, activeInstance?.baseUrl, selectedChannelId]);
+
+  // Opening a channel/DM is what "reads" it — clears its unread flag
+  // regardless of which of the several places in this file set
+  // selectedChannelId (a sidebar click, the default-channel landing effect,
+  // a mention/reply jump, ...) rather than needing every call site to
+  // remember to do this itself.
+  useEffect(() => {
+    if (!selectedChannelId) return;
+    setUnreadChannelIds((prev) => {
+      if (!prev.has(selectedChannelId)) return prev;
+      const next = new Set(prev);
+      next.delete(selectedChannelId);
+      return next;
+    });
+  }, [selectedChannelId]);
 
   function handleConnected(instance: Instance, newSession: Session) {
     setInstances((prev) => {
@@ -772,6 +824,7 @@ function App() {
     stickToBottomRef.current = distanceFromBottom < 100;
   }
   const memberUsernames = new Set(members.map((m) => m.username));
+  const usernameByUserId = new Map(members.map((m) => [m.userId, m.username]));
   const currentMember = members.find((m) => m.userId === session.user.id);
   const isOwner = session.user.isOwner;
   const hasPerm = (permission: Permission): boolean =>
@@ -878,26 +931,31 @@ function App() {
           {dmChannels.length > 0 && (
             <div className="channel-section dm-section">
               <div className="channel-category-row">
-                <span className="channel-category">Direct Messages</span>
+                <button type="button" className="channel-category-toggle" onClick={toggleDmChannelsCollapsed}>
+                  <span className={`category-chevron ${dmChannelsCollapsed ? "collapsed" : ""}`}>▾</span>
+                  <span className="channel-category">Direct Messages</span>
+                </button>
               </div>
-              <div className="channel-section-list">
-                {dmChannels.map((dm) => (
-                  <div className="channel-row" key={dm.id}>
-                    <button
-                      className={`channel-btn ${dm.id === selectedChannelId ? "active" : ""}`}
-                      onClick={() => setSelectedChannelId(dm.id)}
-                    >
-                      {dm.otherAvatarUrl ? (
-                        <img className="avatar dm-avatar" src={dm.otherAvatarUrl} alt="" />
-                      ) : (
-                        <span className="avatar avatar-placeholder dm-avatar">{dm.otherUsername[0]?.toUpperCase()}</span>
-                      )}
-                      <span>{dm.otherUsername}</span>
-                      <span className={`presence-dot ${onlineUserIds.has(dm.otherUserId) ? "online" : ""}`} />
-                    </button>
-                  </div>
-                ))}
-              </div>
+              {!dmChannelsCollapsed && (
+                <div className="channel-section-list">
+                  {dmChannels.map((dm) => (
+                    <div className="channel-row" key={dm.id}>
+                      <button
+                        className={`channel-btn ${dm.id === selectedChannelId ? "active" : ""}`}
+                        onClick={() => setSelectedChannelId(dm.id)}
+                      >
+                        {dm.otherAvatarUrl ? (
+                          <img className="avatar dm-avatar" src={dm.otherAvatarUrl} alt="" />
+                        ) : (
+                          <span className="avatar avatar-placeholder dm-avatar">{dm.otherUsername[0]?.toUpperCase()}</span>
+                        )}
+                        <span>{dm.otherUsername}</span>
+                        {unreadChannelIds.has(dm.id) && <span className="presence-dot online" title="Unread messages" />}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -951,6 +1009,7 @@ function App() {
                   >
                     <span className="channel-icon">#</span>
                     <span>{channel.name}</span>
+                    {unreadChannelIds.has(channel.id) && <span className="presence-dot online" title="Unread messages" />}
                   </button>
                 </div>
               ))}
@@ -1144,6 +1203,7 @@ function App() {
             setInstanceInfo(updated);
             document.documentElement.dataset.theme = updated.theme;
           }}
+          onChannelUpdated={(channel) => setChannels((prev) => prev.map((c) => (c.id === channel.id ? channel : c)))}
         />
       )}
       {searchOpen && (
@@ -1242,6 +1302,7 @@ function App() {
                   currentUserId={session.user.id}
                   canModerate={canManageChannels}
                   memberUsernames={memberUsernames}
+                  usernameByUserId={usernameByUserId}
                   onEdit={(id, content) => gatewayRef.current?.editMessage(id, content)}
                   onDelete={(id) => gatewayRef.current?.deleteMessage(id)}
                   onReact={(id, emoji) => gatewayRef.current?.addReaction(id, emoji)}

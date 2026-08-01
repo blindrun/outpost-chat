@@ -9,7 +9,14 @@ const searchSchema = z.object({
 
 interface GiphyImage {
   images: {
-    fixed_width_small: { url: string };
+    // fixed_height_small is exactly 100px tall (width varies per GIF's own
+    // aspect ratio) — matched to the picker grid's own 100px-tall thumbnail
+    // row (see .gif-thumb img in index.css). The previous fixed_width_small
+    // asset was the opposite: exactly 100px *wide*, height varying 50-190px+
+    // across real GIFs, which forced the browser to both upscale (blurry,
+    // since the fixed height box is usually wider than the 100px source)
+    // and heavily crop portrait-oriented GIFs down to a thin sliver.
+    fixed_height_small: { url: string };
     original: { url: string };
   };
   id: string;
@@ -20,7 +27,7 @@ function simplify(gifs: GiphyImage[]) {
   return gifs.map((gif) => ({
     id: gif.id,
     title: gif.title,
-    previewUrl: gif.images.fixed_width_small.url,
+    previewUrl: gif.images.fixed_height_small.url,
     url: gif.images.original.url,
   }));
 }

@@ -107,6 +107,7 @@ export function MessageItem({
   currentUserId,
   canModerate,
   memberUsernames,
+  usernameByUserId,
   onEdit,
   onDelete,
   onReact,
@@ -126,6 +127,10 @@ export function MessageItem({
   currentUserId: string;
   canModerate: boolean;
   memberUsernames: Set<string>;
+  // userId -> username, for the "who reacted" tooltip on each reaction
+  // pill — reactions only carry userId (see prisma schema), same reasoning
+  // as authorUsername needing a separate hydration step for messages.
+  usernameByUserId: Map<string, string>;
   onEdit: (messageId: string, content: string) => void;
   onDelete: (messageId: string) => void;
   onReact: (messageId: string, emoji: string) => void;
@@ -146,11 +151,12 @@ export function MessageItem({
   const isOwn = message.authorId === currentUserId;
   const authorName = message.authorUsername ?? message.authorId;
 
-  const reactionCounts = new Map<string, { count: number; reactedByMe: boolean }>();
+  const reactionCounts = new Map<string, { count: number; reactedByMe: boolean; reactorNames: string[] }>();
   for (const r of message.reactions ?? []) {
-    const entry = reactionCounts.get(r.emoji) ?? { count: 0, reactedByMe: false };
+    const entry = reactionCounts.get(r.emoji) ?? { count: 0, reactedByMe: false, reactorNames: [] };
     entry.count += 1;
     if (r.userId === currentUserId) entry.reactedByMe = true;
+    entry.reactorNames.push(r.userId === currentUserId ? "You" : usernameByUserId.get(r.userId) ?? "unknown user");
     reactionCounts.set(r.emoji, entry);
   }
 
@@ -285,11 +291,12 @@ export function MessageItem({
 
         {reactionCounts.size > 0 && (
           <div className="reactions">
-            {[...reactionCounts.entries()].map(([emoji, { count, reactedByMe }]) => (
+            {[...reactionCounts.entries()].map(([emoji, { count, reactedByMe, reactorNames }]) => (
               <button
                 key={emoji}
                 className={`reaction-pill ${reactedByMe ? "mine" : ""}`}
                 onClick={() => toggleReaction(emoji)}
+                title={reactorNames.join(", ")}
               >
                 {emoji} {count}
               </button>

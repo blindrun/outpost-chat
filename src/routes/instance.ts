@@ -6,7 +6,7 @@ import {
   hasPermission,
 } from "../util/permissions.js";
 import { createUniqueInviteCode, isInviteValid } from "../util/invites.js";
-import { broadcastAll } from "../gateway/rooms.js";
+import { broadcastChannelsUpdate } from "../gateway/channelBroadcast.js";
 
 const createInviteSchema = z.object({
   maxUses: z.number().int().min(1).max(1000).optional(),
@@ -25,12 +25,26 @@ const updateInstanceSettingsSchema = z.object({
 const createChannelSchema = z.object({
   name: z.string().min(2).max(64),
   type: z.enum(["TEXT", "VOICE"]).default("TEXT"),
+  restrictedToRoleIds: z.array(z.string()).default([]),
 });
 
 const reorderChannelsSchema = z.object({
   type: z.enum(["TEXT", "VOICE"]),
   channelIds: z.array(z.string()).min(1),
 });
+
+const updateChannelPermissionsSchema = z.object({
+  restrictedToRoleIds: z.array(z.string()),
+});
+
+// Shared by create and the permissions-update endpoint — rejects a role id
+// that doesn't exist rather than silently storing a dangling reference that
+// would then hide the channel from literally everyone.
+async function assertRoleIdsExist(roleIds: string[]) {
+  if (roleIds.length === 0) return true;
+  const found = await prisma.role.count({ where: { id: { in: roleIds } } });
+  return found === roleIds.length;
+}
 
 const PERMISSION_KEYS = Object.values(PERMISSIONS) as [string, ...string[]];
 
@@ -223,11 +237,49 @@ export async function instanceRoutes(app: FastifyInstance) {
     if (!(await hasPermission(userId, PERMISSIONS.MANAGE_CHANNELS))) {
       return reply.status(403).send({ error: "missing MANAGE_CHANNELS permission" });
     }
+    if (!(await assertRoleIdsExist(body.restrictedToRoleIds))) {
+      return reply.status(400).send({ error: "restrictedToRoleIds must all reference existing roles" });
+    }
 
     const channel = await prisma.channel.create({
-      data: { name: body.name, type: body.type },
+      data: { name: body.name, type: body.type, restrictedToRoleIds: body.restrictedToRoleIds },
     });
+    // Previously nothing broadcast a newly created channel at all — other
+    // connected clients only picked it up on their next reorder/refresh.
+    // Needed now regardless, since a channel created already-restricted has
+    // to reach only the users who can see it, not everyone.
+    broadcastChannelsUpdate().catch((err) => app.log.error(err, "failed to broadcast channel creation"));
     return reply.status(201).send(channel);
+  });
+
+  // Updates which roles a channel is restricted to — MANAGE_CHANNELS gated,
+  // same as creating one. An empty array reopens the channel to everyone
+  // (today's default). Threads already created under this channel keep
+  // whatever restriction they inherited at creation time; this does not
+  // retroactively re-scope them.
+  app.patch("/channels/:channelId/permissions", { onRequest: [app.authenticate] }, async (req, reply) => {
+    const { channelId } = req.params as { channelId: string };
+    const { sub: userId } = req.user as { sub: string };
+    const body = updateChannelPermissionsSchema.parse(req.body);
+
+    if (!(await hasPermission(userId, PERMISSIONS.MANAGE_CHANNELS))) {
+      return reply.status(403).send({ error: "missing MANAGE_CHANNELS permission" });
+    }
+
+    const channel = await prisma.channel.findUnique({ where: { id: channelId } });
+    if (!channel || channel.type === "DM" || channel.type === "THREAD") {
+      return reply.status(404).send({ error: "channel not found" });
+    }
+    if (!(await assertRoleIdsExist(body.restrictedToRoleIds))) {
+      return reply.status(400).send({ error: "restrictedToRoleIds must all reference existing roles" });
+    }
+
+    const updated = await prisma.channel.update({
+      where: { id: channelId },
+      data: { restrictedToRoleIds: body.restrictedToRoleIds },
+    });
+    await broadcastChannelsUpdate();
+    return updated;
   });
 
   // Reorders one channel-type list (text or voice) at a time, matching how
@@ -253,8 +305,7 @@ export async function instanceRoutes(app: FastifyInstance) {
       body.channelIds.map((id, position) => prisma.channel.update({ where: { id }, data: { position } })),
     );
 
-    const channels = await prisma.channel.findMany({ where: { type: { not: "THREAD" } }, orderBy: { position: "asc" } });
-    broadcastAll({ type: "CHANNELS_UPDATE", channels });
+    await broadcastChannelsUpdate();
     return reply.status(204).send();
   });
 

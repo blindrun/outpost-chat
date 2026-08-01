@@ -47,6 +47,10 @@ export interface Channel {
   // `dmChannels` field / a DM_CHANNEL_CREATE event instead.
   type: "TEXT" | "VOICE" | "THREAD" | "DM";
   position: number;
+  // Empty (or absent, for a THREAD/DM which never carry this field in
+  // practice) = visible to everyone. Non-empty = hidden from anyone without
+  // at least one of these roles — see the server's Channel.restrictedToRoleIds.
+  restrictedToRoleIds?: string[];
 }
 
 export interface ThreadInfo {
@@ -286,10 +290,10 @@ export function register(
   });
 }
 
-export function login(baseUrl: string, email: string, password: string) {
+export function login(baseUrl: string, login: string, password: string) {
   return request<{ token: string; user: User } | MfaChallenge>(baseUrl, "/auth/login", null, {
     method: "POST",
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ login, password }),
   });
 }
 
@@ -393,6 +397,13 @@ export function createChannel(baseUrl: string, token: string, name: string, type
   return request<Channel>(baseUrl, "/channels", token, {
     method: "POST",
     body: JSON.stringify({ name, type }),
+  });
+}
+
+export function updateChannelPermissions(baseUrl: string, token: string, channelId: string, restrictedToRoleIds: string[]) {
+  return request<Channel>(baseUrl, `/channels/${channelId}/permissions`, token, {
+    method: "PATCH",
+    body: JSON.stringify({ restrictedToRoleIds }),
   });
 }
 
