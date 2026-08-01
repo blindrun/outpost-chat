@@ -975,19 +975,25 @@ button, input, select {
 
 .send-form {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 0.5rem;
   background: var(--bg-input);
   border-radius: 8px;
   padding: 0.3rem 0.6rem;
 }
-.send-form input {
+.send-form textarea {
   flex: 1;
   background: none;
   border: none;
   outline: none;
+  resize: none;
   padding: 0.5rem 0.2rem;
   color: var(--text-normal);
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1.4;
+  max-height: 220px;
+  overflow-y: auto;
 }
 .attach-label {
   cursor: pointer;

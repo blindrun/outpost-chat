@@ -190,7 +190,16 @@ function App() {
   useEffect(() => {
     localStorage.setItem("memberListOpen", String(memberListOpen));
   }, [memberListOpen]);
-  const draftInputRef = useRef<HTMLInputElement | null>(null);
+  const draftInputRef = useRef<HTMLTextAreaElement | null>(null);
+  // Grows the composer with its content — reset to "auto" first so it can
+  // shrink back down too (e.g. after sending), not just grow. CSS max-height
+  // + overflow-y:auto caps how tall this can get regardless of scrollHeight.
+  useEffect(() => {
+    const el = draftInputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [draft]);
   const [userSettingsOpen, setUserSettingsOpen] = useState(false);
   const [viewingProfileUserId, setViewingProfileUserId] = useState<string | null>(null);
   const [instanceSettingsOpen, setInstanceSettingsOpen] = useState(false);
@@ -676,7 +685,7 @@ function App() {
     if (selectedChannelId) gatewayRef.current?.sendTyping(selectedChannelId);
   }
 
-  function handleDraftChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleDraftChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const value = e.target.value;
     setDraft(value);
     handleTyping();
@@ -1314,12 +1323,21 @@ function App() {
                     disabled={uploadingAttachment}
                   />
                 </label>
-                <input
+                <textarea
                   ref={draftInputRef}
+                  rows={1}
                   value={draft}
                   onChange={handleDraftChange}
                   onKeyDown={(e) => {
                     if (e.key === "Escape" && mentionQuery !== null) setMentionQuery(null);
+                    // Enter sends, Shift+Enter inserts a real newline —
+                    // needed for multi-line messages/code blocks, which a
+                    // plain single-line <input> could never support (Enter
+                    // always submitted, and pasted newlines got stripped).
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      e.currentTarget.form?.requestSubmit();
+                    }
                   }}
                   placeholder={selectedChannel.type === "DM" ? `Message @${selectedChannel.name}` : `Message #${selectedChannel.name}`}
                 />
