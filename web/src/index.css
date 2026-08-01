@@ -445,10 +445,12 @@ button, input, select {
 .sidebar-scroll { flex: 1; min-height: 0; padding: 0.5rem; display: flex; flex-direction: column; overflow: hidden; }
 /* Each category (DMs / Text / Voice) is its own flex column so its list can
    scroll independently instead of one long page-level scroll — Text
-   Channels gets the lion's share of the space (flex: 1) since it's usually
-   the longest list; DMs/Voice cap out and scroll on their own past that. */
+   Channels sizes to its own content (not flex-grown) so Voice Channels
+   sits directly beneath it rather than getting pushed to the bottom of
+   the sidebar — it only shrinks, with its list scrolling internally,
+   once there genuinely isn't room for everything. */
 .channel-section { display: flex; flex-direction: column; min-height: 0; flex-shrink: 0; }
-.text-channel-section { flex: 1 1 auto; min-height: 80px; }
+.text-channel-section { flex: 0 1 auto; min-height: 80px; }
 .channel-section-list { overflow-y: auto; min-height: 0; }
 .text-channel-section .channel-section-list { flex: 1; }
 .dm-section .channel-section-list,
