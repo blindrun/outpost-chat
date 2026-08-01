@@ -1,5 +1,7 @@
 # Outpost
 
+**[outpost-chat.com](https://outpost-chat.com)** — project site, server directory, downloads, changelog.
+
 A self-hosted Discord alternative. Each Outpost deployment is one
 self-hosted community — accounts, text/voice channels, roles, invites, file
 uploads — reachable from a web browser or the native desktop app.
