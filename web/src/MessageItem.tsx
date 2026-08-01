@@ -1,7 +1,13 @@
 import { useState } from "react";
-import { Message } from "./api";
+import { CustomEmoji, Message } from "./api";
 import { EmojiPicker } from "./EmojiPicker";
 import { attachmentFilename, isImageAttachment } from "./uploadCategories";
+
+// Matches a reaction value that's a custom-emoji shortcode rather than a
+// raw unicode emoji — same shape as the one MessageItem's own renderInline
+// looks for in message text, kept in sync manually since one's a plain
+// string match and the other's baked into a shared regex constant.
+const CUSTOM_EMOJI_REACTION_PATTERN = /^:([a-zA-Z0-9_]+):$/;
 
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🎉"];
 // Group 3 (custom emoji shortcode) must match the NAME_PATTERN the backend
@@ -130,6 +136,7 @@ export function MessageItem({
   memberUsernames,
   usernameByUserId,
   customEmojiByName,
+  customEmoji,
   onEdit,
   onDelete,
   onReact,
@@ -153,8 +160,12 @@ export function MessageItem({
   // pill — reactions only carry userId (see prisma schema), same reasoning
   // as authorUsername needing a separate hydration step for messages.
   usernameByUserId: Map<string, string>;
-  // name (no colons) -> image URL, for rendering :name: shortcodes inline.
+  // name (no colons) -> image URL, for rendering :name: shortcodes inline
+  // (message text) and as a reaction (reaction pills).
   customEmojiByName: Map<string, string>;
+  // Same data as customEmojiByName, un-derived — the reaction picker's
+  // EmojiPicker needs the raw list (id/name/imageUrl per tile), not a map.
+  customEmoji: CustomEmoji[];
   onEdit: (messageId: string, content: string) => void;
   onDelete: (messageId: string) => void;
   onReact: (messageId: string, emoji: string) => void;
@@ -190,7 +201,12 @@ export function MessageItem({
     setEditing(false);
   }
 
-  function toggleReaction(emoji: string) {
+  // Trimmed because EmojiPicker's custom-emoji tiles pass ":name: " (with a
+  // trailing space, meant for continuing to type in the composer) — the
+  // reaction value itself has to be the exact ":name:" with nothing extra,
+  // not "insert-into-text" formatting.
+  function toggleReaction(rawEmoji: string) {
+    const emoji = rawEmoji.trim();
     const mine = reactionCounts.get(emoji)?.reactedByMe;
     if (mine) onUnreact(message.id, emoji);
     else onReact(message.id, emoji);
@@ -309,22 +325,26 @@ export function MessageItem({
 
         {fullPickerOpen && (
           <div className="picker-popover reaction-full-picker">
-            <EmojiPicker onSelect={toggleReaction} />
+            <EmojiPicker onSelect={toggleReaction} customEmoji={customEmoji} />
           </div>
         )}
 
         {reactionCounts.size > 0 && (
           <div className="reactions">
-            {[...reactionCounts.entries()].map(([emoji, { count, reactedByMe, reactorNames }]) => (
-              <button
-                key={emoji}
-                className={`reaction-pill ${reactedByMe ? "mine" : ""}`}
-                onClick={() => toggleReaction(emoji)}
-                title={reactorNames.join(", ")}
-              >
-                {emoji} {count}
-              </button>
-            ))}
+            {[...reactionCounts.entries()].map(([emoji, { count, reactedByMe, reactorNames }]) => {
+              const customName = emoji.match(CUSTOM_EMOJI_REACTION_PATTERN)?.[1];
+              const customUrl = customName ? customEmojiByName.get(customName) : undefined;
+              return (
+                <button
+                  key={emoji}
+                  className={`reaction-pill ${reactedByMe ? "mine" : ""}`}
+                  onClick={() => toggleReaction(emoji)}
+                  title={reactorNames.join(", ")}
+                >
+                  {customUrl ? <img src={customUrl} alt={emoji} className="reaction-emoji-img" /> : emoji} {count}
+                </button>
+              );
+            })}
           </div>
         )}
 

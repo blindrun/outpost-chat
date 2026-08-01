@@ -1316,6 +1316,7 @@ function App() {
                   memberUsernames={memberUsernames}
                   usernameByUserId={usernameByUserId}
                   customEmojiByName={customEmojiByName}
+                  customEmoji={customEmoji}
                   onEdit={(id, content) => gatewayRef.current?.editMessage(id, content)}
                   onDelete={(id) => gatewayRef.current?.deleteMessage(id)}
                   onReact={(id, emoji) => gatewayRef.current?.addReaction(id, emoji)}
