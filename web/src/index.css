@@ -1462,7 +1462,16 @@ button, input, select {
 
   /* Hidden on desktop (App.tsx/MemberList.tsx render these unconditionally);
      shown here as the only way to switch panes on mobile. */
-  .mobile-only-btn { display: inline-flex !important; }
+  .mobile-only-btn {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    /* Plain Unicode arrows/glyphs (← especially) render very thin at the
+       base 1rem icon size with no font-weight applied — barely visible
+       against the dark background. */
+    font-size: 1.4rem;
+    font-weight: 700;
+  }
 
   /* Touch targets sized for mouse precision on desktop (~20-28px) are too
      small to reliably tap — bump via padding rather than shrinking the
@@ -1483,4 +1492,20 @@ button, input, select {
   /* Desktop packs this header's buttons to the right (flex-end); on mobile
      the new back button needs to sit on the left, search on the right. */
   .member-sidebar-header { justify-content: space-between; }
+
+  /* These default to 70% opacity, only reaching 100% on :hover — there's
+     no hover on a touchscreen, so the hamburger/back/pin/search icons sat
+     permanently dimmed with no way to see them at full contrast. */
+  .chat-header-icon-btn { opacity: 1; }
+
+  /* Fixed max-width (320-360px) doesn't shrink below that on a narrower
+     container — it only caps growth, so these overflowed a phone-width
+     chat pane instead of scaling down. width:100% makes them responsive
+     to the container while the existing max-width/max-height still cap
+     them on wider (tablet-width-and-up mobile) screens. */
+  .message-attachment,
+  .message-video {
+    width: 100%;
+    height: auto;
+  }
 }
