@@ -1,11 +1,14 @@
 name: Android client
 
-# Same tag-only trigger as desktop.yml -- a real signed release build
-# shouldn't happen on every branch push, only when a version is actually
-# being cut.
+# Same tag trigger as desktop.yml -- a real signed release build shouldn't
+# happen on every branch push, only when a version is actually being cut.
+# Also manually triggerable (workflow_dispatch) so this new workflow can be
+# test-run in isolation without cutting a real tagged release, which would
+# also fire desktop.yml and docker.yml.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -70,10 +73,22 @@ jobs:
         working-directory: mobile/android
         run: chmod +x gradlew && ./gradlew bundleRelease
 
+      # A manual (workflow_dispatch) run has no version tag to attach a
+      # release to -- just upload the AAB as a plain workflow artifact so it
+      # can be downloaded and sideloaded for a real test build.
+      - name: Upload build as a workflow artifact (manual runs)
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: outpost-android-test-build
+          path: mobile/android/app/build/outputs/bundle/release/app-release.aab
+
       - name: Extract this version's changelog section
+        if: startsWith(github.ref, 'refs/tags/')
         run: bash .github/scripts/extract-changelog.sh "${{ github.ref_name }}" > release-notes.md
 
       - name: Upload release artifact
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           body_path: release-notes.md
@@ -86,7 +101,7 @@ jobs:
       # ANDROID_PLAY_SERVICE_ACCOUNT_JSON. Safe to sit merged and unused
       # until then, same as the keystore step above.
       - name: Publish to Play Console
-        if: ${{ secrets.ANDROID_PLAY_SERVICE_ACCOUNT_JSON != '' }}
+        if: ${{ startsWith(github.ref, 'refs/tags/') && secrets.ANDROID_PLAY_SERVICE_ACCOUNT_JSON != '' }}
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.ANDROID_PLAY_SERVICE_ACCOUNT_JSON }}
