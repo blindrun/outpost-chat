@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Outpost</string>
+    <string name="title_activity_main">Outpost</string>
+    <string name="package_name">com.outpostchat.mobile</string>
+    <string name="custom_url_scheme">com.outpostchat.mobile</string>
+</resources>

@@ -6,3 +6,10 @@ deploy/.env
 deploy/livekit.yaml
 electron/web-dist/
 electron/release/
+mobile/web-dist/
+mobile/android/app/release/
+# Real signing keystore + its passwords -- never committed, CI writes
+# these from repo secrets at build time (see .github/workflows/android.yml).
+mobile/android/keystore.properties
+mobile/android/*.jks
+mobile/android/*.keystore
