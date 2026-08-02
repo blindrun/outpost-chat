@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.15 — 2026-08-02
+
+- Fixed the v0.2.14 Docker image crashing on startup (`webidl.util.markAsUncloneable is not a function`) — the link-preview feature's new `undici` dependency resolved to a version too new for the image's Node 20 runtime. Caught within minutes via the live instance's health check and rolled back immediately; nobody's data was affected. Pinned to a Node-20-compatible version and verified by actually booting the real production image locally before shipping this release, not just typechecking.
+
 ## v0.2.14 — 2026-08-02
 
 - **Rich link previews.** Paste a URL in a message and it now unfurls into a preview card below the message — title, description, and image, pulled from the page's own metadata, same as Discord/Slack. URLs are also clickable now (they weren't before). Only the first link in a message gets a preview card; a link inside a code block or inline code stays plain text and doesn't fetch anything.
