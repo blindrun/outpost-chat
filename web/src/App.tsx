@@ -169,6 +169,22 @@ function App() {
   const [openPicker, setOpenPicker] = useState<"emoji" | "gif" | null>(null);
   const [voiceDetailsOpen, setVoiceDetailsOpen] = useState(false);
   const [memberListOpen, setMemberListOpen] = useState(() => localStorage.getItem("memberListOpen") === "true");
+  // Which full-screen pane is showing on a mobile-width viewport (desktop
+  // shows all of these as grid columns at once, so this is a no-op there —
+  // see the mobile media query in index.css). Not persisted: always start
+  // on the nav pane, since there's no selected channel yet on first load
+  // (one auto-selects shortly after channels fetch, at which point
+  // selectChannel flips this to "chat").
+  const [mobileActivePane, setMobileActivePane] = useState<"nav" | "chat" | "members">("nav");
+  const longPressTimerRef = useRef<number | null>(null);
+  // Shared by every place a channel/DM gets selected (sidebar click, DM
+  // click, search-result jump) so picking one on mobile always returns to
+  // the chat pane — setting mobileActivePane is a harmless no-op on
+  // desktop widths, so no viewport check is needed here.
+  function selectChannel(channelId: string) {
+    setSelectedChannelId(channelId);
+    setMobileActivePane("chat");
+  }
   const [textChannelsCollapsed, setTextChannelsCollapsed] = useState(
     () => localStorage.getItem("textChannelsCollapsed") === "true",
   );
@@ -731,7 +747,7 @@ function App() {
     try {
       const dm = await openDM(activeInstance.baseUrl, session.token, userId);
       setChannels((prev) => (prev.some((c) => c.id === dm.id) ? prev : [...prev, dm]));
-      setSelectedChannelId(dm.id);
+      selectChannel(dm.id);
       setFriendsOpen(false);
     } catch (err) {
       setChannelError((err as Error).message);
@@ -859,7 +875,7 @@ function App() {
   })[];
 
   return (
-    <div className={`app ${memberListOpen ? "" : "member-list-collapsed"}`}>
+    <div className={`app mobile-pane-${mobileActivePane} ${memberListOpen ? "" : "member-list-collapsed"}`}>
       {connectionState === "reconnecting" && (
         <div className="connection-banner">Reconnecting…</div>
       )}
@@ -876,6 +892,20 @@ function App() {
                 const rect = e.currentTarget.getBoundingClientRect();
                 setContextMenuPos({ x: rect.right + 8, y: rect.top });
                 setContextMenuInstanceId(instance.id);
+              }}
+              onTouchStart={(e) => {
+                // Touch has no right-click — long-press opens the same menu.
+                const rect = e.currentTarget.getBoundingClientRect();
+                longPressTimerRef.current = window.setTimeout(() => {
+                  setContextMenuPos({ x: rect.right + 8, y: rect.top });
+                  setContextMenuInstanceId(instance.id);
+                }, 500);
+              }}
+              onTouchEnd={() => {
+                if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+              }}
+              onTouchMove={() => {
+                if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
               }}
             >
               {instance.id === activeInstanceId && instanceInfo?.iconUrl ? (
@@ -953,7 +983,7 @@ function App() {
                     <div className="channel-row" key={dm.id}>
                       <button
                         className={`channel-btn ${dm.id === selectedChannelId ? "active" : ""}`}
-                        onClick={() => setSelectedChannelId(dm.id)}
+                        onClick={() => selectChannel(dm.id)}
                       >
                         {dm.otherAvatarUrl ? (
                           <img className="avatar dm-avatar" src={authedMediaUrl(dm.otherAvatarUrl, activeInstance.baseUrl, session.token)} alt="" />
@@ -1016,7 +1046,7 @@ function App() {
                 >
                   <button
                     className={`channel-btn ${channel.id === selectedChannelId ? "active" : ""}`}
-                    onClick={() => setSelectedChannelId(channel.id)}
+                    onClick={() => selectChannel(channel.id)}
                   >
                     <span className="channel-icon">#</span>
                     <span>{channel.name}</span>
@@ -1230,7 +1260,7 @@ function App() {
           token={session.token}
           currentChannelId={selectedChannelId}
           currentChannelName={selectedChannel?.name ?? null}
-          onJump={(channelId) => setSelectedChannelId(channelId)}
+          onJump={(channelId) => selectChannel(channelId)}
           onClose={() => setSearchOpen(false)}
         />
       )}
@@ -1260,6 +1290,14 @@ function App() {
         {selectedChannel ? (
           <>
             <div className="chat-header">
+              <button
+                type="button"
+                className="chat-header-icon-btn mobile-only-btn"
+                title="Channels"
+                onClick={() => setMobileActivePane("nav")}
+              >
+                ☰
+              </button>
               {selectedChannel.type === "THREAD" && threadParentId ? (
                 <>
                   <button
@@ -1296,7 +1334,13 @@ function App() {
                     type="button"
                     className={`chat-header-icon-btn ${memberListOpen ? "active" : ""}`}
                     title={memberListOpen ? "Hide Member List" : "Show Member List"}
-                    onClick={() => setMemberListOpen((v) => !v)}
+                    onClick={() => {
+                      setMemberListOpen((v) => {
+                        const next = !v;
+                        setMobileActivePane(next ? "members" : "chat");
+                        return next;
+                      });
+                    }}
                   >
                     👥
                   </button>
@@ -1447,7 +1491,17 @@ function App() {
             </div>
           </>
         ) : (
-          <div className="chat-placeholder">Select a channel</div>
+          <div className="chat-placeholder">
+            <button
+              type="button"
+              className="chat-header-icon-btn mobile-only-btn"
+              title="Channels"
+              onClick={() => setMobileActivePane("nav")}
+            >
+              ☰
+            </button>
+            Select a channel
+          </div>
         )}
       </main>
       {memberListOpen && selectedChannel?.type !== "DM" && (
@@ -1457,6 +1511,10 @@ function App() {
           onlineUserIds={onlineUserIds}
           onSelectMember={setViewingProfileUserId}
           refreshKey={memberListRefreshKey}
+          onClose={() => {
+            setMemberListOpen(false);
+            setMobileActivePane("chat");
+          }}
         />
       )}
     </div>

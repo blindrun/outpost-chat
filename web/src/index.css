@@ -1414,6 +1414,73 @@ button, input, select {
 .ptt-bind-row { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; font-size: 0.85rem; color: var(--text-normal); }
 .ptt-bind-row strong { color: var(--header-primary); }
 
+.ptt-hold-btn { user-select: none; touch-action: none; }
+.ptt-hold-btn.active { background: var(--green); color: #fff; }
+
 .mic-meter { position: relative; height: 10px; border-radius: 5px; background: var(--bg-input); overflow: hidden; }
 .mic-meter-fill { height: 100%; background: var(--green); transition: width 60ms linear; }
 .mic-meter-threshold { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text-muted); }
+
+/* Buttons that only exist to switch panes on a mobile-width viewport —
+   hidden on desktop, where all panes show at once. Shown by the mobile
+   media query below. */
+.mobile-only-btn { display: none; }
+
+/* ---------- Mobile layout ----------
+   Placed last in the file so these overrides win the cascade against
+   same-specificity base rules regardless of where those are declared
+   above — a @media block's position among *other* rules doesn't grant it
+   priority, only normal source order does. */
+@media (max-width: 768px) {
+  /* Desktop lays out server-rail/sidebar/chat-pane/member-sidebar as 4
+     grid columns shown at once. There's no room for that on a phone
+     width, so each becomes a full-screen pane and only one shows at a
+     time, switched via the mobile-pane-* class App.tsx already drives
+     off `mobileActivePane` state. */
+  .app {
+    display: block;
+    position: relative;
+    height: 100vh;
+    overflow: hidden;
+  }
+  .server-rail,
+  .sidebar,
+  .chat-pane,
+  .member-sidebar {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .server-rail { z-index: 2; width: 72px; }
+  .sidebar { z-index: 1; left: 72px; width: calc(100% - 72px); }
+
+  .app:not(.mobile-pane-nav) .server-rail,
+  .app:not(.mobile-pane-nav) .sidebar { display: none; }
+  .app:not(.mobile-pane-chat) .chat-pane { display: none; }
+  .app:not(.mobile-pane-members) .member-sidebar { display: none; }
+
+  /* Hidden on desktop (App.tsx/MemberList.tsx render these unconditionally);
+     shown here as the only way to switch panes on mobile. */
+  .mobile-only-btn { display: inline-flex !important; }
+
+  /* Touch targets sized for mouse precision on desktop (~20-28px) are too
+     small to reliably tap — bump via padding rather than shrinking the
+     icon glyph itself, so desktop's visual size is untouched. */
+  .icon-btn,
+  .gear-btn,
+  .toolbar-btn,
+  .chat-header-icon-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .channel-btn { padding: 0.65rem 0.5rem; }
+
+  /* Message toolbar: no hover on a touchscreen, so App/MessageItem toggle
+     `.toolbar-active` on tap instead. Desktop's :hover rule is untouched. */
+  .message.toolbar-active .message-toolbar { display: flex; }
+
+  /* Desktop packs this header's buttons to the right (flex-end); on mobile
+     the new back button needs to sit on the left, search on the right. */
+  .member-sidebar-header { justify-content: space-between; }
+}

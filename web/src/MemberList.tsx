@@ -7,6 +7,7 @@ export function MemberList({
   onlineUserIds,
   onSelectMember,
   refreshKey,
+  onClose,
 }: {
   baseUrl: string;
   token: string;
@@ -17,6 +18,10 @@ export function MemberList({
   // mount, so a ban made from a profile card wouldn't show up here until a
   // full page reload.
   refreshKey: number;
+  // Only rendered as a real button on a mobile-width viewport (see
+  // .mobile-only-btn in index.css) — desktop shows this pane alongside
+  // the chat pane, with the header's own 👥 toggle already covering close.
+  onClose?: () => void;
 }) {
   const [members, setMembers] = useState<Member[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +89,11 @@ export function MemberList({
   return (
     <aside className="member-sidebar">
       <div className="member-sidebar-header">
+        {onClose && (
+          <button type="button" className="chat-header-icon-btn mobile-only-btn" title="Back" onClick={onClose}>
+            ←
+          </button>
+        )}
         <button
           type="button"
           className={`chat-header-icon-btn ${searchOpen ? "active" : ""}`}
