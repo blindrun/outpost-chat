@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { CustomEmoji, Message } from "./api";
 import { EmojiPicker } from "./EmojiPicker";
+import { LinkPreview } from "./LinkPreview";
 import { attachmentFilename, isImageAttachment } from "./uploadCategories";
 
 // Matches a reaction value that's a custom-emoji shortcode rather than a
@@ -13,9 +14,26 @@ const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🎉"];
 // Group 3 (custom emoji shortcode) must match the NAME_PATTERN the backend
 // validates against in customEmoji.ts, minus the length bound (client-side
 // rendering doesn't need to enforce that, only the create endpoint does).
-const MENTION_OR_INLINE_CODE_PATTERN = /@([a-zA-Z0-9_]+)|`([^`\n]+)`|:([a-zA-Z0-9_]+):/g;
+// Group 4 is a bare URL — greedy, so it can swallow trailing sentence
+// punctuation (a period ending the sentence, a closing paren); trimmed back
+// off in renderInline/extractFirstLinkPreviewUrl rather than tightened here,
+// since a stricter pattern risks truncating real URLs that legitimately end
+// in punctuation-like path segments.
+const MENTION_OR_INLINE_CODE_PATTERN = /@([a-zA-Z0-9_]+)|`([^`\n]+)`|:([a-zA-Z0-9_]+):|(https?:\/\/[^\s<]+)/g;
 // ```lang\n...\n``` — lang is optional, kept only for the header label.
 const CODE_BLOCK_PATTERN = /```([a-zA-Z0-9_+-]*)\n?([\s\S]*?)```/g;
+const TRAILING_PUNCTUATION_PATTERN = /[.,!?;:'")\]]+$/;
+
+// Used to find the one URL (if any) a link-preview card gets rendered for —
+// Discord-style "just the first link", not one card per URL in the message.
+// Code blocks/inline code are stripped first so a URL mentioned as code
+// (e.g. an example in backticks) never triggers an unwanted preview fetch.
+function extractFirstLinkPreviewUrl(content: string): string | null {
+  const stripped = content.replace(/```[\s\S]*?```/g, " ").replace(/`[^`\n]+`/g, " ");
+  const match = stripped.match(/https?:\/\/[^\s<]+/);
+  if (!match) return null;
+  return match[0].replace(TRAILING_PUNCTUATION_PATTERN, "");
+}
 
 function formatTimestamp(iso: string): string {
   const date = new Date(iso);
@@ -65,6 +83,7 @@ function renderInline(
     const username = match[1];
     const inlineCode = match[2];
     const emojiName = match[3];
+    const rawUrl = match[4];
     if (username !== undefined) {
       if (memberUsernames.has(username)) {
         parts.push(
@@ -84,6 +103,15 @@ function renderInline(
       } else {
         parts.push(match[0]);
       }
+    } else if (rawUrl !== undefined) {
+      const trimmedUrl = rawUrl.replace(TRAILING_PUNCTUATION_PATTERN, "");
+      const trailing = rawUrl.slice(trimmedUrl.length);
+      parts.push(
+        <a key={`${keyPrefix}-${key++}`} href={trimmedUrl} target="_blank" rel="noopener noreferrer" className="message-link">
+          {trimmedUrl}
+        </a>,
+      );
+      if (trailing) parts.push(trailing);
     } else {
       parts.push(
         <code key={`${keyPrefix}-${key++}`} className="inline-code">
@@ -128,6 +156,8 @@ function renderContent(content: string, memberUsernames: Set<string>, customEmoj
 }
 
 export function MessageItem({
+  baseUrl,
+  token,
   message,
   grouped,
   isOnline,
@@ -147,6 +177,8 @@ export function MessageItem({
   onViewProfile,
   onThreadClick,
 }: {
+  baseUrl: string;
+  token: string;
   message: Message;
   // True when this message is a same-author, same-minute-ish continuation
   // of the one right above it — collapses the repeated avatar/name/
@@ -215,6 +247,7 @@ export function MessageItem({
   }
 
   const isRealUser = !message.isWebhook && !message.isSystemBot && !!message.authorId;
+  const linkPreviewUrl = message.content ? extractFirstLinkPreviewUrl(message.content) : null;
 
   return (
     <div className={`message ${grouped ? "message-grouped" : ""}`}>
@@ -303,6 +336,8 @@ export function MessageItem({
             </a>
           )
         )}
+
+        {linkPreviewUrl && <LinkPreview baseUrl={baseUrl} token={token} url={linkPreviewUrl} />}
 
         {pickerOpen && (
           <div className="emoji-picker">

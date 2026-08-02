@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.14 — 2026-08-02
+
+- **Rich link previews.** Paste a URL in a message and it now unfurls into a preview card below the message — title, description, and image, pulled from the page's own metadata, same as Discord/Slack. URLs are also clickable now (they weren't before). Only the first link in a message gets a preview card; a link inside a code block or inline code stays plain text and doesn't fetch anything.
+
 ## v0.2.13 — 2026-08-01
 
 - **Custom emoji as message reactions.** Following up on v0.2.12's custom server emoji, they're now usable as a reaction too, not just in message text — the reaction picker's "Server" tab, added last release for the composer, now works there as well.

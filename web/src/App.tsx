@@ -1308,6 +1308,8 @@ function App() {
                 return (
                 <MessageItem
                   key={m.id}
+                  baseUrl={activeInstance.baseUrl}
+                  token={session.token}
                   message={m}
                   grouped={grouped}
                   isOnline={onlineUserIds.has(m.authorId)}
