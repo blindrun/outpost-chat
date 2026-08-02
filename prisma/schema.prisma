@@ -242,6 +242,12 @@ model Message {
   isSystemBot   Boolean   @default(false)
   content       String
   attachmentUrl String?
+  // Per-send persona override for a webhook message (Discord/Slack
+  // convention — one webhook, many personas). Stored per-message rather than
+  // read live off Webhook, so a name/avatar reload after the fact reflects
+  // what was actually sent, not the webhook's current defaults.
+  overrideUsername  String?
+  overrideAvatarUrl String?
   createdAt     DateTime  @default(now())
   editedAt      DateTime?
   pinned        Boolean   @default(false)

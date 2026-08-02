@@ -24,7 +24,15 @@ const searchQuerySchema = z.object({
 // the configurable name/avatar from the BotSettings singleton. Shared
 // between the history, search, and pins endpoints, and the gateway (for
 // reply previews).
-export async function hydrateAuthors<T extends { authorId: string | null; webhookId: string | null; isSystemBot?: boolean }>(
+export async function hydrateAuthors<
+  T extends {
+    authorId: string | null;
+    webhookId: string | null;
+    isSystemBot?: boolean;
+    overrideUsername?: string | null;
+    overrideAvatarUrl?: string | null;
+  },
+>(
   messages: T[],
 ): Promise<(T & { authorUsername?: string; authorAvatarUrl?: string | null; isWebhook: boolean; isSystemBot: boolean })[]> {
   const authorIds = [...new Set(messages.filter((m) => m.authorId).map((m) => m.authorId as string))];
@@ -51,8 +59,8 @@ export async function hydrateAuthors<T extends { authorId: string | null; webhoo
     const webhook = m.webhookId ? webhookById.get(m.webhookId) : undefined;
     return {
       ...m,
-      authorUsername: webhook?.name ?? authorById.get(m.authorId ?? "")?.username,
-      authorAvatarUrl: webhook?.avatarUrl ?? authorById.get(m.authorId ?? "")?.avatarUrl,
+      authorUsername: m.overrideUsername ?? webhook?.name ?? authorById.get(m.authorId ?? "")?.username,
+      authorAvatarUrl: m.overrideAvatarUrl ?? webhook?.avatarUrl ?? authorById.get(m.authorId ?? "")?.avatarUrl,
       isWebhook: !!webhook,
       isSystemBot: false,
     };
