@@ -6,7 +6,12 @@ import { toPublicUser } from "./auth.js";
 import { categoryForFilename, permissionForCategory } from "../util/uploadCategories.js";
 import { hasPermission } from "../util/permissions.js";
 
-const MAX_SIZE_BYTES = 8 * 1024 * 1024; // 8MB — plenty for avatars/chat images in dev
+// 8MB was fine for avatars/chat images alone, but is barely a couple of
+// seconds of real video at any watchable resolution/bitrate — raised to
+// 25MB (in the same ballpark as Discord's own free-tier attachment limit)
+// now that video is an upload category. Applies to every attachment type
+// uniformly rather than a differential per-category cap, for simplicity.
+const MAX_SIZE_BYTES = 25 * 1024 * 1024;
 const ALLOWED_MIME_PREFIXES = ["image/"];
 
 export async function uploadRoutes(app: FastifyInstance) {
@@ -35,7 +40,7 @@ export async function uploadRoutes(app: FastifyInstance) {
 
     const buffer = await file.toBuffer();
     if (buffer.length > MAX_SIZE_BYTES) {
-      return reply.status(400).send({ error: "file too large (max 8MB)" });
+      return reply.status(400).send({ error: `file too large (max ${MAX_SIZE_BYTES / 1024 / 1024}MB)` });
     }
 
     const { sub: userId } = req.user as { sub: string };

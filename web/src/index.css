@@ -926,6 +926,7 @@ button, input, select {
 .link-preview-image { width: 80px; height: 80px; object-fit: cover; border-radius: 4px; flex-shrink: 0; }
 
 .message-attachment { max-width: 320px; max-height: 320px; border-radius: 8px; margin-top: 0.4rem; display: block; }
+.message-video { max-width: 360px; max-height: 320px; border-radius: 8px; margin-top: 0.4rem; display: block; background: #000; }
 .message-file-attachment {
   display: inline-flex;
   align-items: center;
@@ -1083,6 +1084,10 @@ button, input, select {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   border-radius: 8px;
 }
+/* Opens downward instead of upward — used when there isn't enough room
+   above the anchor (a message near the top of a scrolled channel), which
+   otherwise pushes the panel off the top of the viewport entirely. */
+.picker-popover-below { bottom: auto; top: 100%; margin-bottom: 0; margin-top: 0.5rem; }
 .composer-area { position: relative; }
 .picker-panel {
   background: var(--bg-primary);

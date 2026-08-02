@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   FriendsList,
   FriendUser,
+  authedMediaUrl,
   listFriends,
   sendFriendRequest,
   acceptFriendRequest,
@@ -12,11 +13,21 @@ import {
 } from "./api";
 import { Modal } from "./Modal";
 
-function FriendRow({ user, children }: { user: FriendUser; children: React.ReactNode }) {
+function FriendRow({
+  baseUrl,
+  token,
+  user,
+  children,
+}: {
+  baseUrl: string;
+  token: string;
+  user: FriendUser;
+  children: React.ReactNode;
+}) {
   return (
     <li className="member-row">
       {user.avatarUrl ? (
-        <img className="avatar" src={user.avatarUrl} alt="" />
+        <img className="avatar" src={authedMediaUrl(user.avatarUrl, baseUrl, token)} alt="" />
       ) : (
         <span className="avatar avatar-placeholder">{user.username[0]?.toUpperCase()}</span>
       )}
@@ -104,7 +115,7 @@ export function FriendsPanel({
           <h3>Friend Requests</h3>
           <ul className="member-list">
             {list.incoming.map((u) => (
-              <FriendRow key={u.userId} user={u}>
+              <FriendRow key={u.userId} baseUrl={baseUrl} token={token} user={u}>
                 <button className="text-btn" onClick={() => run(() => acceptFriendRequest(baseUrl, token, u.userId))}>
                   accept
                 </button>
@@ -122,7 +133,7 @@ export function FriendsPanel({
           <h3>Sent Requests</h3>
           <ul className="member-list">
             {list.outgoing.map((u) => (
-              <FriendRow key={u.userId} user={u}>
+              <FriendRow key={u.userId} baseUrl={baseUrl} token={token} user={u}>
                 <button className="text-btn" onClick={() => run(() => removeFriend(baseUrl, token, u.userId))}>
                   cancel
                 </button>
@@ -140,7 +151,7 @@ export function FriendsPanel({
           ) : (
             <ul className="member-list">
               {list.friends.map((u) => (
-                <FriendRow key={u.userId} user={u}>
+                <FriendRow key={u.userId} baseUrl={baseUrl} token={token} user={u}>
                   <button className="text-btn" onClick={() => onMessage(u.userId)}>
                     message
                   </button>
@@ -164,7 +175,7 @@ export function FriendsPanel({
             {list.blocked.map((u) => (
               <li key={u.userId} className="member-row banned">
                 {u.avatarUrl ? (
-                  <img className="avatar" src={u.avatarUrl} alt="" />
+                  <img className="avatar" src={authedMediaUrl(u.avatarUrl, baseUrl, token)} alt="" />
                 ) : (
                   <span className="avatar avatar-placeholder">{u.username[0]?.toUpperCase()}</span>
                 )}

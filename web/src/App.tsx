@@ -10,6 +10,7 @@ import {
   Permission,
   Role,
   User,
+  authedMediaUrl,
   createChannel,
   createThread,
   getCurrentUser,
@@ -878,7 +879,7 @@ function App() {
               }}
             >
               {instance.id === activeInstanceId && instanceInfo?.iconUrl ? (
-                <img src={instanceInfo.iconUrl} alt="" />
+                <img src={authedMediaUrl(instanceInfo.iconUrl, activeInstance.baseUrl, session.token)} alt="" />
               ) : (
                 initials(instance.label)
               )}
@@ -955,7 +956,7 @@ function App() {
                         onClick={() => setSelectedChannelId(dm.id)}
                       >
                         {dm.otherAvatarUrl ? (
-                          <img className="avatar dm-avatar" src={dm.otherAvatarUrl} alt="" />
+                          <img className="avatar dm-avatar" src={authedMediaUrl(dm.otherAvatarUrl, activeInstance.baseUrl, session.token)} alt="" />
                         ) : (
                           <span className="avatar avatar-placeholder dm-avatar">{dm.otherUsername[0]?.toUpperCase()}</span>
                         )}
@@ -1097,7 +1098,7 @@ function App() {
                         <div key={userId} className="voice-member-row">
                           <span className={`voice-member-avatar ${speaking ? "speaking" : ""}`}>
                             {member?.avatarUrl ? (
-                              <img src={member.avatarUrl} alt="" />
+                              <img src={authedMediaUrl(member.avatarUrl, activeInstance.baseUrl, session.token)} alt="" />
                             ) : (
                               <span className="avatar-placeholder">{(member?.username ?? "?")[0]?.toUpperCase()}</span>
                             )}
@@ -1142,7 +1143,7 @@ function App() {
         )}
         <div className="user-panel">
           {session.user.avatarUrl ? (
-            <img className="avatar" src={session.user.avatarUrl} alt="" />
+            <img className="avatar" src={authedMediaUrl(session.user.avatarUrl, activeInstance.baseUrl, session.token)} alt="" />
           ) : (
             <span className="avatar avatar-placeholder">{session.user.username[0]?.toUpperCase()}</span>
           )}
@@ -1162,6 +1163,9 @@ function App() {
             onClick={voice.toggleDeafen}
           >
             {voice.deafened ? "🔕" : "🎧"}
+          </button>
+          <button className="icon-btn" title="Friends" onClick={() => setFriendsOpen(true)}>
+            👤
           </button>
           <button className="gear-btn" title="User Settings" onClick={() => setUserSettingsOpen(true)}>
             ⚙️
@@ -1206,6 +1210,8 @@ function App() {
         <InstanceSettingsModal
           baseUrl={activeInstance.baseUrl}
           token={session.token}
+          isOwner={session.user.isOwner}
+          canModerate={canModerate}
           instanceInfo={instanceInfo}
           channels={channels}
           onClose={() => setInstanceSettingsOpen(false)}
@@ -1369,7 +1375,7 @@ function App() {
               {openPicker && (
                 <div className="picker-popover">
                   {openPicker === "emoji" ? (
-                    <EmojiPicker onSelect={handleEmojiSelect} customEmoji={customEmoji} />
+                    <EmojiPicker baseUrl={activeInstance.baseUrl} token={session.token} onSelect={handleEmojiSelect} customEmoji={customEmoji} />
                   ) : (
                     <GifPicker baseUrl={activeInstance.baseUrl} token={session.token} onSelect={handleGifSelect} />
                   )}
@@ -1450,7 +1456,6 @@ function App() {
           token={session.token}
           onlineUserIds={onlineUserIds}
           onSelectMember={setViewingProfileUserId}
-          onOpenFriends={() => setFriendsOpen(true)}
           refreshKey={memberListRefreshKey}
         />
       )}

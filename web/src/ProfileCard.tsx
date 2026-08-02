@@ -4,6 +4,7 @@ import {
   Member,
   Role,
   acceptFriendRequest,
+  authedMediaUrl,
   assignRole,
   banMember,
   declineFriendRequest,
@@ -227,7 +228,7 @@ export function ProfileCard({
           <>
             <div className="profile-card-header">
               {profile.avatarUrl ? (
-                <img className="avatar avatar-lg" src={profile.avatarUrl} alt="" />
+                <img className="avatar avatar-lg" src={authedMediaUrl(profile.avatarUrl, baseUrl, token)} alt="" />
               ) : (
                 <span className="avatar avatar-lg avatar-placeholder">{profile.username[0]?.toUpperCase()}</span>
               )}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { EMOJI_CATEGORIES, EMOJI_LIST } from "./emojiData";
-import { CustomEmoji } from "./api";
+import { authedMediaUrl, CustomEmoji } from "./api";
 
 const SERVER_CATEGORY = "Server";
 
@@ -10,9 +10,13 @@ const SERVER_CATEGORY = "Server";
 // the CustomEmoji Prisma model's comment for why that's a separate,
 // bigger change). Only the message composer passes a real list.
 export function EmojiPicker({
+  baseUrl,
+  token,
   onSelect,
   customEmoji = [],
 }: {
+  baseUrl: string;
+  token: string;
   onSelect: (value: string) => void;
   customEmoji?: CustomEmoji[];
 }) {
@@ -64,7 +68,7 @@ export function EmojiPicker({
             className="picker-emoji picker-emoji-custom"
             onClick={() => onSelect(`:${e.name}: `)}
           >
-            <img src={e.imageUrl} alt={e.name} />
+            <img src={authedMediaUrl(e.imageUrl, baseUrl, token)} alt={e.name} />
           </button>
         ))}
         {builtInResults.map((e) => (

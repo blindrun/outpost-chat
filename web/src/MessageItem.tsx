@@ -1,8 +1,8 @@
-import { useState } from "react";
-import { CustomEmoji, Message } from "./api";
+import { useRef, useState } from "react";
+import { authedMediaUrl, CustomEmoji, Message } from "./api";
 import { EmojiPicker } from "./EmojiPicker";
 import { LinkPreview } from "./LinkPreview";
-import { attachmentFilename, isImageAttachment } from "./uploadCategories";
+import { attachmentFilename, isImageAttachment, isVideoAttachment } from "./uploadCategories";
 
 // Matches a reaction value that's a custom-emoji shortcode rather than a
 // raw unicode emoji — same shape as the one MessageItem's own renderInline
@@ -72,6 +72,8 @@ function renderInline(
   memberUsernames: Set<string>,
   customEmojiByName: Map<string, string>,
   keyPrefix: string,
+  baseUrl: string,
+  token: string,
 ): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
@@ -98,7 +100,13 @@ function renderInline(
       const imageUrl = customEmojiByName.get(emojiName);
       if (imageUrl) {
         parts.push(
-          <img key={`${keyPrefix}-${key++}`} src={imageUrl} alt={`:${emojiName}:`} title={`:${emojiName}:`} className="custom-emoji-inline" />,
+          <img
+            key={`${keyPrefix}-${key++}`}
+            src={authedMediaUrl(imageUrl, baseUrl, token)}
+            alt={`:${emojiName}:`}
+            title={`:${emojiName}:`}
+            className="custom-emoji-inline"
+          />,
         );
       } else {
         parts.push(match[0]);
@@ -129,7 +137,13 @@ function renderInline(
 // whitespace preserved verbatim, no mention/inline-code/emoji parsing
 // inside), then runs mention/inline-code/emoji highlighting over everything
 // in between.
-function renderContent(content: string, memberUsernames: Set<string>, customEmojiByName: Map<string, string>): React.ReactNode[] {
+function renderContent(
+  content: string,
+  memberUsernames: Set<string>,
+  customEmojiByName: Map<string, string>,
+  baseUrl: string,
+  token: string,
+): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -137,7 +151,7 @@ function renderContent(content: string, memberUsernames: Set<string>, customEmoj
   CODE_BLOCK_PATTERN.lastIndex = 0;
   while ((match = CODE_BLOCK_PATTERN.exec(content))) {
     if (match.index > lastIndex) {
-      parts.push(...renderInline(content.slice(lastIndex, match.index), memberUsernames, customEmojiByName, `pre${key}`));
+      parts.push(...renderInline(content.slice(lastIndex, match.index), memberUsernames, customEmojiByName, `pre${key}`, baseUrl, token));
     }
     const lang = match[1];
     const code = match[2].replace(/\n$/, "");
@@ -150,7 +164,7 @@ function renderContent(content: string, memberUsernames: Set<string>, customEmoj
     lastIndex = match.index + match[0].length;
   }
   if (lastIndex < content.length) {
-    parts.push(...renderInline(content.slice(lastIndex), memberUsernames, customEmojiByName, `post${key}`));
+    parts.push(...renderInline(content.slice(lastIndex), memberUsernames, customEmojiByName, `post${key}`, baseUrl, token));
   }
   return parts;
 }
@@ -215,6 +229,13 @@ export function MessageItem({
   const [draft, setDraft] = useState(message.content);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [fullPickerOpen, setFullPickerOpen] = useState(false);
+  // Which way the full emoji picker opens — normally upward (anchored to
+  // the message's bottom edge, matching the composer's own picker), but
+  // for a message near the top of the scrolled channel that pushes the
+  // ~400px-tall panel off the top of the viewport entirely. Measured at
+  // open-time against the message's own position, not assumed once.
+  const [pickerOpensBelow, setPickerOpensBelow] = useState(false);
+  const messageRef = useRef<HTMLDivElement>(null);
   const isOwn = message.authorId === currentUserId;
   const authorName = message.authorUsername ?? message.authorId;
 
@@ -246,23 +267,34 @@ export function MessageItem({
     setFullPickerOpen(false);
   }
 
+  // ~400px covers .picker-panel's 360px max-height plus its padding/margin
+  // — an estimate rather than a live measurement, since the panel isn't in
+  // the DOM yet at the moment this decision has to be made.
+  const FULL_PICKER_ESTIMATED_HEIGHT = 400;
+  function openFullPicker() {
+    const rect = messageRef.current?.getBoundingClientRect();
+    setPickerOpensBelow(!!rect && rect.top < FULL_PICKER_ESTIMATED_HEIGHT);
+    setPickerOpen(false);
+    setFullPickerOpen(true);
+  }
+
   const isRealUser = !message.isWebhook && !message.isSystemBot && !!message.authorId;
   const linkPreviewUrl = message.content ? extractFirstLinkPreviewUrl(message.content) : null;
 
   return (
-    <div className={`message ${grouped ? "message-grouped" : ""}`}>
+    <div ref={messageRef} className={`message ${grouped ? "message-grouped" : ""}`}>
       {grouped ? (
         <span className="message-hover-timestamp">{formatShortTime(message.createdAt)}</span>
       ) : isRealUser ? (
         <button type="button" className="avatar-btn" onClick={() => onViewProfile(message.authorId)}>
           {message.authorAvatarUrl ? (
-            <img className="avatar" src={message.authorAvatarUrl} alt="" />
+            <img className="avatar" src={authedMediaUrl(message.authorAvatarUrl, baseUrl, token)} alt="" />
           ) : (
             <span className="avatar avatar-placeholder">{initials(authorName)}</span>
           )}
         </button>
       ) : message.authorAvatarUrl ? (
-        <img className="avatar" src={message.authorAvatarUrl} alt="" />
+        <img className="avatar" src={authedMediaUrl(message.authorAvatarUrl, baseUrl, token)} alt="" />
       ) : (
         <span className="avatar avatar-placeholder">{initials(authorName)}</span>
       )}
@@ -315,7 +347,7 @@ export function MessageItem({
         ) : (
           message.content && (
             <div className="message-content">
-              {renderContent(message.content, memberUsernames, customEmojiByName)}
+              {renderContent(message.content, memberUsernames, customEmojiByName, baseUrl, token)}
               {message.editedAt && <span className="edited-tag"> (edited)</span>}
             </div>
           )
@@ -323,7 +355,9 @@ export function MessageItem({
 
         {message.attachmentUrl && (
           isImageAttachment(message.attachmentUrl) ? (
-            <img className="message-attachment" src={message.attachmentUrl} alt="attachment" />
+            <img className="message-attachment" src={authedMediaUrl(message.attachmentUrl, baseUrl, token)} alt="attachment" />
+          ) : isVideoAttachment(message.attachmentUrl) ? (
+            <video className="message-video" src={authedMediaUrl(message.attachmentUrl, baseUrl, token)} controls preload="metadata" />
           ) : (
             <a
               className="message-file-attachment"
@@ -348,10 +382,7 @@ export function MessageItem({
             ))}
             <button
               title="More emoji"
-              onClick={() => {
-                setPickerOpen(false);
-                setFullPickerOpen(true);
-              }}
+              onClick={openFullPicker}
             >
               ➕
             </button>
@@ -359,8 +390,8 @@ export function MessageItem({
         )}
 
         {fullPickerOpen && (
-          <div className="picker-popover reaction-full-picker">
-            <EmojiPicker onSelect={toggleReaction} customEmoji={customEmoji} />
+          <div className={`picker-popover reaction-full-picker ${pickerOpensBelow ? "picker-popover-below" : ""}`}>
+            <EmojiPicker baseUrl={baseUrl} token={token} onSelect={toggleReaction} customEmoji={customEmoji} />
           </div>
         )}
 
@@ -376,7 +407,7 @@ export function MessageItem({
                   onClick={() => toggleReaction(emoji)}
                   title={reactorNames.join(", ")}
                 >
-                  {customUrl ? <img src={customUrl} alt={emoji} className="reaction-emoji-img" /> : emoji} {count}
+                  {customUrl ? <img src={authedMediaUrl(customUrl, baseUrl, token)} alt={emoji} className="reaction-emoji-img" /> : emoji} {count}
                 </button>
               );
             })}

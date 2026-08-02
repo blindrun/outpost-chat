@@ -8,6 +8,7 @@ import fastifyWebsocket from "@fastify/websocket";
 import fastifyCors from "@fastify/cors";
 import fastifyMultipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
+import fastifyRateLimit from "@fastify/rate-limit";
 import { prisma } from "./plugins/db.js";
 import { authRoutes } from "./routes/auth.js";
 import { instanceRoutes } from "./routes/instance.js";
@@ -16,6 +17,7 @@ import { voiceRoutes } from "./routes/voice.js";
 import { uploadRoutes } from "./routes/uploads.js";
 import { gifRoutes } from "./routes/gifs.js";
 import { linkPreviewRoutes } from "./routes/linkPreview.js";
+import { apiBotRoutes } from "./routes/apiBots.js";
 import { customEmojiRoutes } from "./routes/customEmoji.js";
 import { webhookRoutes } from "./routes/webhooks.js";
 import { botRoutes } from "./routes/bot.js";
@@ -60,6 +62,13 @@ app.register(fastifyCors, {
 app.register(fastifyJwt, { secret: process.env.JWT_SECRET ?? "insecure-dev-secret" });
 await app.register(fastifyWebsocket);
 await app.register(fastifyMultipart);
+// global: false — this only throttles the specific brute-force-relevant
+// auth routes that opt in via their own `config.rateLimit` (login,
+// register, MFA code verification), not the API as a whole. A blanket
+// global limit would risk throttling normal chat usage (message sends,
+// gateway reconnects) for no real security benefit, since those aren't
+// guessable-secret endpoints.
+await app.register(fastifyRateLimit, { global: false });
 
 await ensureBucket();
 await ensureClaimCode(app.log);
@@ -101,6 +110,7 @@ app.register(voiceRoutes);
 app.register(uploadRoutes);
 app.register(gifRoutes);
 app.register(linkPreviewRoutes);
+app.register(apiBotRoutes);
 app.register(customEmojiRoutes);
 app.register(webhookRoutes);
 app.register(botRoutes);

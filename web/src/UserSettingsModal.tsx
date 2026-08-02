@@ -3,6 +3,7 @@ import { startRegistration } from "@simplewebauthn/browser";
 import {
   MfaStatus,
   User,
+  authedMediaUrl,
   confirmTotp,
   deleteWebauthnCredential,
   disableTotp,
@@ -81,7 +82,7 @@ function ProfileTab({
       <div className="settings-section">
         <div className="settings-avatar-row">
           {user.avatarUrl ? (
-            <img className="avatar avatar-lg" src={user.avatarUrl} alt="" />
+            <img className="avatar avatar-lg" src={authedMediaUrl(user.avatarUrl, baseUrl, token)} alt="" />
           ) : (
             <span className="avatar avatar-lg avatar-placeholder">{user.username[0]?.toUpperCase()}</span>
           )}

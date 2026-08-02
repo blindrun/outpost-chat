@@ -27,6 +27,11 @@ export const UPLOAD_CATEGORIES = {
       ".php", ".sql", ".json", ".yaml", ".yml", ".toml", ".ini", ".env.example", ".xml", ".html", ".css",
     ],
   },
+  videos: {
+    label: "Videos",
+    permission: PERMISSIONS.UPLOAD_VIDEOS,
+    extensions: [".mp4", ".webm", ".mov", ".m4v", ".ogv"],
+  },
 } as const;
 
 export type UploadCategory = keyof typeof UPLOAD_CATEGORIES;

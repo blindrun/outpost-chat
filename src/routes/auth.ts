@@ -77,7 +77,10 @@ export async function authRoutes(app: FastifyInstance) {
   // "general" channel, the @everyone role). Every subsequent registrant is
   // gated by InstanceSettings.requireInviteToRegister, same as any other
   // self-hosted app's "invite-only" toggle.
-  app.post("/auth/register", async (req, reply) => {
+  app.post(
+    "/auth/register",
+    { config: { rateLimit: { max: 10, timeWindow: "10 minutes" } } },
+    async (req, reply) => {
     const body = registerSchema.parse(req.body);
 
     const existing = await prisma.user.findFirst({
@@ -186,11 +189,14 @@ export async function authRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post("/auth/login", async (req, reply) => {
+  app.post(
+    "/auth/login",
+    { config: { rateLimit: { max: 10, timeWindow: "10 minutes" } } },
+    async (req, reply) => {
     const body = loginSchema.parse(req.body);
 
     const user = await prisma.user.findFirst({ where: { OR: [{ email: body.login }, { username: body.login }] } });
-    if (!user) {
+    if (!user || user.isBot) {
       return reply.status(401).send({ error: "invalid credentials" });
     }
 
@@ -225,7 +231,14 @@ export async function authRoutes(app: FastifyInstance) {
 
   // Second step of login for an MFA-enabled account — a 6-digit TOTP code
   // or one of the account's unused backup codes, either is accepted here.
-  app.post("/auth/mfa/verify-code", async (req, reply) => {
+  app.post(
+    "/auth/mfa/verify-code",
+    // A 6-digit TOTP code only has 1,000,000 possibilities — without this,
+    // the whole point of a second factor (something the attacker doesn't
+    // already have) evaporates the moment they've captured a valid
+    // mfaToken, since guessing is otherwise cheap and fast.
+    { config: { rateLimit: { max: 10, timeWindow: "10 minutes" } } },
+    async (req, reply) => {
     const body = mfaVerifyCodeSchema.parse(req.body);
 
     let userId: string;

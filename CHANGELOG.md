@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.2.16 — 2026-08-02
+
+- **Inline video playback.** Videos are now a real upload category (gated per-role, like documents/archives/code) and render as an actual playable `<video>` in chat instead of a download link. Raised the upload cap from 8MB to 25MB — 8MB was barely a couple of seconds of real video.
+- **A real developer/bot API.** Instance Settings → API Bots lets an admin create bot accounts — real members with real roles and permissions, authenticated by a token instead of a password, usable against the same REST API (and gateway) any human client uses. Revoke or delete a bot at any time.
+- **Owner-initiated password reset.** Before this, a member who forgot their password had no way to recover their account — not even the owner could help. Instance Settings → Members now has a "reset password" action for the owner that generates a one-time temp password to relay to the member directly.
+- **A real moderation audit log.** Every ban, kick, mute, and password reset now leaves a permanent record of who did it, to whom, and when — visible to anyone with moderator permissions, under a new Audit Log tab.
+- **Login/register/2FA brute-force protection.** These previously had no rate limiting at all. Now capped at 10 attempts per 10 minutes per IP.
+- Fixed the full emoji picker rendering off the top of the screen for a message near the top of a channel — it now opens downward when there isn't room above.
+- Moved the Friends button to the user bar at the bottom-left (next to your avatar and settings) so it's reachable everywhere, not just when the member list happens to be open.
+
 ## v0.2.15 — 2026-08-02
 
 - Fixed the v0.2.14 Docker image crashing on startup (`webidl.util.markAsUncloneable is not a function`) — the link-preview feature's new `undici` dependency resolved to a version too new for the image's Node 20 runtime. Caught within minutes via the live instance's health check and rolled back immediately; nobody's data was affected. Pinned to a Node-20-compatible version and verified by actually booting the real production image locally before shipping this release, not just typechecking.

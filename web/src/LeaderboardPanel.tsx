@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LeaderboardEntry, getLeaderboard } from "./api";
+import { authedMediaUrl, LeaderboardEntry, getLeaderboard } from "./api";
 import { Modal } from "./Modal";
 
 export function LeaderboardPanel({
@@ -35,7 +35,7 @@ export function LeaderboardPanel({
             <div key={e.userId} className="leaderboard-row">
               <span className="leaderboard-rank">#{i + 1}</span>
               {e.avatarUrl ? (
-                <img className="avatar" src={e.avatarUrl} alt="" />
+                <img className="avatar" src={authedMediaUrl(e.avatarUrl, baseUrl, token)} alt="" />
               ) : (
                 <span className="avatar avatar-placeholder">{e.username[0]?.toUpperCase()}</span>
               )}

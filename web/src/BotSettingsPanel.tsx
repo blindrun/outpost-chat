@@ -5,6 +5,7 @@ import {
   CustomCommand,
   ReactionRoleEntry,
   Role,
+  authedMediaUrl,
   createCustomCommand,
   createReactionRole,
   deleteCustomCommand,
@@ -297,7 +298,7 @@ export function BotSettingsPanel({ baseUrl, token, channels }: { baseUrl: string
       <form className="settings-section" onSubmit={handleSave}>
         <div className="settings-avatar-row">
           {config.settings.avatarUrl ? (
-            <img className="avatar avatar-lg" src={config.settings.avatarUrl} alt="" />
+            <img className="avatar avatar-lg" src={authedMediaUrl(config.settings.avatarUrl, baseUrl, token)} alt="" />
           ) : (
             <span className="avatar avatar-lg avatar-placeholder">{(name || "B")[0]?.toUpperCase()}</span>
           )}

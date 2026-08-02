@@ -4,12 +4,16 @@ import {
   CustomEmoji,
   InstanceInfo,
   Member,
+  ModerationLogEntry,
   Permission,
   Role,
   assignRole,
+  authedMediaUrl,
   createRole,
+  getModerationAuditLog,
   listMembers,
   listRoles,
+  resetMemberPassword,
   unbanMember,
   updateInstanceSettings,
   updateRole,
@@ -21,6 +25,7 @@ import { WebhooksPanel } from "./WebhooksPanel";
 import { BotSettingsPanel } from "./BotSettingsPanel";
 import { ChannelsPanel } from "./ChannelsPanel";
 import { EmojiSettingsPanel } from "./EmojiSettingsPanel";
+import { ApiBotsPanel } from "./ApiBotsPanel";
 import { ThemePicker } from "./ThemePicker";
 
 const ALL_PERMISSIONS: Permission[] = [
@@ -31,9 +36,10 @@ const ALL_PERMISSIONS: Permission[] = [
   "UPLOAD_DOCUMENTS",
   "UPLOAD_ARCHIVES",
   "UPLOAD_CODE",
+  "UPLOAD_VIDEOS",
 ];
 
-type Tab = "general" | "roles" | "members" | "channels" | "invites" | "webhooks" | "bot" | "emoji";
+type Tab = "general" | "roles" | "members" | "channels" | "invites" | "webhooks" | "bot" | "emoji" | "apiBots" | "auditLog";
 
 function GeneralTab({
   baseUrl,
@@ -101,7 +107,7 @@ function GeneralTab({
     <form className="settings-section" onSubmit={handleSave}>
       <div className="settings-avatar-row">
         {instanceInfo.iconUrl ? (
-          <img className="avatar avatar-lg" src={instanceInfo.iconUrl} alt="" />
+          <img className="avatar avatar-lg" src={authedMediaUrl(instanceInfo.iconUrl, baseUrl, token)} alt="" />
         ) : (
           <span className="avatar avatar-lg avatar-placeholder">{instanceInfo.name[0]?.toUpperCase()}</span>
         )}
@@ -300,11 +306,16 @@ function RolesTab({ baseUrl, token }: { baseUrl: string; token: string }) {
   );
 }
 
-function MembersTab({ baseUrl, token }: { baseUrl: string; token: string }) {
+function MembersTab({ baseUrl, token, isOwner }: { baseUrl: string; token: string; isOwner: boolean }) {
   const [members, setMembers] = useState<Member[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [selectedRole, setSelectedRole] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  // The freshly-generated temp password for whichever member was just
+  // reset — shown once, never refetchable (see moderation.ts), so this is
+  // the only place it's ever visible.
+  const [revealedReset, setRevealedReset] = useState<{ userId: string; password: string } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   function refresh() {
     listMembers(baseUrl, token).then(setMembers).catch((err) => setError(err.message));
@@ -335,6 +346,27 @@ function MembersTab({ baseUrl, token }: { baseUrl: string; token: string }) {
     }
   }
 
+  async function handleResetPassword(userId: string) {
+    setError(null);
+    try {
+      const { tempPassword } = await resetMemberPassword(baseUrl, token, userId);
+      setRevealedReset({ userId, password: tempPassword });
+      setCopied(false);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function handleCopyTempPassword() {
+    if (!revealedReset) return;
+    try {
+      await navigator.clipboard.writeText(revealedReset.password);
+      setCopied(true);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
   const activeMembers = members.filter((m) => !m.banned);
   const bannedMembers = members.filter((m) => m.banned);
 
@@ -345,7 +377,7 @@ function MembersTab({ baseUrl, token }: { baseUrl: string; token: string }) {
         {activeMembers.map((m) => (
           <li key={m.userId} className="member-row">
             {m.avatarUrl ? (
-              <img className="avatar" src={m.avatarUrl} alt="" />
+              <img className="avatar" src={authedMediaUrl(m.avatarUrl, baseUrl, token)} alt="" />
             ) : (
               <span className="avatar avatar-placeholder">{m.username[0]?.toUpperCase()}</span>
             )}
@@ -365,9 +397,29 @@ function MembersTab({ baseUrl, token }: { baseUrl: string; token: string }) {
             <button className="text-btn" onClick={() => handleAssign(m.userId)}>
               assign
             </button>
+            {isOwner && !m.isOwner && !m.isBot && (
+              <button className="text-btn" onClick={() => handleResetPassword(m.userId)}>
+                reset password
+              </button>
+            )}
           </li>
         ))}
       </ul>
+
+      {revealedReset && (
+        <div className="settings-section" style={{ background: "var(--bg-floating)", borderRadius: 6, padding: "0.6rem" }}>
+          <p className="subtitle">
+            New temp password for <strong>{members.find((m) => m.userId === revealedReset.userId)?.username}</strong> — won't
+            be shown again, relay it to them directly (DM, voice call — not this channel).
+          </p>
+          <div className="invite-row">
+            <code className="inline-code">{revealedReset.password}</code>
+            <button type="button" className="text-btn" onClick={handleCopyTempPassword}>
+              {copied ? "copied!" : "copy"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Banned members are hidden from the regular member list sidebar
           everyone sees — this is the one place their status is visible,
@@ -381,7 +433,7 @@ function MembersTab({ baseUrl, token }: { baseUrl: string; token: string }) {
             {bannedMembers.map((m) => (
               <li key={m.userId} className="member-row banned">
                 {m.avatarUrl ? (
-                  <img className="avatar" src={m.avatarUrl} alt="" />
+                  <img className="avatar" src={authedMediaUrl(m.avatarUrl, baseUrl, token)} alt="" />
                 ) : (
                   <span className="avatar avatar-placeholder">{m.username[0]?.toUpperCase()}</span>
                 )}
@@ -399,9 +451,57 @@ function MembersTab({ baseUrl, token }: { baseUrl: string; token: string }) {
   );
 }
 
+const ACTION_LABELS: Record<string, string> = {
+  ban: "banned",
+  unban: "unbanned",
+  kick: "kicked",
+  mute: "muted",
+  unmute: "unmuted",
+  reset_password: "reset the password of",
+};
+
+function AuditLogTab({ baseUrl, token }: { baseUrl: string; token: string }) {
+  const [entries, setEntries] = useState<ModerationLogEntry[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getModerationAuditLog(baseUrl, token)
+      .then(setEntries)
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [baseUrl, token]);
+
+  return (
+    <div className="settings-section">
+      <p className="subtitle">
+        Every ban, kick, mute, and password reset performed by a moderator or the owner, newest first. Visible to
+        anyone with MODERATE_MEMBERS — the same permission that lets someone perform these actions in the first
+        place.
+      </p>
+      {error && <p className="error">{error}</p>}
+      {loading && <p className="picker-empty">Loading…</p>}
+      {!loading && entries.length === 0 && <p className="picker-empty">No moderation actions yet.</p>}
+      <ul className="member-list">
+        {entries.map((e) => (
+          <li key={e.id} className="member-row">
+            <span className="member-username">
+              <strong>{e.actorUsername}</strong> {ACTION_LABELS[e.action] ?? e.action} <strong>{e.targetUsername}</strong>
+              {e.detail ? ` (${e.detail})` : ""}
+            </span>
+            <span className="invite-meta">{new Date(e.createdAt).toLocaleString()}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function InstanceSettingsModal({
   baseUrl,
   token,
+  isOwner,
+  canModerate,
   instanceInfo,
   channels,
   onClose,
@@ -412,6 +512,8 @@ export function InstanceSettingsModal({
 }: {
   baseUrl: string;
   token: string;
+  isOwner: boolean;
+  canModerate: boolean;
   instanceInfo: InstanceInfo;
   channels: Channel[];
   onClose: () => void;
@@ -450,13 +552,21 @@ export function InstanceSettingsModal({
         <button className={tab === "emoji" ? "active" : ""} onClick={() => setTab("emoji")}>
           Emoji
         </button>
+        <button className={tab === "apiBots" ? "active" : ""} onClick={() => setTab("apiBots")}>
+          API Bots
+        </button>
+        {canModerate && (
+          <button className={tab === "auditLog" ? "active" : ""} onClick={() => setTab("auditLog")}>
+            Audit Log
+          </button>
+        )}
       </div>
 
       {tab === "general" && (
         <GeneralTab baseUrl={baseUrl} token={token} instanceInfo={instanceInfo} channels={channels} onUpdated={onUpdated} />
       )}
       {tab === "roles" && <RolesTab baseUrl={baseUrl} token={token} />}
-      {tab === "members" && <MembersTab baseUrl={baseUrl} token={token} />}
+      {tab === "members" && <MembersTab baseUrl={baseUrl} token={token} isOwner={isOwner} />}
       {tab === "channels" && (
         <ChannelsPanel baseUrl={baseUrl} token={token} channels={channels} onChannelUpdated={onChannelUpdated} />
       )}
@@ -466,6 +576,8 @@ export function InstanceSettingsModal({
       {tab === "emoji" && (
         <EmojiSettingsPanel baseUrl={baseUrl} token={token} customEmoji={customEmoji} onChanged={onCustomEmojiChanged} />
       )}
+      {tab === "apiBots" && <ApiBotsPanel baseUrl={baseUrl} token={token} />}
+      {tab === "auditLog" && canModerate && <AuditLogTab baseUrl={baseUrl} token={token} />}
 
       <div className="modal-actions">
         <button className="btn secondary" onClick={onClose}>

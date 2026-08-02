@@ -155,6 +155,8 @@ export async function instanceRoutes(app: FastifyInstance) {
       joinedAt: u.createdAt,
       mutedUntil: u.mutedUntil,
       banned: u.banned,
+      isOwner: u.isOwner,
+      isBot: u.isBot,
       roles: u.memberRoles.map((mr) => ({ id: mr.role.id, name: mr.role.name })),
     }));
   });
@@ -178,6 +180,8 @@ export async function instanceRoutes(app: FastifyInstance) {
       joinedAt: user.createdAt,
       mutedUntil: user.mutedUntil,
       banned: user.banned,
+      isOwner: user.isOwner,
+      isBot: user.isBot,
       roles: user.memberRoles.map((mr) => ({ id: mr.role.id, name: mr.role.name })),
     };
   });
