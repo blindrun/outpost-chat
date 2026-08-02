@@ -21,6 +21,11 @@ export const UPLOAD_CATEGORIES = {
       ".php", ".sql", ".json", ".yaml", ".yml", ".toml", ".ini", ".env.example", ".xml", ".html", ".css",
     ],
   },
+  videos: {
+    label: "Videos",
+    permission: "UPLOAD_VIDEOS",
+    extensions: [".mp4", ".webm", ".mov", ".m4v", ".ogv"],
+  },
 } as const;
 
 export type UploadCategory = keyof typeof UPLOAD_CATEGORIES;
@@ -38,6 +43,11 @@ const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".av
 export function isImageAttachment(url: string): boolean {
   const clean = url.split(/[?#]/)[0].toLowerCase();
   return IMAGE_EXTENSIONS.some((ext) => clean.endsWith(ext));
+}
+
+export function isVideoAttachment(url: string): boolean {
+  const clean = url.split(/[?#]/)[0].toLowerCase();
+  return (UPLOAD_CATEGORIES.videos.extensions as readonly string[]).some((ext) => clean.endsWith(ext));
 }
 
 // The stored upload key is `${userId}/${uuid}-${originalFilename}` — strip

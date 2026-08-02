@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CustomEmoji, createCustomEmoji, deleteCustomEmoji, uploadFile } from "./api";
+import { authedMediaUrl, CustomEmoji, createCustomEmoji, deleteCustomEmoji, uploadFile } from "./api";
 
 export function EmojiSettingsPanel({
   baseUrl,
@@ -71,7 +71,7 @@ export function EmojiSettingsPanel({
       <ul className="role-list">
         {customEmoji.map((e) => (
           <li key={e.id} className="role-row">
-            <img src={e.imageUrl} alt={e.name} className="custom-emoji-preview" />
+            <img src={authedMediaUrl(e.imageUrl, baseUrl, token)} alt={e.name} className="custom-emoji-preview" />
             <strong>:{e.name}:</strong>
             <button className="text-btn" onClick={() => handleDelete(e.id)}>
               delete

@@ -18,6 +18,14 @@ model User {
   // card.
   bio          String?
   isOwner      Boolean  @default(false)
+  // A developer-created service account (see routes/apiBots.ts) — a real
+  // User row with real roles/permissions, distinct from the single
+  // built-in server BOT (welcome/leveling/automod, see routes/bot.ts) and
+  // from webhooks (one-way, no login). Its "token" is a normal never-
+  // expiring JWT minted at creation time and shown once; revocation and
+  // deletion both reuse existing User semantics (banned = instantly
+  // invalid token, delete = gone) rather than inventing a new mechanism.
+  isBot        Boolean  @default(false)
   createdAt    DateTime @default(now())
   // Timed moderation mute — blocks MESSAGE_SEND entirely (unlike automod's
   // per-message banned-word block) until this timestamp passes. Set either
@@ -119,6 +127,22 @@ model Warning {
   source      String // "automod" | "manual"
   moderatorId String? // null for automod-issued warnings
   createdAt   DateTime @default(now())
+}
+
+// Accountability trail for moderation actions (ban/kick/mute/reset-password)
+// — before this, none of them left any record of who did what to whom,
+// which matters the moment more than one person holds MODERATE_MEMBERS.
+// Deliberately no FK/relation to User on either id (unlike Warning, which
+// cascade-deletes with its user) — an audit entry is supposed to survive
+// the accounts involved being deleted later, same reasoning as
+// Message.authorId having no FK (see messages.ts).
+model ModerationLogEntry {
+  id        String   @id @default(uuid())
+  action    String // "ban" | "unban" | "kick" | "mute" | "unmute" | "reset_password"
+  actorId   String
+  targetId  String
+  detail    String?
+  createdAt DateTime @default(now())
 }
 
 model InstanceSettings {

@@ -121,6 +121,14 @@ export interface LinkPreviewData {
   siteName?: string;
 }
 
+export interface ApiBot {
+  id: string;
+  username: string;
+  avatarUrl?: string | null;
+  revoked: boolean;
+  createdAt: string;
+}
+
 export interface Webhook {
   id: string;
   channelId: string;
@@ -195,7 +203,8 @@ export type Permission =
   | "MODERATE_MEMBERS"
   | "UPLOAD_DOCUMENTS"
   | "UPLOAD_ARCHIVES"
-  | "UPLOAD_CODE";
+  | "UPLOAD_CODE"
+  | "UPLOAD_VIDEOS";
 
 export interface Role {
   id: string;
@@ -212,7 +221,20 @@ export interface Member {
   joinedAt: string;
   mutedUntil: string | null;
   banned: boolean;
+  isOwner: boolean;
+  isBot: boolean;
   roles: { id: string; name: string }[];
+}
+
+export interface ModerationLogEntry {
+  id: string;
+  action: string;
+  actorId: string;
+  actorUsername: string;
+  targetId: string;
+  targetUsername: string;
+  detail: string | null;
+  createdAt: string;
 }
 
 export interface BotSettings {
@@ -257,6 +279,21 @@ export interface BotConfig {
 
 export function toWsUrl(baseUrl: string): string {
   return baseUrl.replace(/^http/, "ws");
+}
+
+// Uploaded avatars/attachments/emoji are served from a private bucket
+// through an authenticated backend route now (see routes/fileServing.ts on
+// the server) — a plain <img>/<video> tag can't send an Authorization
+// header, so the session token is appended as a query param instead, same
+// tradeoff already accepted for this app's gateway WebSocket connection.
+// Only ever applied to our own same-origin uploads: an external URL (a GIF
+// picker result, a link-preview image) must never get the session token
+// appended to it, so this is a no-op for anything not under `baseUrl`.
+export function authedMediaUrl(url: string | null | undefined, baseUrl: string, token: string): string {
+  if (!url) return "";
+  if (!url.startsWith(baseUrl)) return url;
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}token=${token}`;
 }
 
 async function request<T>(baseUrl: string, path: string, token: string | null, init?: RequestInit): Promise<T> {
@@ -608,6 +645,28 @@ export function deleteWebhook(baseUrl: string, token: string, webhookId: string)
   return request<void>(baseUrl, `/webhooks/${webhookId}`, token, { method: "DELETE" });
 }
 
+export function listApiBots(baseUrl: string, token: string) {
+  return request<ApiBot[]>(baseUrl, "/api-bots", token);
+}
+
+export function createApiBot(baseUrl: string, token: string, username: string) {
+  return request<{ bot: ApiBot; token: string }>(baseUrl, "/api-bots", token, {
+    method: "POST",
+    body: JSON.stringify({ username }),
+  });
+}
+
+export function setApiBotRevoked(baseUrl: string, token: string, botId: string, revoked: boolean) {
+  return request<ApiBot>(baseUrl, `/api-bots/${botId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify({ revoked }),
+  });
+}
+
+export function deleteApiBot(baseUrl: string, token: string, botId: string) {
+  return request<void>(baseUrl, `/api-bots/${botId}`, token, { method: "DELETE" });
+}
+
 export function getBotConfig(baseUrl: string, token: string) {
   return request<BotConfig>(baseUrl, "/bot/settings", token);
 }
@@ -697,6 +756,16 @@ export function banMember(baseUrl: string, token: string, userId: string) {
 
 export function unbanMember(baseUrl: string, token: string, userId: string) {
   return request<void>(baseUrl, `/moderation/${userId}/unban`, token, { method: "POST" });
+}
+
+// Owner-only — returns the new temp password once (never stored/re-fetchable,
+// same "shown once" precedent as a bot account's token). See moderation.ts.
+export function resetMemberPassword(baseUrl: string, token: string, userId: string) {
+  return request<{ tempPassword: string }>(baseUrl, `/moderation/${userId}/reset-password`, token, { method: "POST" });
+}
+
+export function getModerationAuditLog(baseUrl: string, token: string) {
+  return request<ModerationLogEntry[]>(baseUrl, "/moderation/audit-log", token);
 }
 
 export function listFriends(baseUrl: string, token: string) {

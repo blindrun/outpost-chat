@@ -1,19 +1,17 @@
 import { useEffect, useState } from "react";
-import { Member, listMembers } from "./api";
+import { Member, authedMediaUrl, listMembers } from "./api";
 
 export function MemberList({
   baseUrl,
   token,
   onlineUserIds,
   onSelectMember,
-  onOpenFriends,
   refreshKey,
 }: {
   baseUrl: string;
   token: string;
   onlineUserIds: Set<string>;
   onSelectMember: (userId: string) => void;
-  onOpenFriends: () => void;
   // Bumped by the parent whenever a moderation action (ban/unban, role
   // change) happens elsewhere — this list otherwise only loads once on
   // mount, so a ban made from a profile card wouldn't show up here until a
@@ -68,7 +66,7 @@ export function MemberList({
           list.map((m) => (
             <button key={m.userId} type="button" className="member-list-entry" onClick={() => onSelectMember(m.userId)}>
               {m.avatarUrl ? (
-                <img className="avatar" src={m.avatarUrl} alt="" />
+                <img className="avatar" src={authedMediaUrl(m.avatarUrl, baseUrl, token)} alt="" />
               ) : (
                 <span className="avatar avatar-placeholder">{m.username[0]?.toUpperCase()}</span>
               )}
@@ -86,14 +84,6 @@ export function MemberList({
   return (
     <aside className="member-sidebar">
       <div className="member-sidebar-header">
-        <button
-          type="button"
-          className="chat-header-icon-btn"
-          title="Friends"
-          onClick={onOpenFriends}
-        >
-          👤
-        </button>
         <button
           type="button"
           className={`chat-header-icon-btn ${searchOpen ? "active" : ""}`}
