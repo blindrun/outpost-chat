@@ -113,6 +113,14 @@ export interface Gif {
   url: string;
 }
 
+export interface LinkPreviewData {
+  url: string;
+  title?: string;
+  description?: string;
+  image?: string;
+  siteName?: string;
+}
+
 export interface Webhook {
   id: string;
   channelId: string;
@@ -459,6 +467,18 @@ export function searchGifs(baseUrl: string, token: string, query: string) {
 
 export function trendingGifs(baseUrl: string, token: string) {
   return request<Gif[]>(baseUrl, "/gifs/trending", token);
+}
+
+// Best-effort: the backend returns 204 (no metadata found) as `undefined`
+// via request()'s existing handling; a hard failure (network error, 4xx/5xx)
+// is swallowed here too rather than surfaced, since a missing link preview
+// is never worth showing an error state for.
+export async function getLinkPreview(baseUrl: string, token: string, url: string): Promise<LinkPreviewData | undefined> {
+  try {
+    return await request<LinkPreviewData>(baseUrl, `/link-preview?url=${encodeURIComponent(url)}`, token);
+  } catch {
+    return undefined;
+  }
 }
 
 export async function uploadFile(baseUrl: string, token: string, file: File): Promise<{ url: string }> {
