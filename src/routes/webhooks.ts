@@ -101,6 +101,8 @@ export async function webhookRoutes(app: FastifyInstance) {
         webhookId: webhook.id,
         content: body.content ?? "",
         attachmentUrl: body.attachmentUrl,
+        overrideUsername: body.username,
+        overrideAvatarUrl: body.avatarUrl,
       },
     });
 
