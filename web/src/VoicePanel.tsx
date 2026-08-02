@@ -42,6 +42,25 @@ export function VoicePanel({ channel, session }: { channel: Channel; session: Vo
           <div className="mic-meter-fill" style={{ width: `${session.vadLevel}%` }} />
         </div>
       )}
+      {isThisChannel && session.mode === "ptt" && !session.muted && !session.deafened && (
+        // Same gate the keyboard PTT binding drives (useVoiceSession's
+        // triggerPtt) — there's no keyboard to bind on a touch-only client.
+        // Works alongside a keyboard binding too, not a replacement for it.
+        <button
+          type="button"
+          className={`btn ptt-hold-btn ${session.pttActive ? "active" : ""}`}
+          onMouseDown={() => session.triggerPtt(true)}
+          onMouseUp={() => session.triggerPtt(false)}
+          onMouseLeave={() => session.pttActive && session.triggerPtt(false)}
+          onTouchStart={(e) => {
+            e.preventDefault();
+            session.triggerPtt(true);
+          }}
+          onTouchEnd={() => session.triggerPtt(false)}
+        >
+          {session.pttActive ? "🎙️ Talking…" : "Hold to Talk"}
+        </button>
+      )}
 
       {!isThisChannel && session.activeChannel && (
         <p className="voice-status-note">Connected to 🔊 {session.activeChannel.name} elsewhere</p>

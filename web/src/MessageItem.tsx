@@ -225,6 +225,10 @@ export function MessageItem({
   // "open the existing thread" since the caller (App.tsx) knows which.
   onThreadClick: (message: Message) => void;
 }) {
+  // Desktop reveals the toolbar on :hover (index.css); there's no hover on
+  // a touchscreen, so tapping the message body toggles this instead — see
+  // the `.message.toolbar-active` rule in the mobile media query.
+  const [toolbarActive, setToolbarActive] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -282,7 +286,18 @@ export function MessageItem({
   const linkPreviewUrl = message.content ? extractFirstLinkPreviewUrl(message.content) : null;
 
   return (
-    <div ref={messageRef} className={`message ${grouped ? "message-grouped" : ""}`}>
+    <div
+      ref={messageRef}
+      className={`message ${grouped ? "message-grouped" : ""} ${toolbarActive ? "toolbar-active" : ""}`}
+      onClick={(e) => {
+        // Only toggle for taps on plain message content — clicking an
+        // actual interactive element (avatar, reaction, link, attachment)
+        // should do that element's own thing, not also flip the toolbar.
+        const target = e.target as HTMLElement;
+        if (target.closest("button, a, input, textarea")) return;
+        setToolbarActive((v) => !v);
+      }}
+    >
       {grouped ? (
         <span className="message-hover-timestamp">{formatShortTime(message.createdAt)}</span>
       ) : isRealUser ? (

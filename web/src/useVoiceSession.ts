@@ -30,6 +30,9 @@ function toInfo(p: Participant): ParticipantInfo {
 
 // Gates transmission on the bound key while connected; leaves the published
 // track alone otherwise (mic starts disabled, matching "hold to talk").
+// `gateRef` is also handed the same gate function so a touch-only client
+// (no keyboard to bind) can drive it from an on-screen hold button instead —
+// see `triggerPtt` in the hook below.
 function setupPushToTalk(
   room: Room,
   settings: AudioSettings,
@@ -37,10 +40,8 @@ function setupPushToTalk(
   mutedRef: { current: boolean },
   setMicEnabled: (v: boolean) => void,
   setPttActive: (v: boolean) => void,
+  gateRef: MutableRefObject<((active: boolean) => void) | null>,
 ): () => void {
-  if (!settings.pttKey) return () => {};
-  const pttKey = settings.pttKey;
-
   function applyGate(active: boolean) {
     setPttActive(active);
     if (mutedRef.current) return;
@@ -49,6 +50,15 @@ function setupPushToTalk(
       .then(() => isCurrent() && setMicEnabled(active))
       .catch((err) => console.warn("PTT mic toggle failed:", err));
   }
+
+  gateRef.current = applyGate;
+
+  if (!settings.pttKey) {
+    return () => {
+      gateRef.current = null;
+    };
+  }
+  const pttKey = settings.pttKey;
 
   function onKeyDown(e: KeyboardEvent) {
     if (e.code !== pttKey || e.repeat || !isCurrent()) return;
@@ -65,6 +75,7 @@ function setupPushToTalk(
   return () => {
     window.removeEventListener("keydown", onKeyDown);
     window.removeEventListener("keyup", onKeyUp);
+    gateRef.current = null;
   };
 }
 
@@ -170,6 +181,10 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
   // element per active share, labeled via a data attribute set on attach.
   const videoContainerRef = useRef<HTMLDivElement | null>(null);
   const automationCleanupRef = useRef<(() => void) | null>(null);
+  // Set only while mode === "ptt" and connected — see setupPushToTalk. Lets
+  // an on-screen hold button (no physical keyboard on mobile) drive the
+  // same gate the keyboard binding does.
+  const pttGateRef = useRef<((active: boolean) => void) | null>(null);
   const mutedRef = useRef(false);
   const deafenedRef = useRef(false);
   const mutedBeforeDeafenRef = useRef(false);
@@ -318,7 +333,7 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
 
           automationCleanupRef.current =
             settings.mode === "ptt"
-              ? setupPushToTalk(room, settings, isCurrent, mutedRef, setMicEnabled, setPttActive)
+              ? setupPushToTalk(room, settings, isCurrent, mutedRef, setMicEnabled, setPttActive, pttGateRef)
               : setupVoiceActivity(room, settings, isCurrent, mutedRef, setMicEnabled, setVadLevel);
 
           // A standing mute from the user bar (set before this join, or
@@ -388,6 +403,13 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
     // it on the next key press / voice-activity trigger, same as before.
   }, []);
 
+  // Drives PTT from an on-screen hold button instead of the keyboard —
+  // there's no keyboard on mobile. No-op if not currently in PTT mode
+  // (pttGateRef is only set up by setupPushToTalk while mode === "ptt").
+  const triggerPtt = useCallback((active: boolean) => {
+    pttGateRef.current?.(active);
+  }, []);
+
   const toggleDeafen = useCallback(async () => {
     const next = !deafenedRef.current;
     deafenedRef.current = next;
@@ -412,6 +434,7 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
     muted,
     deafened,
     pttActive,
+    triggerPtt,
     vadLevel,
     mode,
     error,
