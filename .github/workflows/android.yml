@@ -1,0 +1,95 @@
+name: Android client
+
+# Same tag-only trigger as desktop.yml -- a real signed release build
+# shouldn't happen on every branch push, only when a version is actually
+# being cut.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install web client deps
+        working-directory: web
+        run: npm ci
+
+      - name: Install mobile (Capacitor) deps
+        working-directory: mobile
+        run: npm ci
+
+      - name: Build web client + sync into the native Android project
+        working-directory: mobile
+        run: npm run sync
+
+      # No signing secrets configured yet (see mobile/android/keystore.properties.example
+      # and the Play Console prerequisites in the mobile client plan) -- this
+      # step is deliberately a no-op rather than a failure until then, same
+      # pattern desktop.yml's Twitter announce step already uses for secrets
+      # that don't exist yet. Without it, gradlew below produces an unsigned
+      # AAB (fine for a GitHub Release attachment, not uploadable to Play
+      # Console until this is wired up for real).
+      - name: Write signing keystore
+        working-directory: mobile/android
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "No signing keystore configured yet -- building unsigned."
+            exit 0
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > upload-keystore.jks
+          cat > keystore.properties <<PROPS
+          storeFile=upload-keystore.jks
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          PROPS
+
+      - name: Build release AAB
+        working-directory: mobile/android
+        run: chmod +x gradlew && ./gradlew bundleRelease
+
+      - name: Extract this version's changelog section
+        run: bash .github/scripts/extract-changelog.sh "${{ github.ref_name }}" > release-notes.md
+
+      - name: Upload release artifact
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release-notes.md
+          files: mobile/android/app/build/outputs/bundle/release/app-release.aab
+          fail_on_unmatched_files: false
+
+      # Inert until the one-time manual Play Console bootstrap is done (an
+      # app must already exist there before the API can publish to it --
+      # see the mobile client plan) and a service account key is added as
+      # ANDROID_PLAY_SERVICE_ACCOUNT_JSON. Safe to sit merged and unused
+      # until then, same as the keystore step above.
+      - name: Publish to Play Console
+        if: ${{ secrets.ANDROID_PLAY_SERVICE_ACCOUNT_JSON != '' }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.ANDROID_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.outpostchat.mobile
+          releaseFiles: mobile/android/app/build/outputs/bundle/release/app-release.aab
+          track: internal
