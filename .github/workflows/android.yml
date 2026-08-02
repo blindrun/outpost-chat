@@ -34,7 +34,10 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          # Capacitor 8's own Android module compiles against Java 21 --
+          # 17 failed with "Java compilation initialization error: invalid
+          # source release: 21" on capacitor-android specifically.
+          java-version: 21
 
       - uses: android-actions/setup-android@v3
 
