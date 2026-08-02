@@ -1,11 +1,14 @@
 __PUBLIC_HOST__ {
-	# Uploaded avatars/attachments (MinIO) and LiveKit's voice signaling both
-	# need to be reachable from the same HTTPS origin as the app itself —
-	# browsers silently fail to load plain-http images and flatly refuse
-	# plain-ws websockets when the page is https. Routing both through this
-	# same Caddy site (instead of exposing MinIO/LiveKit's raw ports directly)
-	# avoids needing separate certs for those ports too.
-	reverse_proxy /outpost-uploads/* localhost:9000
+	# LiveKit's voice signaling needs to be reachable from the same HTTPS
+	# origin as the app itself — browsers flatly refuse a plain-ws
+	# connection from an https page. Routing it through this same Caddy
+	# site (instead of exposing LiveKit's raw port directly) avoids needing
+	# a separate cert for it too.
+	#
+	# Uploaded avatars/attachments/emoji are served by the app itself now
+	# (GET /outpost-uploads/*, authenticated — see src/routes/fileServing.ts),
+	# not proxied straight to MinIO — the bucket is private, so MinIO's own
+	# port never needs to be reachable from outside this host at all.
 	reverse_proxy /rtc/* localhost:7880
 	reverse_proxy localhost:__APP_PORT__
 }

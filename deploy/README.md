@@ -42,20 +42,19 @@ first (real) user.
 
 Browsers only allow microphone access (`getUserMedia`) on a secure (HTTPS)
 page, so voice chat needs this instance behind HTTPS. That has a
-non-obvious consequence: avatars/attachments (served by MinIO) and voice
-signaling (served by LiveKit) both need to be reachable from the **same**
-HTTPS origin as the app — pointing them at a bare `http://host:9000` or
-`ws://host:7880` instead breaks silently. Browsers auto-upgrade insecure
-`<img>` requests to HTTPS and just fail if nothing's listening there
-(broken avatar/icon images, no visible error); they flatly refuse to even
-attempt an insecure WebSocket from a secure page (voice never connects,
-`DOMException: The operation is insecure` in the console).
+non-obvious consequence: voice signaling (served by LiveKit) needs to be
+reachable from the **same** HTTPS origin as the app — pointing it at a
+bare `ws://host:7880` instead breaks silently, since browsers flatly
+refuse to even attempt an insecure WebSocket from a secure page (voice
+never connects, `DOMException: The operation is insecure` in the
+console). Avatars/attachments/emoji are served by the app itself (not
+MinIO directly — see [private uploads](#uploads-are-private) below), so
+they don't have this problem.
 
 If you said yes to the HTTPS prompt, `install.sh` already generated a
-ready-to-use `Caddyfile` in this directory that proxies both
-`/outpost-uploads/*` (MinIO) and `/rtc/*` (LiveKit signaling) through the
-same site as the app, and set `LIVEKIT_URL`/`MINIO_PUBLIC_URL` in `.env` to
-the matching `wss://`/`https://` addresses. To actually put it in effect:
+ready-to-use `Caddyfile` in this directory that proxies `/rtc/*` (LiveKit
+signaling) through the same site as the app, and set `LIVEKIT_URL` in
+`.env` to the matching `wss://` address. To actually put it in effect:
 
 ```bash
 # Install Caddy if it isn't already: https://caddyserver.com/docs/install
@@ -67,12 +66,25 @@ Make sure your domain's DNS already points at this server before reloading
 — Caddy fetches a real Let's Encrypt certificate automatically on first
 request, no manual cert setup needed. Using a different reverse proxy
 (nginx, Traefik, etc.) instead of Caddy is fine too — just replicate the
-same three routes (app, `/outpost-uploads/*` → MinIO, `/rtc/*` → LiveKit)
-under one HTTPS site.
+same two routes (`/rtc/*` → LiveKit, everything else → the app) under one
+HTTPS site.
 
 If you're testing on a LAN with no domain/TLS, you can skip this — voice
 chat just won't work until you add it later (re-run `install.sh` after
 deleting `.env` to add TLS to an existing install).
+
+## Uploads are private
+
+Avatars, message attachments, and custom emoji are stored in MinIO, but
+the bucket itself is private — MinIO's own port isn't reachable from
+outside this host at all (see `docker-compose.yml`, bound to
+`127.0.0.1`). The app serves them itself through an authenticated route
+(`GET /outpost-uploads/*`), so a leaked or guessed file URL doesn't work
+on its own; it has to come with a live, non-banned session token (the web
+and desktop clients handle this automatically). Need to browse the bucket
+directly for some reason? Tunnel in rather than opening the port:
+`ssh -L 9001:localhost:9001 <this-host>`, then open
+`http://localhost:9001` for the MinIO console.
 
 ## Manual install
 
