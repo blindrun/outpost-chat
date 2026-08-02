@@ -91,7 +91,7 @@ export function MemberList({
       <div className="member-sidebar-header">
         {onClose && (
           <button type="button" className="chat-header-icon-btn mobile-only-btn" title="Back" onClick={onClose}>
-            ←
+            ⬅️
           </button>
         )}
         <button
