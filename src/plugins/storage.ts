@@ -9,28 +9,21 @@ export const minioClient = new Client({
 });
 
 export const BUCKET = process.env.MINIO_BUCKET ?? "outpost-uploads";
-export const PUBLIC_URL = process.env.MINIO_PUBLIC_URL ?? `http://localhost:9000/${BUCKET}`;
+// Routes through the app's own port by default now, not MinIO's (9000)
+// directly — see routes/fileServing.ts. The bucket is private; nothing can
+// fetch from MinIO's own port without valid MinIO credentials anymore.
+export const PUBLIC_URL = process.env.MINIO_PUBLIC_URL ?? `http://localhost:${process.env.PORT ?? 8080}/${BUCKET}`;
 
-const publicReadPolicy = JSON.stringify({
-  Version: "2012-10-17",
-  Statement: [
-    {
-      Effect: "Allow",
-      Principal: { AWS: ["*"] },
-      Action: ["s3:GetObject"],
-      Resource: [`arn:aws:s3:::${BUCKET}/*`],
-    },
-  ],
-});
-
-// Dev-only convenience: uploaded files are served back at a stable, directly
-// fetchable public URL rather than minting presigned GETs per request — this
-// bucket has no sensitive content (avatars/attachments only), so public-read
-// is an acceptable tradeoff here, not something to carry into a real deploy.
+// Private bucket (MinIO's default — no explicit policy needed, but ensured
+// idempotently in case a pre-existing bucket from before this change still
+// has the old public-read policy attached). Uploaded files are served
+// through the app's own authenticated proxy route instead (see
+// routes/fileServing.ts) — a leaked or guessed object key alone no longer
+// works, unlike the previous public-read setup.
 export async function ensureBucket() {
   const exists = await minioClient.bucketExists(BUCKET).catch(() => false);
   if (!exists) {
     await minioClient.makeBucket(BUCKET);
   }
-  await minioClient.setBucketPolicy(BUCKET, publicReadPolicy);
+  await minioClient.setBucketPolicy(BUCKET, "").catch(() => {});
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.17 — 2026-08-02
+
+- **Uploads are private now.** Avatars, message attachments, and custom emoji were previously stored in a public-read bucket — anyone with a URL (leaked, guessed, or shared) could view it forever, even after it was deleted from the app. Uploads are now served through an authenticated route instead; a valid, non-banned session is required. No visible change for normal usage — existing links keep working, video seeking still works — this is entirely a server-side hardening change. Self-hosters: MinIO's own port no longer needs to be reachable from outside the host at all.
+
 ## v0.2.16 — 2026-08-02
 
 - **Inline video playback.** Videos are now a real upload category (gated per-role, like documents/archives/code) and render as an actual playable `<video>` in chat instead of a download link. Raised the upload cap from 8MB to 25MB — 8MB was barely a couple of seconds of real video.

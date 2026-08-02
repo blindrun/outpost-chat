@@ -55,7 +55,7 @@ if [[ "$USE_TLS" =~ ^[Yy] ]]; then
   sedi "s|^MINIO_PUBLIC_URL=.*|MINIO_PUBLIC_URL=https://${PUBLIC_HOST}/outpost-uploads|"
 else
   sedi "s|^LIVEKIT_URL=.*|LIVEKIT_URL=ws://${PUBLIC_HOST}:7880|"
-  sedi "s|^MINIO_PUBLIC_URL=.*|MINIO_PUBLIC_URL=http://${PUBLIC_HOST}:9000/outpost-uploads|"
+  sedi "s|^MINIO_PUBLIC_URL=.*|MINIO_PUBLIC_URL=http://${PUBLIC_HOST}:${APP_PORT}/outpost-uploads|"
 fi
 sedi "s|^APP_IMAGE=.*|APP_IMAGE=ghcr.io/${IMAGE_OWNER}/outpost-chat:latest|"
 
