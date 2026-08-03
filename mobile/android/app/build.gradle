@@ -22,8 +22,8 @@ android {
         // own semver. versionName is kept in step with the other 4
         // package.json files bumped together each release (no automation
         // for this across any of the 5 today — see the mobile client plan).
-        versionCode 2
-        versionName "0.2.18"
+        versionCode 3
+        versionName "0.2.21"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
