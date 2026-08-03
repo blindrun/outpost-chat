@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.0 — 2026-08-03
+
+- **Import an existing Discord server.** New owner-only Import tab in Instance Settings: point it at a Discord server via a bot token you create yourself, and it recreates the channels, roles, and custom emoji here — with an opt-in (off by default) full message history backfill, attributed to one per-author webhook identity rather than a single generic import account. Meant to be run once, early, before real content accumulates — see the in-app instructions for the Discord-side bot setup and known limitations (no category concept, coarse permission mapping, not a merge/sync tool).
+
 ## v0.2.21 — 2026-08-03
 
 - **The Android app is downloadable for the first time.** A debug build (self-signed — Android will warn it's from outside the Play Store, expected for now) is attached directly to this release on the [Releases page](https://github.com/blindrun/outpost-chat/releases), the same way the desktop installers are. It's still the Capacitor wrapper around the same web client, not a from-scratch native app.

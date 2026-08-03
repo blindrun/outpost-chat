@@ -26,6 +26,7 @@ import { BotSettingsPanel } from "./BotSettingsPanel";
 import { ChannelsPanel } from "./ChannelsPanel";
 import { EmojiSettingsPanel } from "./EmojiSettingsPanel";
 import { ApiBotsPanel } from "./ApiBotsPanel";
+import { ImportPanel } from "./ImportPanel";
 import { ThemePicker } from "./ThemePicker";
 
 const ALL_PERMISSIONS: Permission[] = [
@@ -39,7 +40,7 @@ const ALL_PERMISSIONS: Permission[] = [
   "UPLOAD_VIDEOS",
 ];
 
-type Tab = "general" | "roles" | "members" | "channels" | "invites" | "webhooks" | "bot" | "emoji" | "apiBots" | "auditLog";
+type Tab = "general" | "roles" | "members" | "channels" | "invites" | "webhooks" | "bot" | "emoji" | "apiBots" | "auditLog" | "import";
 
 function GeneralTab({
   baseUrl,
@@ -560,6 +561,11 @@ export function InstanceSettingsModal({
             Audit Log
           </button>
         )}
+        {isOwner && (
+          <button className={tab === "import" ? "active" : ""} onClick={() => setTab("import")}>
+            Import
+          </button>
+        )}
       </div>
 
       {tab === "general" && (
@@ -578,6 +584,7 @@ export function InstanceSettingsModal({
       )}
       {tab === "apiBots" && <ApiBotsPanel baseUrl={baseUrl} token={token} />}
       {tab === "auditLog" && canModerate && <AuditLogTab baseUrl={baseUrl} token={token} />}
+      {tab === "import" && isOwner && <ImportPanel baseUrl={baseUrl} token={token} />}
 
       <div className="modal-actions">
         <button className="btn secondary" onClick={onClose}>
