@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.2.18 — 2026-08-02
+
+- **The web app is actually usable on a phone now.** Previously the desktop layout just got squeezed onto a small screen — now it switches to full-screen panes (server/channel list, chat, members) below tablet width, with a hamburger button and a proper back button to move between them.
+- Message actions (reply/react/edit/delete) now also open with a tap, not just a hover — there's no hover on a touchscreen.
+- Fixed videos and GIFs overflowing the screen on mobile instead of scaling down to fit.
+- Bumped touch target sizes on the header icons (they were sized for a mouse cursor) and fixed them rendering too dim to see clearly on mobile.
+- Push-to-talk now has an on-screen hold button, for when there's no keyboard to bind a key on.
+- Fixed a webhook bug: a per-message username/avatar override (for a bot posting as different personas) would silently revert to the webhook's default identity on page reload — the override was broadcast live but never actually saved.
+
 ## v0.2.17 — 2026-08-02
 
 - **Uploads are private now.** Avatars, message attachments, and custom emoji were previously stored in a public-read bucket — anyone with a URL (leaked, guessed, or shared) could view it forever, even after it was deleted from the app. Uploads are now served through an authenticated route instead; a valid, non-banned session is required. No visible change for normal usage — existing links keep working, video seeking still works — this is entirely a server-side hardening change. Self-hosters: MinIO's own port no longer needs to be reachable from outside the host at all.
