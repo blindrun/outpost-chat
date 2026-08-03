@@ -84,15 +84,23 @@ jobs:
         working-directory: mobile/android
         run: chmod +x gradlew && ./gradlew bundleRelease
 
-      # A manual (workflow_dispatch) run has no version tag to attach a
-      # release to -- just upload the AAB as a plain workflow artifact so it
-      # can be downloaded and sideloaded for a real test build.
+      # An AAB can't actually be sideloaded -- it's not an installable
+      # package, Play Console (or bundletool) has to turn it into device-
+      # specific APKs first. For a manual (workflow_dispatch) test run there's
+      # no tag to attach a Play-bound AAB to anyway, so build a debug APK
+      # instead: self-signed with the Android debug key, directly
+      # `adb install`-able / sideloadable on a real device.
+      - name: Build debug APK (manual test runs)
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        working-directory: mobile/android
+        run: ./gradlew assembleDebug
+
       - name: Upload build as a workflow artifact (manual runs)
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: actions/upload-artifact@v4
         with:
           name: outpost-android-test-build
-          path: mobile/android/app/build/outputs/bundle/release/app-release.aab
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Extract this version's changelog section
         if: startsWith(github.ref, 'refs/tags/')
