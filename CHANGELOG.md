@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.20 — 2026-08-03
+
+- **The connected-voice details panel no longer covers the channel list.** It used to open directly over the sidebar, blocking channel navigation while connected to voice. It now floats over the main chat area instead, and can be minimized down to a slim status bar to get it fully out of the way.
+
 ## v0.2.19 — 2026-08-02
 
 - **Fixed captcha failures on the desktop app.** Cloudflare Turnstile sitekeys are locked to specific domains, but the Windows/Mac/Linux desktop app runs its UI from a `file://` origin, which never matches — so registration always failed with "captcha verification failed" there, even though the exact same widget worked fine on the web. The captcha now renders inside an iframe pointed at the instance's own domain (a new small page the server hosts), so it always runs same-origin with the real backend no matter which client loads it.

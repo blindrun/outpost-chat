@@ -595,16 +595,20 @@ button, input, select {
   cursor: pointer;
 }
 .voice-status-bar:hover { background: var(--interactive-hover); }
+/* Fixed and offset clear of the 72px server rail + 240px channel sidebar
+   (see .app's grid-template-columns) rather than absolutely positioned
+   within the sidebar column — floating it over the main chat area instead
+   of the channel list means opening it never blocks channel navigation,
+   which the previous sidebar-relative placement did. */
 .voice-details-popover {
-  position: absolute;
-  bottom: 100%;
-  left: 0;
+  position: fixed;
+  left: 328px;
+  bottom: 16px;
   width: 300px;
-  margin-bottom: 0.3rem;
   background: var(--bg-primary);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-  z-index: 25;
+  z-index: 50;
   max-height: 60vh;
   overflow-y: auto;
 }
@@ -1166,6 +1170,10 @@ button, input, select {
 
 .voice-panel { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 1.5rem; padding: 2rem; }
 .voice-panel h3 { color: var(--header-primary); }
+.voice-panel-header { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 0.5rem; }
+.voice-panel-header h3 { margin: 0; }
+.voice-panel-header .icon-btn { flex-shrink: 0; }
+.voice-panel.minimized { gap: 0; }
 .voice-controls { display: flex; gap: 0.6rem; flex-wrap: wrap; justify-content: center; }
 .voice-participants { list-style: none; padding: 0; margin: 0; display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center; }
 .voice-participant { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; width: 88px; }
@@ -1459,6 +1467,12 @@ button, input, select {
   .app:not(.mobile-pane-nav) .sidebar { display: none; }
   .app:not(.mobile-pane-chat) .chat-pane { display: none; }
   .app:not(.mobile-pane-members) .member-sidebar { display: none; }
+
+  /* Desktop's left:328px offset (clearing the two-rail sidebar) would push
+     this off-screen on a single-pane mobile layout — full-width bottom
+     sheet instead, still clear of the channel list underneath since panes
+     are mutually exclusive full-screen overlays here anyway. */
+  .voice-details-popover { left: 0.5rem; right: 0.5rem; bottom: 4.5rem; width: auto; }
 
   /* Hidden on desktop (App.tsx/MemberList.tsx render these unconditionally);
      shown here as the only way to switch panes on mobile. */
