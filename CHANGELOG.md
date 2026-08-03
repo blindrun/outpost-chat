@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.2.21 — 2026-08-03
+
+- **The Android app is downloadable for the first time.** A debug build (self-signed — Android will warn it's from outside the Play Store, expected for now) is attached directly to this release on the [Releases page](https://github.com/blindrun/outpost-chat/releases), the same way the desktop installers are. It's still the Capacitor wrapper around the same web client, not a from-scratch native app.
+- **Fixed voice channels not working in the Android app at all.** Two separate bugs, both only reachable via real device testing (nothing in local dev or CI could catch either): the WebView never forwarded the page's microphone permission request to Android's own runtime permission system, so joining voice silently failed with no mic prompt ever appearing; fixing that surfaced a second failure (`NotReadableError`, "could not start audio source") because nothing was putting the device's audio system into communication mode, which Chromium's WebView needs to actually open the microphone. Voice channels now work end-to-end on a real device.
+
 ## Internal / infrastructure — 2026-08-03
 
 No user-facing changes; not a tagged release.
