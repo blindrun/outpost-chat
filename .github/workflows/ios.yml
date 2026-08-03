@@ -54,7 +54,7 @@ jobs:
         working-directory: mobile/ios/App
         run: |
           xcodebuild build \
-            -workspace App.xcworkspace \
+            -project App.xcodeproj \
             -scheme App \
             -destination "generic/platform=iOS Simulator" \
             CODE_SIGNING_ALLOWED=NO
@@ -91,7 +91,7 @@ jobs:
           IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
         run: |
           xcodebuild archive \
-            -workspace App.xcworkspace \
+            -project App.xcodeproj \
             -scheme App \
             -sdk iphoneos \
             -archivePath "$RUNNER_TEMP/App.xcarchive" \
