@@ -53,6 +53,12 @@ function setupPushToTalk(
 
   gateRef.current = applyGate;
 
+  // Start gated closed — join() enables the mic before this runs (so a
+  // permission prompt/track exists to gate at all), but "hold to talk"
+  // means silent until the key is actually held, same as VAD starts closed
+  // until the level first crosses the threshold.
+  applyGate(false);
+
   if (!settings.pttKey) {
     return () => {
       gateRef.current = null;

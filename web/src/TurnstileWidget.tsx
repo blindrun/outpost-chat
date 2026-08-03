@@ -1,61 +1,43 @@
 import { useEffect, useRef } from "react";
 
-// Cloudflare's own script manages a global `window.turnstile` — loaded
-// lazily and only once, so self-hosters who never configure Turnstile
-// (no siteKey, this component never mounts) don't pull in third-party JS
-// at all.
-const SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js";
-let scriptPromise: Promise<void> | null = null;
+// Rendered as an iframe pointed at this instance's own /turnstile.html
+// (served by the backend, same origin as the sitekey's Cloudflare-configured
+// allowed domain) rather than injecting Cloudflare's script directly into
+// this page. Turnstile sitekeys are domain-locked, and this component can
+// run from origins that never match that allowlist — notably the desktop
+// app's `file://` origin — where a directly-embedded widget silently fails
+// (or produces a token that fails server-side verification). The iframe
+// approach keeps the challenge running same-origin with the real backend
+// regardless of what's hosting this component, and the token comes back via
+// postMessage.
+export function TurnstileWidget({
+  baseUrl,
+  onVerify,
+}: {
+  baseUrl: string;
+  onVerify: (token: string) => void;
+}) {
+  const onVerifyRef = useRef(onVerify);
+  onVerifyRef.current = onVerify;
 
-function loadTurnstileScript(): Promise<void> {
-  if (scriptPromise) return scriptPromise;
-  scriptPromise = new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${SCRIPT_SRC}"]`)) {
-      resolve();
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = SCRIPT_SRC;
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("failed to load Turnstile"));
-    document.head.appendChild(script);
-  });
-  return scriptPromise;
-}
-
-declare global {
-  interface Window {
-    turnstile?: {
-      render: (
-        container: HTMLElement,
-        options: { sitekey: string; callback: (token: string) => void; "error-callback"?: () => void },
-      ) => string;
-      reset: (widgetId?: string) => void;
-      remove: (widgetId?: string) => void;
-    };
-  }
-}
-
-export function TurnstileWidget({ siteKey, onVerify }: { siteKey: string; onVerify: (token: string) => void }) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const widgetIdRef = useRef<string | null>(null);
+  const frameOrigin = new URL(baseUrl).origin;
 
   useEffect(() => {
-    let cancelled = false;
-    loadTurnstileScript().then(() => {
-      if (cancelled || !containerRef.current || !window.turnstile) return;
-      widgetIdRef.current = window.turnstile.render(containerRef.current, {
-        sitekey: siteKey,
-        callback: onVerify,
-      });
-    });
-    return () => {
-      cancelled = true;
-      if (widgetIdRef.current && window.turnstile) window.turnstile.remove(widgetIdRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [siteKey]);
+    function handleMessage(event: MessageEvent) {
+      if (event.origin !== frameOrigin) return;
+      if (event.data?.type !== "outpost-turnstile-token") return;
+      onVerifyRef.current(event.data.token);
+    }
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [frameOrigin]);
 
-  return <div ref={containerRef} className="turnstile-widget" />;
+  return (
+    <iframe
+      className="turnstile-widget"
+      src={`${baseUrl}/turnstile.html`}
+      title="Captcha"
+      style={{ border: 0, width: 300, height: 65 }}
+    />
+  );
 }
