@@ -1,0 +1,164 @@
+name: iOS client
+
+# Same trigger shape as android.yml: workflow_dispatch for manual test runs,
+# tag push for a real release. Milestone 1 of the iOS plan only needs an
+# unsigned Simulator build to prove the WebView-wrapped app compiles --
+# there's no native voice plugin yet, and no Apple Developer secrets exist.
+# Real device/TestFlight signing activates automatically once those secrets
+# are added, same inert-until-configured pattern as android.yml's
+# "Write signing keystore" step.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    # `secrets` isn't resolvable inside a step's own `if:` -- route through
+    # job-level env instead, same reason android.yml does this for
+    # HAS_PLAY_CREDENTIALS.
+    env:
+      HAS_APPLE_SIGNING: ${{ secrets.IOS_DIST_CERTIFICATE_P12_BASE64 != '' }}
+      HAS_TESTFLIGHT_CREDENTIALS: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Capacitor's CLI requires Node >=22, same as android.yml.
+          node-version: 22
+
+      # macos-latest has already rolled to Xcode 26 (Capacitor's iOS build
+      # requires 26.0+) -- this is just a sanity log in case the runner
+      # image's default Xcode drifts, not a hard version pin.
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Install web client deps
+        working-directory: web
+        run: npm ci
+
+      - name: Install mobile (Capacitor) deps
+        working-directory: mobile
+        run: npm ci
+
+      - name: Build web client + sync into the native iOS project
+        working-directory: mobile
+        run: npm run sync:ios
+
+      - name: Build for iOS Simulator (unsigned)
+        working-directory: mobile/ios/App
+        run: |
+          xcodebuild build \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -destination "generic/platform=iOS Simulator" \
+            CODE_SIGNING_ALLOWED=NO
+
+      # Inert until real Apple Developer Program secrets exist (see the iOS
+      # plan's milestone 3) -- imports a distribution certificate and
+      # provisioning profile into a temporary CI keychain. Same
+      # no-op-until-configured pattern as android.yml's signing keystore step.
+      - name: Import signing identity
+        if: env.HAS_APPLE_SIGNING == 'true'
+        env:
+          IOS_DIST_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_DIST_CERTIFICATE_P12_BASE64 }}
+          IOS_DIST_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DIST_CERTIFICATE_PASSWORD }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          echo "$IOS_DIST_CERTIFICATE_P12_BASE64" | base64 -d -o "$RUNNER_TEMP/dist.p12"
+          security import "$RUNNER_TEMP/dist.p12" -P "$IOS_DIST_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" "$(security list-keychains -d user | sed 's/"//g')"
+
+          mkdir -p ~/Library/MobileDevice/"Provisioning Profiles"
+          echo "$IOS_PROVISIONING_PROFILE_BASE64" | base64 -d -o ~/Library/MobileDevice/"Provisioning Profiles"/profile.mobileprovision
+
+      - name: Build signed archive
+        if: env.HAS_APPLE_SIGNING == 'true'
+        working-directory: mobile/ios/App
+        env:
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+        run: |
+          xcodebuild archive \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -sdk iphoneos \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            DEVELOPMENT_TEAM="$IOS_TEAM_ID"
+
+      # TestFlight always distributes through App Store Connect -- there's no
+      # separate "ad-hoc for TestFlight" export method the way Android has a
+      # plain debug-signed APK. exportOptions.plist is generated here rather
+      # than checked into the repo since it needs the real team ID, which
+      # only exists as a secret, not a repo-committed fact.
+      - name: Export .ipa
+        if: env.HAS_APPLE_SIGNING == 'true'
+        working-directory: mobile/ios/App
+        env:
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+        run: |
+          cat > "$RUNNER_TEMP/exportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store</string>
+            <key>teamID</key>
+            <string>$IOS_TEAM_ID</string>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/exportOptions.plist"
+
+      # Unlike Android, there's no plain "sideload the .ipa" path -- a real
+      # device install needs either a UDID-registered ad-hoc profile or a
+      # TestFlight invite even for the very first on-device test. This
+      # artifact is for inspection/manual TestFlight upload, not sideloading.
+      - name: Upload signed .ipa as a workflow artifact (manual runs)
+        if: ${{ env.HAS_APPLE_SIGNING == 'true' && !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: outpost-ios-test-build
+          path: ${{ runner.temp }}/export/*.ipa
+
+      - name: Extract this version's changelog section
+        if: ${{ env.HAS_APPLE_SIGNING == 'true' && startsWith(github.ref, 'refs/tags/') }}
+        run: bash .github/scripts/extract-changelog.sh "${{ github.ref_name }}" > release-notes.md
+
+      - name: Upload release artifact
+        if: ${{ env.HAS_APPLE_SIGNING == 'true' && startsWith(github.ref, 'refs/tags/') }}
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release-notes.md
+          files: ${{ runner.temp }}/export/*.ipa
+          fail_on_unmatched_files: false
+
+      # Inert until App Store Connect API credentials exist (see the iOS
+      # plan's milestone 3) -- uploads straight to TestFlight internal
+      # testing, which needs no App Review at all.
+      - name: Upload to TestFlight
+        if: ${{ env.HAS_APPLE_SIGNING == 'true' && env.HAS_TESTFLIGHT_CREDENTIALS == 'true' && startsWith(github.ref, 'refs/tags/') }}
+        env:
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_P8_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_P8_BASE64 }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$APP_STORE_CONNECT_KEY_P8_BASE64" | base64 -d -o ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8
+          xcrun altool --upload-app -f "$RUNNER_TEMP"/export/*.ipa -t ios \
+            --apiKey "$APP_STORE_CONNECT_API_KEY_ID" --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
