@@ -16,7 +16,7 @@ import {
 import { ThemePicker } from "./ThemePicker";
 import { TurnstileWidget } from "./TurnstileWidget";
 
-type Step = "address" | "connecting" | "auth" | "mfa" | "theme" | "intro";
+type Step = "address" | "connecting" | "auth" | "mfa" | "theme" | "intro" | "memberIntro";
 
 // A short admin-only walkthrough shown once, right after the very first
 // owner finishes setup — points at real, already-built Instance Settings
@@ -37,6 +37,30 @@ const INTRO_CARDS: { title: string; body: string }[] = [
   {
     title: "Webhooks, and that's it",
     body: "Webhooks tab: let an external tool (CI, a script, anything that can POST) post messages into a channel without a real account. That covers everything — Instance Settings is always one click away via the gear icon.",
+  },
+];
+
+// Shown once, right after a brand-new member's first registration on an
+// already-claimed instance — the owner's INTRO_CARDS above cover admin
+// surfaces this person has no reason to see. Points at things that are
+// easy to genuinely miss on first use rather than self-evident ones like
+// "type in the box to send a message."
+const MEMBER_INTRO_CARDS: { title: string; body: string }[] = [
+  {
+    title: "Welcome!",
+    body: "A quick tour of a few things that aren't obvious at a glance. Skip anytime — nothing here is required reading.",
+  },
+  {
+    title: "Voice channels",
+    body: "Push-to-talk is on by default — hold the bind key to talk. Prefer it to just stay open while you're speaking? Switch to voice-activity mode, and pick your mic/speaker, in User Settings → Voice.",
+  },
+  {
+    title: "Messages",
+    body: "Type @ to mention someone, or :name: for a custom emoji if this server has any. Hover a message (or tap it on mobile) to reply, edit, delete, or start a thread from it.",
+  },
+  {
+    title: "Friends & DMs",
+    body: "The Friends button lives in the user bar at the bottom-left, next to your avatar — add friends by username and message them directly, outside of any server channel.",
   },
 ];
 
@@ -91,6 +115,7 @@ export function AddServerModal({
   const [pendingInstance, setPendingInstance] = useState<Instance | null>(null);
   const [theme, setTheme] = useState<Theme>("business");
   const [introIndex, setIntroIndex] = useState(0);
+  const [memberIntroIndex, setMemberIntroIndex] = useState(0);
 
   // Second-factor step, entered when POST /auth/login comes back with
   // mfaRequired instead of a session. mfaChallenge holds the short-lived
@@ -158,6 +183,18 @@ export function AddServerModal({
       setPendingSession(result);
       setPendingInstance(instance);
       setStep("theme");
+      return;
+    }
+    // A brand-new member registering on an already-claimed instance —
+    // distinct from the owner-claim path above, and (unlike that one)
+    // never reachable from the MFA path, since a fresh registration can't
+    // already have 2FA configured. Every subsequent login skips straight
+    // to onConnected below, same as always.
+    if (authMode === "register") {
+      setPendingSession(result);
+      setPendingInstance(instance);
+      setMemberIntroIndex(0);
+      setStep("memberIntro");
       return;
     }
     onConnected(instance, result);
@@ -240,6 +277,11 @@ export function AddServerModal({
   }
 
   function finishIntro() {
+    if (!pendingSession || !pendingInstance) return;
+    onConnected(pendingInstance, pendingSession);
+  }
+
+  function finishMemberIntro() {
     if (!pendingSession || !pendingInstance) return;
     onConnected(pendingInstance, pendingSession);
   }
@@ -452,6 +494,39 @@ export function AddServerModal({
         <div className="modal-actions">
           <button className="btn" onClick={handleThemeConfirm}>
             Continue
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "memberIntro") {
+    const isLastCard = memberIntroIndex === MEMBER_INTRO_CARDS.length - 1;
+    const card = MEMBER_INTRO_CARDS[memberIntroIndex];
+    return (
+      <div className="add-server-form">
+        <h2>{card.title}</h2>
+        <p className="subtitle">{card.body}</p>
+        <div className="intro-dots">
+          {MEMBER_INTRO_CARDS.map((_, i) => (
+            <span key={i} className={i === memberIntroIndex ? "active" : ""} />
+          ))}
+        </div>
+        <div className="modal-actions">
+          <button type="button" className="btn secondary" onClick={finishMemberIntro}>
+            Skip
+          </button>
+          {memberIntroIndex > 0 && (
+            <button type="button" className="btn secondary" onClick={() => setMemberIntroIndex((i) => i - 1)}>
+              Back
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn"
+            onClick={() => (isLastCard ? finishMemberIntro() : setMemberIntroIndex((i) => i + 1))}
+          >
+            {isLastCard ? "Get Started" : "Next"}
           </button>
         </div>
       </div>
