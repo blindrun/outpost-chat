@@ -1,5 +1,12 @@
 # Changelog
 
+## Internal / infrastructure — 2026-08-03
+
+No user-facing changes; not a tagged release.
+
+- Fixed the Android CI workflow's manual test-build artifact: it was uploading an `.aab` (Android App Bundle), which isn't directly installable — that format only exists for Play Console to generate device-specific APKs from. Manual (`workflow_dispatch`) runs now build and upload a debug APK instead, which can actually be sideloaded onto a real device.
+- Patched a Dependabot alert (`uuid` < 11.1.1, medium severity) in the mobile client's dependency tree via an npm `overrides` pin to 11.1.1. Pulled in transitively through `@capacitor/cli` → `xcode`, which only ever calls the unaffected `uuid.v4()` code path, and is dev-only tooling never shipped in the app — low real risk, patched anyway since it was free.
+
 ## v0.2.20 — 2026-08-03
 
 - **The connected-voice details panel no longer covers the channel list.** It used to open directly over the sidebar, blocking channel navigation while connected to voice. It now floats over the main chat area instead, and can be minimized down to a slim status bar to get it fully out of the way.
