@@ -847,6 +847,37 @@ type GatewayEvent =
 // from automatically instead of leaving the tab silently dead.
 const NON_RETRYABLE_CLOSE_CODES = new Set([4001, 4003]);
 
+export interface DiscordImportScope {
+  importChannels: boolean;
+  importRoles: boolean;
+  importEmoji: boolean;
+  importMessages: boolean;
+}
+
+export interface DiscordImportStatus {
+  phase: "channels" | "roles" | "emoji" | "messages" | "done";
+  counts: { channels: number; roles: number; emoji: number; messages: number };
+  skipped: string[];
+  failed: string[];
+  done: boolean;
+  error: string | null;
+}
+
+export function startDiscordImport(
+  baseUrl: string,
+  token: string,
+  opts: { botToken: string; guildId: string } & DiscordImportScope,
+) {
+  return request<{ jobId: string }>(baseUrl, "/admin/import/discord", token, {
+    method: "POST",
+    body: JSON.stringify(opts),
+  });
+}
+
+export function getDiscordImportStatus(baseUrl: string, token: string, jobId: string) {
+  return request<DiscordImportStatus>(baseUrl, `/admin/import/discord/${jobId}`, token);
+}
+
 export class Gateway {
   private ws: WebSocket;
   private baseUrl: string;

@@ -27,6 +27,7 @@ import { threadRoutes } from "./routes/threads.js";
 import { friendRoutes } from "./routes/friends.js";
 import { dmRoutes } from "./routes/dms.js";
 import { mfaRoutes } from "./routes/mfa.js";
+import { adminImportRoutes } from "./routes/adminImport.js";
 import { gatewayRoutes } from "./gateway/index.js";
 import { ensureBucket } from "./plugins/storage.js";
 import { ensureClaimCode } from "./util/claim.js";
@@ -121,6 +122,7 @@ app.register(threadRoutes);
 app.register(friendRoutes);
 app.register(dmRoutes);
 app.register(mfaRoutes);
+app.register(adminImportRoutes);
 app.register(gatewayRoutes);
 
 // Serves the built web client (single-container deployment: this backend is
