@@ -17,13 +17,13 @@ android {
         applicationId "com.outpostchat.mobile"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // versionCode is Play Store's own monotonic build counter, unrelated
-        // to versionName — starts at 1 since this is genuinely the first
-        // Android build ever. versionName is kept in step with the other 3
+        // versionCode is Play Store's own monotonic build counter, bumped by
+        // 1 each build regardless of versionName -- unrelated to the app's
+        // own semver. versionName is kept in step with the other 4
         // package.json files bumped together each release (no automation
-        // for this across any of the 4 today — see project.md's plan file).
-        versionCode 1
-        versionName "0.2.17"
+        // for this across any of the 5 today — see the mobile client plan).
+        versionCode 2
+        versionName "0.2.18"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
