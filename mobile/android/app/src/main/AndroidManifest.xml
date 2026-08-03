@@ -42,4 +42,9 @@
          (useVoiceSession/LiveKit) needs this OS-level grant in addition to
          the WebView's own PermissionRequest handshake in MainActivity. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Required to call AudioManager.setMode()/requestAudioFocus() in
+         MainActivity, without which the WebView's own audio capture fails
+         with NotReadableError ("could not start audio source") even once
+         RECORD_AUDIO itself is granted. -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 </manifest>
