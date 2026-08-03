@@ -17,11 +17,13 @@ function FriendRow({
   baseUrl,
   token,
   user,
+  unread,
   children,
 }: {
   baseUrl: string;
   token: string;
   user: FriendUser;
+  unread?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -32,6 +34,7 @@ function FriendRow({
         <span className="avatar avatar-placeholder">{user.username[0]?.toUpperCase()}</span>
       )}
       <span className="member-username">{user.username}</span>
+      {unread && <span className="presence-dot online" title="Unread messages" />}
       <span className={`presence-dot ${user.online ? "online" : ""}`} title={user.online ? "Online" : "Offline"} />
       {children}
     </li>
@@ -44,12 +47,14 @@ export function FriendsPanel({
   baseUrl,
   token,
   refreshKey,
+  unreadFriendUserIds,
   onMessage,
   onClose,
 }: {
   baseUrl: string;
   token: string;
   refreshKey: number;
+  unreadFriendUserIds: Set<string>;
   onMessage: (userId: string) => void;
   onClose: () => void;
 }) {
@@ -151,7 +156,7 @@ export function FriendsPanel({
           ) : (
             <ul className="member-list">
               {list.friends.map((u) => (
-                <FriendRow key={u.userId} baseUrl={baseUrl} token={token} user={u}>
+                <FriendRow key={u.userId} baseUrl={baseUrl} token={token} user={u} unread={unreadFriendUserIds.has(u.userId)}>
                   <button className="text-btn" onClick={() => onMessage(u.userId)}>
                     message
                   </button>
