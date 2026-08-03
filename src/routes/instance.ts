@@ -102,6 +102,39 @@ export async function instanceRoutes(app: FastifyInstance) {
     };
   });
 
+  // Unauthenticated, HTML — not an API endpoint. Cloudflare Turnstile
+  // sitekeys are domain-locked to whatever hostnames were configured for
+  // them in the Cloudflare dashboard, so the widget can only ever be
+  // rendered on a page whose origin actually matches this instance's real
+  // domain. The desktop client's own UI runs from a `file://` origin, which
+  // never matches — so instead of rendering Turnstile directly in the app,
+  // clients embed this page in an <iframe src="{baseUrl}/turnstile.html">,
+  // which runs same-origin with the sitekey's allowed domain, and relay the
+  // solved token back out via postMessage. The token itself is a
+  // short-lived, single-use captcha response (not a credential), so a
+  // wildcard target origin on the postMessage send is fine — the parent is
+  // the one responsible for checking the message's origin before trusting it.
+  app.get("/turnstile.html", async (_req, reply) => {
+    const siteKey = process.env.TURNSTILE_SITE_KEY || "";
+    reply.type("text/html").send(`<!doctype html>
+<html><head><meta charset="utf-8"><style>body{margin:0;display:flex;align-items:center;justify-content:center}</style></head>
+<body>
+<div id="widget"></div>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<script>
+  window.onload = function () {
+    if (!window.turnstile || ${JSON.stringify(siteKey)} === "") return;
+    window.turnstile.render("#widget", {
+      sitekey: ${JSON.stringify(siteKey)},
+      callback: function (token) {
+        parent.postMessage({ type: "outpost-turnstile-token", token: token }, "*");
+      },
+    });
+  };
+</script>
+</body></html>`);
+  });
+
   // Instance settings — owner-only.
   app.patch("/instance/settings", { onRequest: [app.authenticate] }, async (req, reply) => {
     const { sub: userId } = req.user as { sub: string };

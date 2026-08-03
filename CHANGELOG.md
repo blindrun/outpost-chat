@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.2.19 — 2026-08-02
+
+- **Fixed captcha failures on the desktop app.** Cloudflare Turnstile sitekeys are locked to specific domains, but the Windows/Mac/Linux desktop app runs its UI from a `file://` origin, which never matches — so registration always failed with "captcha verification failed" there, even though the exact same widget worked fine on the web. The captcha now renders inside an iframe pointed at the instance's own domain (a new small page the server hosts), so it always runs same-origin with the real backend no matter which client loads it.
+- **Fixed push-to-talk not actually gating the mic.** Joining a voice channel in PTT mode left the mic hot until the first time you released the bind key — PTT effectively had no effect until then, and if no key was ever bound, the mic just stayed open indefinitely. It now starts silent on join, same as it always should have.
+
 ## v0.2.18 — 2026-08-02
 
 - **The web app is actually usable on a phone now.** Previously the desktop layout just got squeezed onto a small screen — now it switches to full-screen panes (server/channel list, chat, members) below tablet width, with a hamburger button and a proper back button to move between them.

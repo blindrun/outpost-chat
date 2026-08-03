@@ -369,7 +369,7 @@ export function AddServerModal({
               bot can't reach a claim code printed on the self-hoster's own
               console. */}
           {authMode === "register" && info?.hasOwner && info.turnstileSiteKey && (
-            <TurnstileWidget siteKey={info.turnstileSiteKey} onVerify={setTurnstileToken} />
+            <TurnstileWidget baseUrl={baseUrl} onVerify={setTurnstileToken} />
           )}
           {authError && <p className="error">{authError}</p>}
           <div className="modal-actions">
