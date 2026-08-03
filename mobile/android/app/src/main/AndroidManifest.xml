@@ -38,4 +38,8 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Voice channels: the web client's getUserMedia({ audio: true }) call
+         (useVoiceSession/LiveKit) needs this OS-level grant in addition to
+         the WebView's own PermissionRequest handshake in MainActivity. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 </manifest>
