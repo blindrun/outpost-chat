@@ -3,6 +3,7 @@
 ## v0.3.0 — 2026-08-03
 
 - **Import an existing Discord server.** New owner-only Import tab in Instance Settings: point it at a Discord server via a bot token you create yourself, and it recreates the channels, roles, and custom emoji here — with an opt-in (off by default) full message history backfill, attributed to one per-author webhook identity rather than a single generic import account. Meant to be run once, early, before real content accumulates — see the in-app instructions for the Discord-side bot setup and known limitations (no category concept, coarse permission mapping, not a merge/sync tool).
+- The Friends list now shows the same green "unread" dot as the DM sidebar when a friend has sent you a message you haven't opened yet — previously that only showed in the sidebar, not in the Friends list itself.
 
 ## v0.2.21 — 2026-08-03
 

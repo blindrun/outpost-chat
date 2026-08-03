@@ -873,6 +873,13 @@ function App() {
     otherUsername: string;
     otherAvatarUrl: string | null;
   })[];
+  // Same unreadChannelIds set the DM sidebar rows already key off of,
+  // re-mapped from channel id to the other participant's user id so the
+  // Friends list can show the same "unread" dot next to a friend, not just
+  // in the sidebar.
+  const unreadFriendUserIds = new Set(
+    dmChannels.filter((dm) => unreadChannelIds.has(dm.id)).map((dm) => dm.otherUserId),
+  );
 
   return (
     <div className={`app mobile-pane-${mobileActivePane} ${memberListOpen ? "" : "member-list-collapsed"}`}>
@@ -1281,6 +1288,7 @@ function App() {
           baseUrl={activeInstance.baseUrl}
           token={session.token}
           refreshKey={friendsRefreshKey}
+          unreadFriendUserIds={unreadFriendUserIds}
           onMessage={handleOpenDM}
           onClose={() => setFriendsOpen(false)}
         />
