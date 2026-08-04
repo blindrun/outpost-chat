@@ -47,14 +47,18 @@ class LiveKitVoice: NSObject {
         try await room?.localParticipant.setMicrophone(enabled: enabled)
     }
 
-    // No confirmed 1:1 native API for "keep receiving/publishing but
-    // silence local playback" -- the web engine mutes each attached
-    // <audio> element directly, which has no native equivalent (see the
-    // iOS plan's open question #2). Best available primitive: toggling
-    // whether each remote audio publication is enabled, which stops local
-    // playback without affecting what's published/subscribed for anyone
-    // else in the room. Unverified -- a real spike against the SDK may
-    // reveal a more direct playback-volume control instead.
+    // Confirmed (2026-08-04, via LiveKit's own client-sdk-swift GitHub
+    // issue #220, unresolved as of this writing): there is no local-only
+    // "silence playback but keep receiving" API on RemoteTrackPublication
+    // or AudioManager -- AudioManager.mixer.appVolume only applies to audio
+    // your own app injects, not remote participants'. `set(enabled:)` is
+    // the only available primitive, and unlike the web engine's instant
+    // <audio>.muted toggle, it's a real subscribe/unsubscribe with the
+    // server (confirmed via the JS SDK's documented behavior, which the
+    // Swift SDK mirrors) -- re-enabling after undeafening likely has a
+    // brief resubscribe delay rather than being instant. Acceptable
+    // trade-off given no better API exists; worth a real-device latency
+    // check during milestone 3, not a blocker before then.
     func setRemoteAudioMuted(_ muted: Bool) async {
         guard let room else { return }
         for participant in room.remoteParticipants.values {
