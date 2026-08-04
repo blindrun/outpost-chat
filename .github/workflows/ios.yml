@@ -84,6 +84,15 @@ jobs:
           mkdir -p ~/Library/MobileDevice/"Provisioning Profiles"
           echo "$IOS_PROVISIONING_PROFILE_BASE64" | base64 -d -o ~/Library/MobileDevice/"Provisioning Profiles"/profile.mobileprovision
 
+      # The project's CODE_SIGN_STYLE is Automatic, which requires a live,
+      # interactive Apple ID session for Xcode to fetch/generate a matching
+      # profile -- not available in CI. Since we import our own pre-made
+      # distribution certificate + provisioning profile via secrets instead,
+      # override to manual signing explicitly rather than relying on
+      # DEVELOPMENT_TEAM alone (confirmed the hard way: that alone still
+      # fails with "No profiles for '<bundle id>' were found").
+      # PROVISIONING_PROFILE_SPECIFIER must match the profile's name exactly
+      # as registered on the Apple Developer portal ("Outpost App Store").
       - name: Build signed archive
         if: env.HAS_APPLE_SIGNING == 'true'
         working-directory: mobile/ios/App
@@ -95,6 +104,9 @@ jobs:
             -scheme App \
             -sdk iphoneos \
             -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="Outpost App Store" \
             DEVELOPMENT_TEAM="$IOS_TEAM_ID"
 
       # TestFlight always distributes through App Store Connect -- there's no
@@ -117,6 +129,13 @@ jobs:
             <string>app-store</string>
             <key>teamID</key>
             <string>$IOS_TEAM_ID</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.outpostchat.mobile</key>
+              <string>Outpost App Store</string>
+            </dict>
           </dict>
           </plist>
           PLIST
