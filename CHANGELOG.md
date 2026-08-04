@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.1 — 2026-08-04
+
+- **Fixed the message avatar drifting away from the username on longer messages.** The avatar's wrapping button kept Chromium's default content-centering behavior even though it was set to `display: block`, so the avatar sank further from the username line the taller a message's (stretched) row got instead of staying pinned near the top. Confirmed in an isolated test harness before shipping — offset went from growing with message length to a constant, intentional 2px nudge regardless of message length.
+
 ## v0.3.0 — 2026-08-03
 
 - **Import an existing Discord server.** New owner-only Import tab in Instance Settings: point it at a Discord server via a bot token you create yourself, and it recreates the channels, roles, and custom emoji here — with an opt-in (off by default) full message history backfill, attributed to one per-author webhook identity rather than a single generic import account. Meant to be run once, early, before real content accumulates — see the in-app instructions for the Discord-side bot setup and known limitations (no category concept, coarse permission mapping, not a merge/sync tool).
