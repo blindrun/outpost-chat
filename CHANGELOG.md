@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.2 — 2026-08-04
+
+- **iOS TestFlight pipeline live for the first time.** Real Apple Distribution certificate, App ID, provisioning profile, and App Store Connect API key wired into CI — this release is the first real signed, TestFlight-uploaded iOS build. Internal testing only for now; background-capable voice (the actual point of the native iOS build) still needs real-device verification next.
+
 ## v0.3.1 — 2026-08-04
 
 - **Fixed the message avatar drifting away from the username on longer messages.** The avatar's wrapping button kept Chromium's default content-centering behavior even though it was set to `display: block`, so the avatar sank further from the username line the taller a message's (stretched) row got instead of staying pinned near the top. Confirmed in an isolated test harness before shipping — offset went from growing with message length to a constant, intentional 2px nudge regardless of message length.
