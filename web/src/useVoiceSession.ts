@@ -1,8 +1,8 @@
 import { MutableRefObject, useCallback, useRef, useState } from "react";
 import { Channel, Gateway, getVoiceToken } from "./api";
 import { AudioSettings, loadAudioSettings } from "./audioSettings";
+import { createVoiceEngine } from "./voice/createVoiceEngine";
 import { ParticipantInfo, VoiceEngine } from "./voice/VoiceEngine";
-import { WebLiveKitEngine } from "./voice/WebLiveKitEngine";
 
 // Hangover keeps the mic briefly open after level drops below threshold so
 // VAD doesn't clip the tail end of words.
@@ -197,9 +197,7 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
         engineRef.current?.disconnect();
 
         const settings = loadAudioSettings();
-        // TODO(iOS milestone 2): select NativeLiveKitEngine when
-        // Capacitor.getPlatform() === "ios" — see the iOS voice plan.
-        const engine = new WebLiveKitEngine(
+        const engine = createVoiceEngine(
           audioContainerRef.current!,
           videoContainerRef.current!,
           settings.outputDeviceId ?? undefined,
