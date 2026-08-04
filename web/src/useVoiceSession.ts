@@ -1,32 +1,15 @@
 import { MutableRefObject, useCallback, useRef, useState } from "react";
-import {
-  ConnectionState,
-  LocalParticipant,
-  Participant,
-  RemoteParticipant,
-  RemoteTrack,
-  RemoteTrackPublication,
-  Room,
-  RoomEvent,
-  Track,
-} from "livekit-client";
 import { Channel, Gateway, getVoiceToken } from "./api";
 import { AudioSettings, loadAudioSettings } from "./audioSettings";
+import { ParticipantInfo, VoiceEngine } from "./voice/VoiceEngine";
+import { WebLiveKitEngine } from "./voice/WebLiveKitEngine";
 
 // Hangover keeps the mic briefly open after level drops below threshold so
 // VAD doesn't clip the tail end of words.
 const VAD_HANGOVER_MS = 300;
 const VAD_POLL_MS = 50;
 
-export interface ParticipantInfo {
-  identity: string;
-  name: string;
-  isLocal: boolean;
-}
-
-function toInfo(p: Participant): ParticipantInfo {
-  return { identity: p.identity, name: p.name || p.identity, isLocal: p instanceof LocalParticipant };
-}
+export type { ParticipantInfo };
 
 // Gates transmission on the bound key while connected; leaves the published
 // track alone otherwise (mic starts disabled, matching "hold to talk").
@@ -34,7 +17,7 @@ function toInfo(p: Participant): ParticipantInfo {
 // (no keyboard to bind) can drive it from an on-screen hold button instead —
 // see `triggerPtt` in the hook below.
 function setupPushToTalk(
-  room: Room,
+  engine: VoiceEngine,
   settings: AudioSettings,
   isCurrent: () => boolean,
   mutedRef: { current: boolean },
@@ -45,7 +28,7 @@ function setupPushToTalk(
   function applyGate(active: boolean) {
     setPttActive(active);
     if (mutedRef.current) return;
-    room.localParticipant
+    engine
       .setMicrophoneEnabled(active)
       .then(() => isCurrent() && setMicEnabled(active))
       .catch((err) => console.warn("PTT mic toggle failed:", err));
@@ -87,17 +70,19 @@ function setupPushToTalk(
 
 // Monitors mic level via a clone of the already-published track (independent
 // enabled/lifecycle from the original, so gating the original via LiveKit's
-// mute doesn't blind the analyser) and gates transmission by threshold.
+// mute doesn't blind the analyser) and gates transmission by threshold. Only
+// ever invoked when engine.capabilities.vad is true (web engine only — see
+// VoiceEngine.ts), since VAD is meaningless once the mic no longer flows
+// through a WebView.
 function setupVoiceActivity(
-  room: Room,
+  engine: VoiceEngine,
   settings: AudioSettings,
   isCurrent: () => boolean,
   mutedRef: { current: boolean },
   setMicEnabled: (v: boolean) => void,
   setVadLevel: (v: number) => void,
 ): () => void {
-  const pub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
-  const liveTrack = pub?.audioTrack?.mediaStreamTrack;
+  const liveTrack = engine.getMicrophoneTrackForVad();
   if (!liveTrack) return () => {};
 
   const monitorTrack = liveTrack.clone();
@@ -115,14 +100,14 @@ function setupVoiceActivity(
     if (open === gateOpen) return;
     gateOpen = open;
     if (!isCurrent() || mutedRef.current) return;
-    room.localParticipant
+    engine
       .setMicrophoneEnabled(open)
       .then(() => isCurrent() && setMicEnabled(open))
       .catch((err) => console.warn("VAD mic toggle failed:", err));
   }
 
   // Start gated closed until the level first crosses the threshold.
-  room.localParticipant
+  engine
     .setMicrophoneEnabled(false)
     .then(() => isCurrent() && setMicEnabled(false))
     .catch(() => {});
@@ -159,7 +144,7 @@ function setupVoiceActivity(
   };
 }
 
-// Owns the LiveKit room for the whole app (not per-channel-view), so voice
+// Owns the voice engine for the whole app (not per-channel-view), so voice
 // stays connected while browsing other channels — mirroring Discord's
 // persistent bottom voice bar. VoicePanel and the user-panel mute/deafen
 // buttons both read from this single instance.
@@ -179,8 +164,12 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
   const [mode, setMode] = useState<AudioSettings["mode"] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [screenSharing, setScreenSharing] = useState(false);
+  // false only for engines that can't do it (the native iOS engine, once it
+  // exists) — VoicePanel hides the Share Screen button when this is false
+  // rather than showing a control that can never work.
+  const [screenShareSupported, setScreenShareSupported] = useState(true);
 
-  const roomRef = useRef<Room | null>(null);
+  const engineRef = useRef<VoiceEngine | null>(null);
   const audioContainerRef = useRef<HTMLDivElement | null>(null);
   // Visible, unlike audioContainerRef — screen share video tiles render
   // here directly (both remote shares and the local preview), one <video>
@@ -196,16 +185,6 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
   const mutedBeforeDeafenRef = useRef(false);
   const screenSharingRef = useRef(false);
 
-  function refreshParticipants(room: Room) {
-    setParticipants([toInfo(room.localParticipant), ...Array.from(room.remoteParticipants.values()).map(toInfo)]);
-  }
-
-  function applyDeafenToElements(deaf: boolean) {
-    audioContainerRef.current?.querySelectorAll("audio").forEach((el) => {
-      (el as HTMLAudioElement).muted = deaf;
-    });
-  }
-
   const join = useCallback(
     async (channel: Channel) => {
       setError(null);
@@ -215,137 +194,93 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
 
         automationCleanupRef.current?.();
         automationCleanupRef.current = null;
-        roomRef.current?.disconnect();
+        engineRef.current?.disconnect();
 
-        const room = new Room();
-        roomRef.current = room;
-        setActiveChannel(channel);
-
-        // Every listener guards against `roomRef.current !== room` — if this
-        // room has since been superseded (a new join, or a leave that raced
-        // with an in-flight event from this one), its late-arriving events
-        // must not touch state that now belongs to a different room/no room.
-        const isCurrent = () => roomRef.current === room;
         const settings = loadAudioSettings();
-
-        room.on(RoomEvent.ParticipantConnected, () => isCurrent() && refreshParticipants(room));
-        room.on(RoomEvent.ParticipantDisconnected, () => isCurrent() && refreshParticipants(room));
-        room.on(RoomEvent.ActiveSpeakersChanged, (speakers: Participant[]) => {
-          if (!isCurrent()) return;
-          setSpeakingUserIds(new Set(speakers.map((s) => s.identity)));
-        });
-        room.on(RoomEvent.ConnectionStateChanged, (state) => {
-          if (!isCurrent()) return;
-          if (state === ConnectionState.Disconnected) {
-            automationCleanupRef.current?.();
-            automationCleanupRef.current = null;
-            gatewayRef.current?.sendVoiceLeave();
-            setActiveChannel(null);
-            setConnecting(false);
-            setParticipants([]);
-            setSpeakingUserIds(new Set());
-            setMode(null);
-            setPttActive(false);
-            setVadLevel(0);
-            screenSharingRef.current = false;
-            setScreenSharing(false);
-          }
-        });
-        room.on(
-          RoomEvent.TrackSubscribed,
-          (track: RemoteTrack, _pub: RemoteTrackPublication, participant: RemoteParticipant) => {
-            if (!isCurrent()) return;
-            if (track.kind === Track.Kind.Audio && audioContainerRef.current) {
-              const el = track.attach();
-              el.dataset.participant = participant.identity;
-              el.muted = deafenedRef.current;
-              if (settings.outputDeviceId && "setSinkId" in el) {
-                el.setSinkId(settings.outputDeviceId).catch((err) => console.warn("setSinkId failed:", err));
-              }
-              audioContainerRef.current.appendChild(el);
-            } else if (track.source === Track.Source.ScreenShare && videoContainerRef.current) {
-              const el = track.attach();
-              el.dataset.participant = participant.identity;
-              el.className = "screen-share-video";
-              const wrapper = document.createElement("div");
-              wrapper.className = "screen-share-tile";
-              wrapper.dataset.participant = participant.identity;
-              const label = document.createElement("span");
-              label.className = "screen-share-label";
-              label.textContent = `${participant.name || participant.identity}'s screen`;
-              wrapper.appendChild(el);
-              wrapper.appendChild(label);
-              videoContainerRef.current.appendChild(wrapper);
-            }
-          },
+        // TODO(iOS milestone 2): select NativeLiveKitEngine when
+        // Capacitor.getPlatform() === "ios" — see the iOS voice plan.
+        const engine = new WebLiveKitEngine(
+          audioContainerRef.current!,
+          videoContainerRef.current!,
+          settings.outputDeviceId ?? undefined,
         );
-        room.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
-          if (!isCurrent()) return;
-          track.detach().forEach((el) => el.remove());
-          if (track.source === Track.Source.ScreenShare) {
-            videoContainerRef.current?.querySelectorAll(".screen-share-tile").forEach((wrapper) => {
-              if (!wrapper.querySelector("video, audio")) wrapper.remove();
-            });
-          }
+        engineRef.current = engine;
+        setActiveChannel(channel);
+        setScreenShareSupported(engine.capabilities.screenShare);
+
+        // Seed the engine with whatever deafen state already persisted
+        // across a previous leave/join — TrackSubscribed on a fresh engine
+        // otherwise starts every newly attached remote audio element
+        // un-muted regardless of a standing deafen from before this join.
+        engine.setRemoteAudioMuted(deafenedRef.current);
+
+        // Every listener guards against `engineRef.current !== engine` — if
+        // this engine has since been superseded (a new join, or a leave
+        // that raced with an in-flight event from this one), its
+        // late-arriving events must not touch state that now belongs to a
+        // different engine/no engine.
+        const isCurrent = () => engineRef.current === engine;
+
+        engine.on("participantsChanged", (list) => {
+          if (isCurrent()) setParticipants(list);
         });
-        room.on(RoomEvent.LocalTrackPublished, (pub) => {
-          if (!isCurrent() || pub.source !== Track.Source.ScreenShare || !pub.track || !videoContainerRef.current) return;
-          const el = pub.track.attach();
-          el.muted = true;
-          el.dataset.participant = room.localParticipant.identity;
-          el.className = "screen-share-video";
-          const wrapper = document.createElement("div");
-          wrapper.className = "screen-share-tile";
-          wrapper.dataset.participant = room.localParticipant.identity;
-          const label = document.createElement("span");
-          label.className = "screen-share-label";
-          label.textContent = "Your screen";
-          wrapper.appendChild(el);
-          wrapper.appendChild(label);
-          videoContainerRef.current.appendChild(wrapper);
+        engine.on("speakingChanged", (ids) => {
+          if (isCurrent()) setSpeakingUserIds(ids);
+        });
+        engine.on("disconnected", () => {
+          if (!isCurrent()) return;
+          automationCleanupRef.current?.();
+          automationCleanupRef.current = null;
+          gatewayRef.current?.sendVoiceLeave();
+          setActiveChannel(null);
+          setConnecting(false);
+          setParticipants([]);
+          setSpeakingUserIds(new Set());
+          setMode(null);
+          setPttActive(false);
+          setVadLevel(0);
+          screenSharingRef.current = false;
+          setScreenSharing(false);
+        });
+        engine.on("localScreenShareStarted", () => {
+          if (!isCurrent()) return;
           screenSharingRef.current = true;
           setScreenSharing(true);
         });
-        room.on(RoomEvent.LocalTrackUnpublished, (pub) => {
-          if (!isCurrent() || pub.source !== Track.Source.ScreenShare) return;
-          pub.track?.detach().forEach((el) => el.remove());
-          videoContainerRef.current
-            ?.querySelectorAll(`.screen-share-tile[data-participant="${room.localParticipant.identity}"]`)
-            .forEach((wrapper) => {
-              if (!wrapper.querySelector("video, audio")) wrapper.remove();
-            });
+        engine.on("localScreenShareStopped", () => {
+          if (!isCurrent()) return;
           screenSharingRef.current = false;
           setScreenSharing(false);
         });
 
-        await room.connect(url, voiceToken);
+        await engine.connect(url, voiceToken);
         if (!isCurrent()) return; // superseded (e.g. leave clicked) while connecting
         gatewayRef.current?.sendVoiceJoin(channel.id);
-        refreshParticipants(room);
         setConnecting(false);
-        setMode(settings.mode);
+        // VAD is meaningless on an engine that can't expose a raw mic track
+        // (the native iOS engine, once it exists) — force push-to-talk
+        // regardless of the user's stored preference in that case.
+        const effectiveMode = engine.capabilities.vad ? settings.mode : "ptt";
+        setMode(effectiveMode);
         setPttActive(false);
         setVadLevel(0);
 
         // Mic may not be available (e.g. no input device in a test/CI browser) —
         // that shouldn't block joining the voice channel to see who else is in it.
         try {
-          await room.localParticipant.setMicrophoneEnabled(
-            true,
-            settings.inputDeviceId ? { deviceId: settings.inputDeviceId } : undefined,
-          );
+          await engine.setMicrophoneEnabled(true, settings.inputDeviceId ?? undefined);
           if (!isCurrent()) return;
           setMicEnabled(true);
 
           automationCleanupRef.current =
-            settings.mode === "ptt"
-              ? setupPushToTalk(room, settings, isCurrent, mutedRef, setMicEnabled, setPttActive, pttGateRef)
-              : setupVoiceActivity(room, settings, isCurrent, mutedRef, setMicEnabled, setVadLevel);
+            effectiveMode === "ptt"
+              ? setupPushToTalk(engine, settings, isCurrent, mutedRef, setMicEnabled, setPttActive, pttGateRef)
+              : setupVoiceActivity(engine, settings, isCurrent, mutedRef, setMicEnabled, setVadLevel);
 
           // A standing mute from the user bar (set before this join, or
           // carried over from a previous session) should still apply.
           if (mutedRef.current) {
-            room.localParticipant
+            engine
               .setMicrophoneEnabled(false)
               .then(() => isCurrent() && setMicEnabled(false))
               .catch(() => {});
@@ -365,8 +300,8 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
   const leave = useCallback(() => {
     automationCleanupRef.current?.();
     automationCleanupRef.current = null;
-    roomRef.current?.disconnect();
-    roomRef.current = null;
+    engineRef.current?.disconnect();
+    engineRef.current = null;
     gatewayRef.current?.sendVoiceLeave();
     setActiveChannel(null);
     setConnecting(false);
@@ -380,15 +315,13 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
     setScreenSharing(false);
   }, [gatewayRef]);
 
-  // getDisplayMedia rejects if the user cancels the browser's share picker
-  // — that's not a real error, just leave screenSharing false and move on.
   const toggleScreenShare = useCallback(async () => {
-    const room = roomRef.current;
-    if (!room) return;
+    const engine = engineRef.current;
+    if (!engine) return;
     try {
-      await room.localParticipant.setScreenShareEnabled(!screenSharingRef.current);
+      await engine.setScreenShareEnabled(!screenSharingRef.current);
     } catch (err) {
-      if ((err as Error).name !== "NotAllowedError") setError((err as Error).message);
+      setError((err as Error).message);
     }
   }, []);
 
@@ -396,10 +329,10 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
     const next = !mutedRef.current;
     mutedRef.current = next;
     setMuted(next);
-    const room = roomRef.current;
-    if (room && next) {
+    const engine = engineRef.current;
+    if (engine && next) {
       try {
-        await room.localParticipant.setMicrophoneEnabled(false);
+        await engine.setMicrophoneEnabled(false);
         setMicEnabled(false);
       } catch (err) {
         setError((err as Error).message);
@@ -420,7 +353,7 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
     const next = !deafenedRef.current;
     deafenedRef.current = next;
     setDeafened(next);
-    applyDeafenToElements(next);
+    engineRef.current?.setRemoteAudioMuted(next);
 
     if (next) {
       mutedBeforeDeafenRef.current = mutedRef.current;
@@ -445,6 +378,7 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
     mode,
     error,
     screenSharing,
+    screenShareSupported,
     audioContainerRef,
     videoContainerRef,
     join,
