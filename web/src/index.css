@@ -752,7 +752,11 @@ button, input, select {
 .pinned-badge-grouped { display: inline-block; margin-bottom: 0.15rem; }
 .message-header { display: flex; align-items: baseline; gap: 0.5rem; }
 .message-author { font-weight: 600; color: var(--header-primary); font-size: 0.95rem; }
-.avatar-btn { background: none; border: none; padding: 0; cursor: pointer; display: block; }
+/* display:flex + align-items:flex-start (not display:block) -- buttons keep
+   centering their content by default even when overridden to display:block,
+   so without this the avatar drifts further down the taller a stretched
+   message body gets instead of staying pinned near the username line. */
+.avatar-btn { background: none; border: none; padding: 0; cursor: pointer; display: flex; align-items: flex-start; }
 .message-author-btn {
   background: none;
   border: none;
