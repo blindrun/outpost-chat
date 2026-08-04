@@ -24,6 +24,10 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Outpost needs microphone access to let you talk in voice channels.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Outpost needs camera access for video and screen sharing in voice channels.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

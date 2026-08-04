@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.3 — 2026-08-04
+
+- Fixed the iOS build failing Apple's post-upload TestFlight processing (a real error, only caught once a build actually reached Apple's servers): `Info.plist` was missing `NSCameraUsageDescription`/`NSMicrophoneUsageDescription`, required because the LiveKit voice SDK references camera/microphone APIs even though the app doesn't currently use camera itself.
+
 ## v0.3.2 — 2026-08-04
 
 - **iOS TestFlight pipeline live for the first time.** Real Apple Distribution certificate, App ID, provisioning profile, and App Store Connect API key wired into CI — this release is the first real signed, TestFlight-uploaded iOS build. Internal testing only for now; background-capable voice (the actual point of the native iOS build) still needs real-device verification next.
