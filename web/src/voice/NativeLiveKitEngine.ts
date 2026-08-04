@@ -1,14 +1,48 @@
 // iOS-only voice transport: bridges to LiveKit's Swift SDK via a Capacitor
-// custom plugin (mobile/plugins/livekit-voice), instead of routing through
-// WKWebView's WebRTC -- see the iOS voice plan's Context section for why
-// (WKWebView suspends audio ~27s after backgrounding/screen lock, an
-// OS-level limitation this plugin exists specifically to avoid).
+// custom plugin (mobile/plugins/livekit-voice/ios), instead of routing
+// through WKWebView's WebRTC -- see the iOS voice plan's Context section
+// for why (WKWebView suspends audio ~27s after backgrounding/screen lock,
+// an OS-level limitation this plugin exists specifically to avoid).
+//
+// The plugin registration and its TS contract live here, not in a
+// separately-built npm package -- mobile/plugins/livekit-voice has no
+// JS/TS side at all (see that package's README for why: it would give
+// every platform that builds web/src, not just iOS, a build-time
+// dependency on this package's compiled output). `registerPlugin` just
+// needs the string "LiveKitVoice" to match `jsName` in
+// LiveKitVoicePlugin.swift -- where it's called from doesn't matter to
+// Capacitor's native bridge.
 //
 // Screen share and VAD are unsupported here (see VoiceEngine.ts's
 // capabilities doc comments) -- useVoiceSession.ts already gates both on
 // capabilities before ever calling into this engine for them.
-import { LiveKitVoice, VoiceParticipantData } from "outpost-livekit-voice";
+import { registerPlugin } from "@capacitor/core";
 import { ParticipantInfo, VoiceEngine, VoiceEngineEvents } from "./VoiceEngine";
+
+interface VoiceParticipantData {
+  identity: string;
+  name: string;
+  isLocal: boolean;
+}
+
+interface LiveKitVoicePlugin {
+  connect(options: { url: string; token: string }): Promise<void>;
+  disconnect(): Promise<void>;
+  setMicrophoneEnabled(options: { enabled: boolean }): Promise<void>;
+  setRemoteAudioMuted(options: { muted: boolean }): Promise<void>;
+  localIdentity(): Promise<{ identity: string }>;
+  addListener(
+    eventName: "participantsChanged",
+    listenerFunc: (data: { participants: VoiceParticipantData[] }) => void,
+  ): Promise<{ remove(): Promise<void> }>;
+  addListener(
+    eventName: "speakingChanged",
+    listenerFunc: (data: { identities: string[] }) => void,
+  ): Promise<{ remove(): Promise<void> }>;
+  addListener(eventName: "disconnected", listenerFunc: () => void): Promise<{ remove(): Promise<void> }>;
+}
+
+const LiveKitVoice = registerPlugin<LiveKitVoicePlugin>("LiveKitVoice");
 
 function toInfo(p: VoiceParticipantData): ParticipantInfo {
   return { identity: p.identity, name: p.name, isLocal: p.isLocal };
@@ -22,7 +56,7 @@ export class NativeLiveKitEngine implements VoiceEngine {
   // Internally untyped for the same reason as WebLiveKitEngine's listeners
   // map -- see that file's comment.
   private listeners: Record<string, Set<(...args: never[]) => void>> = {};
-  private pluginListenerHandles: { remove(): void }[] = [];
+  private pluginListenerHandles: { remove(): Promise<void> }[] = [];
 
   constructor() {
     LiveKitVoice.addListener("participantsChanged", ({ participants }) => {

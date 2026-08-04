@@ -12,7 +12,6 @@
     "@capacitor/core": "^8.5.0",
     "@simplewebauthn/browser": "^13.3.0",
     "livekit-client": "^2.21.0",
-    "outpost-livekit-voice": "file:../mobile/plugins/livekit-voice",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
