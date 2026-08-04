@@ -69,13 +69,21 @@ class LiveKitVoice: NSObject {
         room?.localParticipant.identity?.stringValue ?? ""
     }
 
+    // Participant.name is String? in the real SDK (confirmed via CI compile
+    // error -- this file's earlier draft assumed non-optional String).
+    private func displayName(_ name: String?, fallback: String) -> String {
+        guard let name, !name.isEmpty else { return fallback }
+        return name
+    }
+
     private func emitParticipants() {
         guard let room else { return }
         let local = room.localParticipant
+        let localIdentity = local.identity?.stringValue ?? ""
         var list = [
             VoiceParticipant(
-                identity: local.identity?.stringValue ?? "",
-                name: local.name.isEmpty ? (local.identity?.stringValue ?? "") : local.name,
+                identity: localIdentity,
+                name: displayName(local.name, fallback: localIdentity),
                 isLocal: true
             )
         ]
@@ -84,7 +92,7 @@ class LiveKitVoice: NSObject {
             list.append(
                 VoiceParticipant(
                     identity: identity,
-                    name: participant.name.isEmpty ? identity : participant.name,
+                    name: displayName(participant.name, fallback: identity),
                     isLocal: false
                 )
             )
