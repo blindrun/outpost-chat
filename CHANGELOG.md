@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.4 — 2026-08-04
+
+- **Fixed the iOS app rendering under the notch/Dynamic Island and home indicator.** The app runs edge-to-edge in an unpadded WKWebView on iOS; nothing accounted for the device's safe area before this. The login screen, the main app shell (server list/channels/chat/members), the voice popout, and the connection banner are all now correctly inset.
+- **Login screen no longer gets stuck behind the keyboard.** Switched from a fixed `100vh` to a dynamic-viewport-aware height, so the form actually resizes when the on-screen keyboard opens instead of being pushed out of view.
+- Added much more detailed error diagnostics for the iOS voice-connect failure currently under investigation — surfaces the full underlying error chain instead of a shallow one-line description, to help pin down a real-device-only connection timeout that server-side testing (TLS, HTTP/3, LiveKit room state) hasn't been able to reproduce or explain yet.
+
 ## v0.3.3 — 2026-08-04
 
 - Fixed the iOS build failing Apple's post-upload TestFlight processing (a real error, only caught once a build actually reached Apple's servers): `Info.plist` was missing `NSCameraUsageDescription`/`NSMicrophoneUsageDescription`, required because the LiveKit voice SDK references camera/microphone APIs even though the app doesn't currently use camera itself.
