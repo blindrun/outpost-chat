@@ -84,15 +84,24 @@ jobs:
           mkdir -p ~/Library/MobileDevice/"Provisioning Profiles"
           echo "$IOS_PROVISIONING_PROFILE_BASE64" | base64 -d -o ~/Library/MobileDevice/"Provisioning Profiles"/profile.mobileprovision
 
-      # The project's CODE_SIGN_STYLE is Automatic, which requires a live,
+      # The project's CODE_SIGN_STYLE was Automatic, which requires a live,
       # interactive Apple ID session for Xcode to fetch/generate a matching
       # profile -- not available in CI. Since we import our own pre-made
       # distribution certificate + provisioning profile via secrets instead,
-      # override to manual signing explicitly rather than relying on
-      # DEVELOPMENT_TEAM alone (confirmed the hard way: that alone still
-      # fails with "No profiles for '<bundle id>' were found").
-      # PROVISIONING_PROFILE_SPECIFIER must match the profile's name exactly
-      # as registered on the Apple Developer portal ("Outpost App Store").
+      # the App target's Release config in project.pbxproj now hardcodes
+      # CODE_SIGN_STYLE=Manual, CODE_SIGN_IDENTITY="Apple Distribution", and
+      # PROVISIONING_PROFILE_SPECIFIER="Outpost App Store" directly (matching
+      # the profile name on the Apple Developer portal).
+      #
+      # Deliberately NOT passed as global xcodebuild command-line overrides
+      # (KEY=VALUE after the archive command): those apply to every target in
+      # the build graph, including SPM library dependencies (SwiftProtobuf,
+      # LiveKit) that reject having a provisioning profile at all -- confirmed
+      # the hard way ("does not support provisioning profiles, but
+      # provisioning profile ... has been manually specified"). DEVELOPMENT_TEAM
+      # alone is still passed this way since it doesn't hit the same conflict,
+      # and (unlike the other three) is a real account-identifying fact kept
+      # out of this public repo's committed files, injected only via secret.
       - name: Build signed archive
         if: env.HAS_APPLE_SIGNING == 'true'
         working-directory: mobile/ios/App
@@ -104,9 +113,6 @@ jobs:
             -scheme App \
             -sdk iphoneos \
             -archivePath "$RUNNER_TEMP/App.xcarchive" \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER="Outpost App Store" \
             DEVELOPMENT_TEAM="$IOS_TEAM_ID"
 
       # TestFlight always distributes through App Store Connect -- there's no
