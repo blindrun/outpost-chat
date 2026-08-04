@@ -127,10 +127,25 @@ button, input, select {
 /* ---------- Auth screen ---------- */
 
 .auth-screen {
+  /* dvh (dynamic viewport height), not vh -- vh is fixed to the *largest*
+     possible viewport and doesn't shrink when the on-screen keyboard opens,
+     so centered content got pushed out of view/cut off behind the keyboard
+     on a real iPhone. dvh tracks the actual visible viewport as it changes.
+     vh fallback first for browsers that don't support dvh (falls through,
+     doesn't error) -- most already do, but this costs nothing to keep. */
   height: 100vh;
+  height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Edge-to-edge WKWebView on iOS -- without this the form can render
+     under the notch or home indicator on short/landscape screens. overflow
+     auto lets it scroll rather than clip if the keyboard + form still don't
+     both fit even after this. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+  box-sizing: border-box;
+  overflow-y: auto;
   background: linear-gradient(160deg, #ff8a52 0%, #c65d3b 45%, #1a140f 45%, #1a140f 100%);
 }
 
@@ -235,7 +250,10 @@ button, input, select {
 }
 .connection-banner {
   position: fixed;
-  top: 0.6rem;
+  /* position:fixed is relative to the viewport, not .app's safe-area
+     padding -- add the inset directly here too, or this sits under the
+     notch/Dynamic Island on a real iPhone regardless of .app's own fix. */
+  top: calc(0.6rem + env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
   z-index: 50;
@@ -1452,8 +1470,18 @@ button, input, select {
   .app {
     display: block;
     position: relative;
-    height: 100vh;
+    height: 100dvh;
     overflow: hidden;
+    /* Edge-to-edge WKWebView on iOS (no viewport-fit=cover-aware inset from
+       the native side) -- without this, every full-screen mobile pane below
+       renders under the notch/Dynamic Island and home indicator instead of
+       clear of them. Each pane inherits this via inset:0, which positions
+       against the containing block's *padding* edge, not its border edge --
+       so this one rule insets all four consistently. Zero on browsers/
+       Android, which don't report a safe-area-inset. */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+      env(safe-area-inset-left);
+    box-sizing: border-box;
   }
   .server-rail,
   .sidebar,
@@ -1476,7 +1504,16 @@ button, input, select {
      this off-screen on a single-pane mobile layout — full-width bottom
      sheet instead, still clear of the channel list underneath since panes
      are mutually exclusive full-screen overlays here anyway. */
-  .voice-details-popover { left: 0.5rem; right: 0.5rem; bottom: 4.5rem; width: auto; }
+  /* This popover is position:fixed, so it's relative to the viewport, not
+     .app's now-safe-area-padded box -- the fixed 4.5rem bottom offset alone
+     left it sitting under/against the home indicator on a real notched
+     iPhone. Added on top of, not instead of, the existing clearance. */
+  .voice-details-popover {
+    left: 0.5rem;
+    right: 0.5rem;
+    bottom: calc(4.5rem + env(safe-area-inset-bottom));
+    width: auto;
+  }
 
   /* Hidden on desktop (App.tsx/MemberList.tsx render these unconditionally);
      shown here as the only way to switch panes on mobile. */

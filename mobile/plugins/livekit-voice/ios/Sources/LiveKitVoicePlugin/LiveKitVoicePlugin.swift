@@ -36,9 +36,31 @@ public class LiveKitVoicePlugin: CAPPlugin, CAPBridgedPlugin {
                 try await implementation.connect(url: url, token: token)
                 call.resolve()
             } catch {
-                call.reject("Failed to connect: \(error.localizedDescription)", nil, error)
+                // localizedDescription alone was too shallow to diagnose a
+                // real-device-only connect failure (2026-08-04) -- this
+                // walks the full NSError/NSUnderlyingError chain plus the
+                // exact URL used, since curl/Safari both reached the same
+                // endpoint fine from the same device/network, meaning the
+                // difference has to be in exactly what URLSession/the SDK
+                // did differently. Verbose on purpose; this is diagnostic
+                // output surfaced directly in the app UI, not a log file we
+                // can't otherwise get to without a Mac.
+                call.reject("Failed to connect to \(url): \(Self.describeError(error))", nil, error)
             }
         }
+    }
+
+    private static func describeError(_ error: Error) -> String {
+        var parts: [String] = []
+        var current: Error? = error
+        var depth = 0
+        while let err = current, depth < 6 {
+            let ns = err as NSError
+            parts.append("[\(ns.domain)#\(ns.code)] \(ns.localizedDescription)")
+            current = ns.userInfo[NSUnderlyingErrorKey] as? Error
+            depth += 1
+        }
+        return parts.joined(separator: " <- ")
     }
 
     @objc func disconnect(_ call: CAPPluginCall) {
