@@ -104,6 +104,7 @@ export interface InstanceInfo {
   turnstileSiteKey: string | null;
   defaultChannelId: string | null;
   levelingEnabled: boolean;
+  version: string;
 }
 
 export interface Gif {

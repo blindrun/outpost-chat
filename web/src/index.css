@@ -415,7 +415,8 @@ button, input, select {
   resize: vertical;
 }
 .modal input:focus, .modal textarea:focus, .modal select:focus { border-color: var(--brand); }
-.modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
+.modal-actions { display: flex; justify-content: center; gap: 0.5rem; }
+.instance-version { text-align: center; font-size: 0.7rem; color: var(--text-faint); margin: 0.5rem 0 0; }
 .btn {
   background: var(--brand);
   border: 1px solid transparent;

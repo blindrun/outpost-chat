@@ -458,14 +458,14 @@ export function MessageItem({
           </button>
         )}
         {isOwn && !editing && (
-          <>
-            <button className="toolbar-btn" title="Edit" onClick={() => setEditing(true)}>
-              ✏️
-            </button>
-            <button className="toolbar-btn" title="Delete" onClick={() => onDelete(message.id)}>
-              🗑️
-            </button>
-          </>
+          <button className="toolbar-btn" title="Edit" onClick={() => setEditing(true)}>
+            ✏️
+          </button>
+        )}
+        {(isOwn || canModerate) && !editing && (
+          <button className="toolbar-btn" title="Delete" onClick={() => onDelete(message.id)}>
+            🗑️
+          </button>
         )}
       </div>
     </div>

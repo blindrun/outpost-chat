@@ -48,12 +48,14 @@ function GeneralTab({
   instanceInfo,
   channels,
   onUpdated,
+  onClose,
 }: {
   baseUrl: string;
   token: string;
   instanceInfo: InstanceInfo;
   channels: Channel[];
   onUpdated: (info: InstanceInfo) => void;
+  onClose: () => void;
 }) {
   const [name, setName] = useState(instanceInfo.name);
   const [description, setDescription] = useState(instanceInfo.description ?? "");
@@ -145,6 +147,9 @@ function GeneralTab({
       <ThemePicker value={theme} onChange={setTheme} />
       {error && <p className="error">{error}</p>}
       <div className="modal-actions">
+        <button type="button" className="btn secondary" onClick={onClose}>
+          Close
+        </button>
         <button type="submit" className="btn" disabled={saving}>
           {saving ? "Saving…" : "Save"}
         </button>
@@ -569,7 +574,14 @@ export function InstanceSettingsModal({
       </div>
 
       {tab === "general" && (
-        <GeneralTab baseUrl={baseUrl} token={token} instanceInfo={instanceInfo} channels={channels} onUpdated={onUpdated} />
+        <GeneralTab
+          baseUrl={baseUrl}
+          token={token}
+          instanceInfo={instanceInfo}
+          channels={channels}
+          onUpdated={onUpdated}
+          onClose={onClose}
+        />
       )}
       {tab === "roles" && <RolesTab baseUrl={baseUrl} token={token} />}
       {tab === "members" && <MembersTab baseUrl={baseUrl} token={token} isOwner={isOwner} />}
@@ -586,11 +598,14 @@ export function InstanceSettingsModal({
       {tab === "auditLog" && canModerate && <AuditLogTab baseUrl={baseUrl} token={token} />}
       {tab === "import" && isOwner && <ImportPanel baseUrl={baseUrl} token={token} />}
 
-      <div className="modal-actions">
-        <button className="btn secondary" onClick={onClose}>
-          Close
-        </button>
-      </div>
+      <p className="instance-version">Outpost v{instanceInfo.version}</p>
+      {tab !== "general" && (
+        <div className="modal-actions">
+          <button className="btn secondary" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      )}
     </Modal>
   );
 }

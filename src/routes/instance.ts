@@ -1,5 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { prisma } from "../plugins/db.js";
 import {
   PERMISSIONS,
@@ -7,6 +9,13 @@ import {
 } from "../util/permissions.js";
 import { createUniqueInviteCode, isInviteValid } from "../util/invites.js";
 import { broadcastChannelsUpdate } from "../gateway/channelBroadcast.js";
+
+// Read once at module load rather than per-request — package.json doesn't
+// change at runtime, and the production image's CWD (/app) is where it's
+// copied to (see the Dockerfile's production stage).
+const APP_VERSION: string = JSON.parse(
+  readFileSync(join(process.cwd(), "package.json"), "utf-8"),
+).version;
 
 const createInviteSchema = z.object({
   maxUses: z.number().int().min(1).max(1000).optional(),
@@ -99,6 +108,7 @@ export async function instanceRoutes(app: FastifyInstance) {
       turnstileSiteKey: process.env.TURNSTILE_SITE_KEY || null,
       defaultChannelId: settings.defaultChannelId,
       levelingEnabled: botSettings?.levelingEnabled ?? false,
+      version: APP_VERSION,
     };
   });
 
