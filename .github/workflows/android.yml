@@ -54,6 +54,20 @@ jobs:
         working-directory: mobile
         run: npm run sync
 
+      # versionCode was a static value hand-bumped in build.gradle -- exactly
+      # the same class of bug as iOS's CURRENT_PROJECT_VERSION (see ios.yml):
+      # it wasn't bumped between the 0.2.21 closed-testing upload and v0.3.5,
+      # so the v0.3.5 AAB was silently unusable for Play Console (rejected,
+      # "Version code 3 has already been used") even though it built and
+      # attached to the GitHub Release fine. Play Store requires every
+      # uploaded build to have a strictly higher versionCode than the last,
+      # forever, regardless of versionName -- github.run_number is
+      # monotonically increasing across every workflow run, removing this
+      # failure mode for good instead of relying on remembering to bump it.
+      - name: Set version code from the run number
+        working-directory: mobile/android/app
+        run: sed -i "s/versionCode [0-9]*/versionCode $GITHUB_RUN_NUMBER/" build.gradle
+
       # No signing secrets configured yet (see mobile/android/keystore.properties.example
       # and the Play Console prerequisites in the mobile client plan) -- this
       # step is deliberately a no-op rather than a failure until then, same
