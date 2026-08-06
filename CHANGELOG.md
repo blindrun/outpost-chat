@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.5 — 2026-08-06
+
+- **Fixed a real permission gap: nobody, not even the instance owner, could delete a webhook-authored message.** The delete button was gated only on `isOwn` (`message.authorId === currentUserId`), but a webhook message's `authorId` is always `null`, so `isOwn` could never be true for one — even though the backend already correctly supported a `MANAGE_CHANNELS` holder deleting any message. Now gated on `(isOwn || canModerate)`, matching the backend; editing stays `isOwn`-only since the backend has no moderator override for edits.
+- Added the running version number to Instance Settings, so it's easy to confirm what's actually deployed.
+- Centered the Save/Close button rows across every settings modal (previously right-aligned); on the General tab specifically, Save and Close now sit next to each other in one row instead of stacked separately.
+
 ## v0.3.4 — 2026-08-04
 
 - **Fixed the iOS app rendering under the notch/Dynamic Island and home indicator.** The app runs edge-to-edge in an unpadded WKWebView on iOS; nothing accounted for the device's safe area before this. The login screen, the main app shell (server list/channels/chat/members), the voice popout, and the connection banner are all now correctly inset.
