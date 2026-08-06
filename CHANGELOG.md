@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.6 — 2026-08-06
+
+- **Fixed native iOS voice never connecting** ("Network error(Validation request failed...Timed out)" on every network tested). Root-caused by walking LiveKit's actual Swift SDK source: the signaling WebSocket explicitly opts into Multipath TCP "handover" mode (iOS-only), which hung until the SDK's own 7-second join-response timeout — while curl, Safari, and the JS SDK (used by the web app) all connect fine against the same server, since none of them use Multipath TCP. Matches a known, still-open upstream issue (a maintainer's own suspicion was "multipath handling with certain n/w providers"); the one-line fix existed but was closed unmerged for lack of reproduction, not disproven. Patched via a pinned fork (`multipathServiceType: .handover` → `.none`) rather than waiting on upstream.
+
 ## v0.3.5 — 2026-08-06
 
 - **Fixed a real permission gap: nobody, not even the instance owner, could delete a webhook-authored message.** The delete button was gated only on `isOwn` (`message.authorId === currentUserId`), but a webhook message's `authorId` is always `null`, so `isOwn` could never be true for one — even though the backend already correctly supported a `MANAGE_CHANNELS` holder deleting any message. Now gated on `(isOwn || canModerate)`, matching the backend; editing stays `isOwn`-only since the backend has no moderator override for edits.
