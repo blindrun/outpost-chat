@@ -38,6 +38,22 @@ jobs:
       - name: Xcode version
         run: xcodebuild -version
 
+      # CURRENT_PROJECT_VERSION (the build number, distinct from
+      # MARKETING_VERSION) was a static value hand-bumped in project.pbxproj
+      # on past iOS-touching commits -- v0.3.5 didn't touch iOS at all, so
+      # nobody bumped it, and its tag's real TestFlight upload silently
+      # failed ("bundle version must be higher than the previously uploaded
+      # version") even though the archive itself built fine. Apple requires
+      # every uploaded build to have a strictly higher build number than the
+      # last one, forever, regardless of MARKETING_VERSION -- github.run_number
+      # is monotonically increasing across every workflow run (not just
+      # tags), so deriving it here removes the manual step (and its failure
+      # mode) entirely instead of relying on remembering to do it by hand.
+      - name: Set build number from the run number
+        working-directory: mobile/ios/App
+        run: |
+          sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9]*;/CURRENT_PROJECT_VERSION = $GITHUB_RUN_NUMBER;/g" App.xcodeproj/project.pbxproj
+
       - name: Install web client deps
         working-directory: web
         run: npm ci
