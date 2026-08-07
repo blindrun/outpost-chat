@@ -31,7 +31,19 @@ class LiveKitVoice: NSObject {
     private var room: Room?
 
     func connect(url: String, token: String) async throws {
-        let newRoom = Room()
+        // Outpost-specific: without this, Room() defaults to the legacy
+        // `/rtc` signaling path (join request sent as a WS message after
+        // connecting), which this server accepts the WebSocket upgrade for
+        // but then abruptly resets within ~80ms with no proper close frame
+        // -- a real-device investigation found the JS/web client (which
+        // already defaults to the newer `/rtc/v1` path, join request
+        // embedded directly in the connect URL) has never had this problem
+        // against the exact same server. The SDK already has a clean
+        // fallback to the legacy path if the server 404s the v1 endpoint
+        // (see Room+Engine.swift's fullConnectSequence), so this is safe
+        // to enable unconditionally rather than something needing our own
+        // server-support detection.
+        let newRoom = Room(roomOptions: RoomOptions(singlePeerConnection: true))
         newRoom.add(delegate: self)
         room = newRoom
         try await newRoom.connect(url: url, token: token)

@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.9 — 2026-08-07
+
+- **Fixed native iOS voice never connecting, for real this time.** v0.3.7/v0.3.8's diagnostic build revealed the actual cause: the signaling WebSocket was completing its handshake successfully, then getting abruptly reset by the server (`code=1005`, no close frame at all) within ~80ms. Comparing against a working web/Safari connection to the same server found the real difference — the JS SDK connects via the newer `/rtc/v1` endpoint (join request embedded directly in the connect URL), while the pinned Swift SDK defaults to the legacy `/rtc` endpoint (join request sent as a follow-up WebSocket message), which this server version doesn't handle correctly. The SDK already fully implements the `/rtc/v1` path with a built-in fallback to legacy if a server doesn't support it — it was just never enabled. Turned on via `RoomOptions(singlePeerConnection: true)`, confirmed the same server already serves the working web client over `/rtc/v1` today.
+
 ## v0.3.8 — 2026-08-07
 
 - v0.3.7's iOS build failed CI (a Swift Sendable-conformance compile error in the diagnostic patch, not caught locally since only CI builds iOS). Same diagnostic-only build described below, compile error fixed.
