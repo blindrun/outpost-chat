@@ -105,6 +105,8 @@ export interface InstanceInfo {
   defaultChannelId: string | null;
   levelingEnabled: boolean;
   passwordResetEnabled: boolean;
+  afkChannelId: string | null;
+  afkTimeoutMinutes: number | null;
   version: string;
 }
 
@@ -589,6 +591,8 @@ export function updateInstanceSettings(
     smtpUsername?: string | null;
     smtpPassword?: string | null;
     smtpFromAddress?: string | null;
+    afkChannelId?: string | null;
+    afkTimeoutMinutes?: number | null;
   },
 ) {
   return request<FullInstanceSettings>(baseUrl, "/instance/settings", token, {

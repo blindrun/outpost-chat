@@ -64,12 +64,15 @@ function GeneralTab({
   const [theme, setTheme] = useState(instanceInfo.theme);
   const [requireInvite, setRequireInvite] = useState(instanceInfo.requireInviteToRegister);
   const [defaultChannelId, setDefaultChannelId] = useState(instanceInfo.defaultChannelId ?? "");
+  const [afkChannelId, setAfkChannelId] = useState(instanceInfo.afkChannelId ?? "");
+  const [afkTimeoutMinutes, setAfkTimeoutMinutes] = useState(instanceInfo.afkTimeoutMinutes ?? 5);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [iconUploading, setIconUploading] = useState(false);
   const [iconError, setIconError] = useState<string | null>(null);
 
   const textChannels = channels.filter((c) => c.type === "TEXT");
+  const voiceChannels = channels.filter((c) => c.type === "VOICE");
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -82,6 +85,11 @@ function GeneralTab({
         theme,
         requireInviteToRegister: requireInvite,
         defaultChannelId: defaultChannelId || null,
+        afkChannelId: afkChannelId || null,
+        // No AFK channel selected means the timeout is meaningless — clear
+        // it too rather than leaving a stale value that'd resurface if a
+        // channel gets picked again later without also being retyped.
+        afkTimeoutMinutes: afkChannelId ? afkTimeoutMinutes : null,
       });
       onUpdated(updated);
     } catch (err) {
@@ -145,6 +153,29 @@ function GeneralTab({
           ))}
         </select>
       </label>
+      <label>
+        AFK Voice Channel
+        <select value={afkChannelId} onChange={(e) => setAfkChannelId(e.target.value)}>
+          <option value="">None — members stay in voice indefinitely while idle</option>
+          {voiceChannels.map((c) => (
+            <option key={c.id} value={c.id}>
+              🔊 {c.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {afkChannelId && (
+        <label>
+          AFK Timeout
+          <select value={afkTimeoutMinutes} onChange={(e) => setAfkTimeoutMinutes(Number(e.target.value))}>
+            <option value={1}>1 minute</option>
+            <option value={5}>5 minutes</option>
+            <option value={15}>15 minutes</option>
+            <option value={30}>30 minutes</option>
+            <option value={60}>1 hour</option>
+          </select>
+        </label>
+      )}
       <h3>Theme</h3>
       <ThemePicker value={theme} onChange={setTheme} />
       {error && <p className="error">{error}</p>}

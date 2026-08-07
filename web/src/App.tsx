@@ -367,6 +367,27 @@ function App() {
     activeVoiceChannelIdRef.current = voice.activeChannel?.id ?? null;
   }, [voice.activeChannel?.id]);
 
+  // Discord-style AFK move — client-driven rather than a server timer,
+  // since only this client actually knows its own speaking history
+  // (LiveKit audio activity isn't visible server-side at all; see
+  // afkChannelId's comment in schema.prisma). isLocalUserSpeaking is
+  // deliberately a boolean, not the raw speakingUserIds Set, so this only
+  // resets the timer when *this* user's own speaking state flips — someone
+  // else talking in the same channel shouldn't keep this client out of AFK.
+  const isLocalUserSpeaking = !!session && voice.speakingUserIds.has(session.user.id);
+  useEffect(() => {
+    if (!instanceInfo?.afkChannelId || !instanceInfo.afkTimeoutMinutes) return;
+    if (!voice.activeChannel || voice.activeChannel.id === instanceInfo.afkChannelId) return;
+    if (isLocalUserSpeaking) return;
+
+    const timer = setTimeout(() => {
+      const afkChannel = channels.find((c) => c.id === instanceInfo.afkChannelId && c.type === "VOICE");
+      if (afkChannel) voice.join(afkChannel);
+    }, instanceInfo.afkTimeoutMinutes * 60_000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLocalUserSpeaking, voice.activeChannel?.id, instanceInfo?.afkChannelId, instanceInfo?.afkTimeoutMinutes, channels]);
+
   // Load the active instance's stored session whenever it changes, then
   // refresh the cached user object from the server — a stale/incomplete
   // user object (e.g. from an endpoint that once forgot to return a field
