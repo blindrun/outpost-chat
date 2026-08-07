@@ -1264,9 +1264,18 @@ function App() {
                     // Joining voice is a side effect, not "viewing" — it
                     // deliberately does NOT touch selectedChannelId, so
                     // whatever text channel is open stays open (previously
-                    // this yanked the main pane over to VoicePanel).
-                    if (!isMyChannel) voice.join(channel);
-                    else setVoiceDetailsOpen((v) => !v);
+                    // this yanked the main pane over to VoicePanel). The
+                    // details popover (mic/speaker controls etc.) opens
+                    // automatically on join rather than needing a second,
+                    // undiscoverable click on the now-active channel —
+                    // real user feedback: it wasn't obvious a second click
+                    // was needed at all.
+                    if (!isMyChannel) {
+                      voice.join(channel);
+                      setVoiceDetailsOpen(true);
+                    } else {
+                      setVoiceDetailsOpen((v) => !v);
+                    }
                   }}
                 >
                   <span className="channel-icon">🔊</span>
