@@ -180,22 +180,26 @@ export async function instanceRoutes(app: FastifyInstance) {
   });
 
   // Full settings including Mail-tab fields (smtpPassword redacted to a
-  // boolean) — owner-only, separate from the public GET /instance-info
-  // above since that endpoint is unauthenticated.
+  // boolean) — owner or a MANAGE_SERVER role holder, separate from the
+  // public GET /instance-info above since that endpoint is unauthenticated.
   app.get("/instance/settings", { onRequest: [app.authenticate] }, async (req, reply) => {
     const { sub: userId } = req.user as { sub: string };
     const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user?.isOwner) return reply.status(403).send({ error: "only the instance owner can view these settings" });
+    if (!user?.isOwner && !(await hasPermission(userId, PERMISSIONS.MANAGE_SERVER))) {
+      return reply.status(403).send({ error: "missing MANAGE_SERVER permission" });
+    }
     return redactSettings(await getOrCreateSettings());
   });
 
-  // Instance settings — owner-only.
+  // Instance settings — owner or a MANAGE_SERVER role holder.
   app.patch("/instance/settings", { onRequest: [app.authenticate] }, async (req, reply) => {
     const { sub: userId } = req.user as { sub: string };
     const body = updateInstanceSettingsSchema.parse(req.body ?? {});
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user?.isOwner) return reply.status(403).send({ error: "only the instance owner can change settings" });
+    if (!user?.isOwner && !(await hasPermission(userId, PERMISSIONS.MANAGE_SERVER))) {
+      return reply.status(403).send({ error: "missing MANAGE_SERVER permission" });
+    }
 
     if (body.defaultChannelId) {
       const channel = await prisma.channel.findUnique({ where: { id: body.defaultChannelId } });

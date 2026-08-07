@@ -3,6 +3,14 @@ import { prisma } from "../plugins/db.js";
 export const PERMISSIONS = {
   MANAGE_CHANNELS: "MANAGE_CHANNELS",
   MANAGE_ROLES: "MANAGE_ROLES",
+  // General + Mail tabs of Instance Settings (name/icon/theme/default
+  // channel/AFK channel, outbound SMTP config) — previously hardcoded to
+  // isOwner with no grantable escape hatch, so a role with every other
+  // permission checked still couldn't actually save a change there. Kept
+  // separate from MANAGE_CHANNELS/MANAGE_ROLES since it's a materially
+  // different blast radius (whole-instance identity and mail credentials,
+  // not one channel or role at a time).
+  MANAGE_SERVER: "MANAGE_SERVER",
   SEND_MESSAGES: "SEND_MESSAGES",
   MODERATE_MEMBERS: "MODERATE_MEMBERS",
   // Gate which curated non-image attachment categories a role's members can

@@ -215,6 +215,7 @@ export interface SearchResult extends Message {
 export type Permission =
   | "MANAGE_CHANNELS"
   | "MANAGE_ROLES"
+  | "MANAGE_SERVER"
   | "SEND_MESSAGES"
   | "MODERATE_MEMBERS"
   | "UPLOAD_DOCUMENTS"

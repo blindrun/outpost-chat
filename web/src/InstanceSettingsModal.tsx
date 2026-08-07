@@ -34,6 +34,7 @@ import { ThemePicker } from "./ThemePicker";
 const ALL_PERMISSIONS: Permission[] = [
   "MANAGE_CHANNELS",
   "MANAGE_ROLES",
+  "MANAGE_SERVER",
   "SEND_MESSAGES",
   "MODERATE_MEMBERS",
   "UPLOAD_DOCUMENTS",
@@ -661,6 +662,7 @@ export function InstanceSettingsModal({
   token,
   isOwner,
   canModerate,
+  canManageServer,
   instanceInfo,
   channels,
   onClose,
@@ -673,6 +675,7 @@ export function InstanceSettingsModal({
   token: string;
   isOwner: boolean;
   canModerate: boolean;
+  canManageServer: boolean;
   instanceInfo: InstanceInfo;
   channels: Channel[];
   onClose: () => void;
@@ -690,7 +693,7 @@ export function InstanceSettingsModal({
         <button className={tab === "general" ? "active" : ""} onClick={() => setTab("general")}>
           General
         </button>
-        {isOwner && (
+        {(isOwner || canManageServer) && (
           <button className={tab === "mail" ? "active" : ""} onClick={() => setTab("mail")}>
             Mail
           </button>
@@ -741,7 +744,7 @@ export function InstanceSettingsModal({
           onClose={onClose}
         />
       )}
-      {tab === "mail" && isOwner && <MailTab baseUrl={baseUrl} token={token} onUpdated={onUpdated} />}
+      {tab === "mail" && (isOwner || canManageServer) && <MailTab baseUrl={baseUrl} token={token} onUpdated={onUpdated} />}
       {tab === "roles" && <RolesTab baseUrl={baseUrl} token={token} />}
       {tab === "members" && <MembersTab baseUrl={baseUrl} token={token} isOwner={isOwner} />}
       {tab === "channels" && (

@@ -995,6 +995,7 @@ function App() {
     (currentMember?.roles.some((r) => roles.find((role) => role.id === r.id)?.permissions.includes(permission)) ?? false);
   const canManageChannels = hasPerm("MANAGE_CHANNELS");
   const canManageRoles = hasPerm("MANAGE_ROLES");
+  const canManageServer = hasPerm("MANAGE_SERVER");
   const canModerate = hasPerm("MODERATE_MEMBERS");
   const myUploadCategories = UPLOAD_CATEGORY_KEYS.filter((cat) => hasPerm(UPLOAD_CATEGORIES[cat].permission));
   const mentionMatches =
@@ -1115,7 +1116,12 @@ function App() {
       <aside className="sidebar">
         <div className="sidebar-header">
           <span>{instanceInfo?.name ?? activeInstance.label}</span>
-          {session.user.isOwner && (
+          {/* Was isOwner-only — silently locked out any non-owner holding
+              MANAGE_CHANNELS/MANAGE_ROLES/MODERATE_MEMBERS/MANAGE_SERVER
+              too, since there was no way to even open the modal to reach
+              the tab their permission already worked for. Each tab still
+              gates its own content/actions server-side regardless. */}
+          {(isOwner || canManageChannels || canManageRoles || canModerate || canManageServer) && (
             <button className="gear-btn" title="Instance Settings" onClick={() => setInstanceSettingsOpen(true)}>
               ⚙️
             </button>
@@ -1417,6 +1423,7 @@ function App() {
           token={session.token}
           isOwner={session.user.isOwner}
           canModerate={canModerate}
+          canManageServer={canManageServer}
           instanceInfo={instanceInfo}
           channels={channels}
           onClose={() => setInstanceSettingsOpen(false)}
