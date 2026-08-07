@@ -792,6 +792,10 @@ export function kickMember(baseUrl: string, token: string, userId: string) {
   return request<void>(baseUrl, `/moderation/${userId}/kick`, token, { method: "POST" });
 }
 
+export function kickFromVoice(baseUrl: string, token: string, userId: string) {
+  return request<void>(baseUrl, `/moderation/${userId}/voice-kick`, token, { method: "POST" });
+}
+
 export function banMember(baseUrl: string, token: string, userId: string) {
   return request<void>(baseUrl, `/moderation/${userId}/ban`, token, { method: "POST" });
 }
@@ -872,6 +876,7 @@ type GatewayEvent =
   | { type: "VOICE_STATE_UPDATE"; channelId: string; userIds: string[] }
   | { type: "THREAD_CREATE"; parentMessageId: string; thread: ThreadChannel }
   | { type: "FORCE_DISCONNECT"; reason: "kicked" | "banned" }
+  | { type: "VOICE_KICKED"; channelId: string }
   | { type: "CHANNELS_UPDATE"; channels: Channel[] }
   | { type: "DM_CHANNEL_CREATE"; channel: DMChannel }
   | { type: "FRIEND_REQUEST_RECEIVED"; user: FriendUser }
