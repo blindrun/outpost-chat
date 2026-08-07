@@ -408,6 +408,19 @@ function App() {
         setChannels([...event.channels, ...event.dmChannels]);
         setOnlineUserIds(new Set(event.onlineUserIds));
         setVoiceState(event.voiceState);
+        // READY fires on every reconnect, not just the initial connect (the
+        // Gateway instance reconnects internally on its own backoff timer).
+        // Presence/channels/voice all get a fresh snapshot above, but the
+        // already-loaded message list for the open channel doesn't — so a
+        // MESSAGE_DELETE/MESSAGE_UPDATE that happened during the disconnect
+        // window (mobile app backgrounded, laptop slept, brief WiFi drop)
+        // was silently missed forever. Refetch it here to close that gap.
+        const currentChannelId = selectedChannelIdRef.current;
+        if (currentChannelId) {
+          listMessages(activeInstance.baseUrl, session.token, currentChannelId)
+            .then((history) => setMessages((prev) => ({ ...prev, [currentChannelId]: history })))
+            .catch(console.error);
+        }
       } else if (event.type === "VOICE_STATE_UPDATE") {
         setVoiceState((prev) => ({ ...prev, [event.channelId]: event.userIds }));
       } else if (event.type === "MESSAGE_CREATE") {
