@@ -27,6 +27,7 @@ import {
 } from "./api";
 import { VoicePanel } from "./VoicePanel";
 import { useVoiceSession } from "./useVoiceSession";
+import { playVoiceJoinSound, playVoiceLeaveSound } from "./voiceSounds";
 import { MessageItem, messageIdentityKey } from "./MessageItem";
 import { Modal } from "./Modal";
 import { AddServerModal } from "./AddServerModal";
@@ -254,6 +255,20 @@ function App() {
   useEffect(() => {
     selectedChannelIdRef.current = selectedChannelId;
   }, [selectedChannelId]);
+  // Same staleness problem as selectedChannelIdRef above, for the voice
+  // channel this client is currently connected to — mirrored into a ref so
+  // the gateway effect's VOICE_STATE_UPDATE handler (set up once, not
+  // re-run on every join/leave) always reads the live value instead of
+  // whatever it was at connect time.
+  const activeVoiceChannelIdRef = useRef<string | null>(null);
+  // Mirrors voiceState purely so the join/leave-sound diff below has a
+  // side-effect-free read of "who was in this channel before" — doing that
+  // read inside the setVoiceState updater itself would run the diff (and
+  // the sounds it triggers) twice under StrictMode's dev-only double-invoke.
+  const voiceStateRef = useRef<Record<string, string[]>>({});
+  useEffect(() => {
+    voiceStateRef.current = voiceState;
+  }, [voiceState]);
   useEffect(() => {
     localStorage.setItem("memberListOpen", String(memberListOpen));
   }, [memberListOpen]);
@@ -347,6 +362,9 @@ function App() {
   // quick mute/deafen buttons have something to act on regardless of which
   // channel is currently selected.
   const voice = useVoiceSession(activeInstance?.baseUrl ?? "", session?.token ?? "", gatewayRef);
+  useEffect(() => {
+    activeVoiceChannelIdRef.current = voice.activeChannel?.id ?? null;
+  }, [voice.activeChannel?.id]);
 
   // Load the active instance's stored session whenever it changes, then
   // refresh the cached user object from the server — a stale/incomplete
@@ -451,6 +469,22 @@ function App() {
           markChannelRead(activeInstance.baseUrl, session.token, currentChannelId).catch(console.error);
         }
       } else if (event.type === "VOICE_STATE_UPDATE") {
+        // A sound only makes sense for the voice channel this client is
+        // actually in — a join/leave in some other voice channel isn't
+        // something you'd hear in a real room. Diffed against
+        // voiceStateRef (this event always carries the full current list,
+        // not a delta) rather than inside the setVoiceState updater below,
+        // so the diff — and the sounds it triggers — can't run twice under
+        // StrictMode's dev-only double-invoke of updater functions. Never
+        // sounded for the local user's own join/leave, which already has
+        // its own UI feedback.
+        if (event.channelId === activeVoiceChannelIdRef.current) {
+          const previousIds = voiceStateRef.current[event.channelId] ?? [];
+          const joined = event.userIds.filter((id) => id !== session.user.id && !previousIds.includes(id));
+          const left = previousIds.filter((id) => id !== session.user.id && !event.userIds.includes(id));
+          if (joined.length > 0) playVoiceJoinSound();
+          if (left.length > 0) playVoiceLeaveSound();
+        }
         setVoiceState((prev) => ({ ...prev, [event.channelId]: event.userIds }));
       } else if (event.type === "MESSAGE_CREATE") {
         setMessages((prev) => ({
