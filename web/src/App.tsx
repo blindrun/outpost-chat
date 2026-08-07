@@ -1525,6 +1525,13 @@ function App() {
                     }
                   }}
                   placeholder={selectedChannel.type === "DM" ? `Message @${selectedChannel.name}` : `Message #${selectedChannel.name}`}
+                  // Explicit rather than relying on the browser/WebView
+                  // default, which isn't consistent across platforms (the
+                  // Android/iOS wrappers' WebViews don't all default these
+                  // the same way a desktop browser does).
+                  spellCheck
+                  autoCapitalize="sentences"
+                  autoCorrect="on"
                 />
                 <button
                   type="button"
