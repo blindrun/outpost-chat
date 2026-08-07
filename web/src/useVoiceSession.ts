@@ -3,6 +3,7 @@ import { Channel, Gateway, getVoiceToken } from "./api";
 import { AudioSettings, loadAudioSettings } from "./audioSettings";
 import { createVoiceEngine } from "./voice/createVoiceEngine";
 import { ParticipantInfo, VoiceEngine } from "./voice/VoiceEngine";
+import { playVoiceJoinSound, playVoiceLeaveSound } from "./voiceSounds";
 
 // Hangover keeps the mic briefly open after level drops below threshold so
 // VAD doesn't clip the tail end of words.
@@ -205,6 +206,14 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
         engineRef.current = engine;
         setActiveChannel(channel);
         setScreenShareSupported(engine.capabilities.screenShare);
+        // Every join path funnels through here — a manual sidebar click,
+        // an AFK auto-move, a moderator's voice-kick landing on a
+        // different channel (not this app yet) — so this is the one place
+        // that needs to play it, rather than duplicating the call at each
+        // trigger site. Real user feedback: joining/leaving voice produced
+        // no sound at all for the person doing it (only the "someone else
+        // joined/left the channel you're in" ambient notification did).
+        playVoiceJoinSound();
 
         // Seed the engine with whatever deafen state already persisted
         // across a previous leave/join — TrackSubscribed on a fresh engine
@@ -301,6 +310,10 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
     engineRef.current?.disconnect();
     engineRef.current = null;
     gatewayRef.current?.sendVoiceLeave();
+    // Only fires here, not from join()'s own internal disconnect-then-
+    // reconnect when switching channels directly — that's a single join,
+    // not a leave-then-join, so it should only ever sound like one action.
+    if (activeChannel) playVoiceLeaveSound();
     setActiveChannel(null);
     setConnecting(false);
     setParticipants([]);
@@ -311,7 +324,7 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
     setMode(null);
     screenSharingRef.current = false;
     setScreenSharing(false);
-  }, [gatewayRef]);
+  }, [gatewayRef, activeChannel]);
 
   const toggleScreenShare = useCallback(async () => {
     const engine = engineRef.current;
