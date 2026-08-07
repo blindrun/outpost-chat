@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   Channel,
   CustomEmoji,
+  FullInstanceSettings,
   InstanceInfo,
   Member,
   ModerationLogEntry,
@@ -10,6 +11,7 @@ import {
   assignRole,
   authedMediaUrl,
   createRole,
+  getInstanceSettings,
   getModerationAuditLog,
   listMembers,
   listRoles,
@@ -40,7 +42,7 @@ const ALL_PERMISSIONS: Permission[] = [
   "UPLOAD_VIDEOS",
 ];
 
-type Tab = "general" | "roles" | "members" | "channels" | "invites" | "webhooks" | "bot" | "emoji" | "apiBots" | "auditLog" | "import";
+type Tab = "general" | "mail" | "roles" | "members" | "channels" | "invites" | "webhooks" | "bot" | "emoji" | "apiBots" | "auditLog" | "import";
 
 function GeneralTab({
   baseUrl,
@@ -54,7 +56,7 @@ function GeneralTab({
   token: string;
   instanceInfo: InstanceInfo;
   channels: Channel[];
-  onUpdated: (info: InstanceInfo) => void;
+  onUpdated: (info: FullInstanceSettings) => void;
   onClose: () => void;
 }) {
   const [name, setName] = useState(instanceInfo.name);
@@ -150,6 +152,126 @@ function GeneralTab({
         <button type="button" className="btn secondary" onClick={onClose}>
           Close
         </button>
+        <button type="submit" className="btn" disabled={saving}>
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// Self-hoster-configured outbound SMTP for the self-service "forgot
+// password" email flow (see POST /auth/forgot-password) — off by default.
+// Fetches its own copy of the full settings on mount rather than trusting
+// instanceInfo (the public GET /instance-info payload never includes
+// smtp*), same pattern as SecurityTab's getMfaStatus in UserSettingsModal.
+function MailTab({ baseUrl, token, onUpdated }: { baseUrl: string; token: string; onUpdated: (info: FullInstanceSettings) => void }) {
+  const [settings, setSettings] = useState<FullInstanceSettings | null>(null);
+  const [smtpEnabled, setSmtpEnabled] = useState(false);
+  const [smtpHost, setSmtpHost] = useState("");
+  const [smtpPort, setSmtpPort] = useState("");
+  const [smtpUsername, setSmtpUsername] = useState("");
+  const [smtpPassword, setSmtpPassword] = useState("");
+  const [smtpFromAddress, setSmtpFromAddress] = useState("");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    getInstanceSettings(baseUrl, token)
+      .then((s) => {
+        setSettings(s);
+        setSmtpEnabled(s.smtpEnabled);
+        setSmtpHost(s.smtpHost ?? "");
+        setSmtpPort(s.smtpPort ? String(s.smtpPort) : "");
+        setSmtpUsername(s.smtpUsername ?? "");
+        setSmtpFromAddress(s.smtpFromAddress ?? "");
+      })
+      .catch((err) => setLoadError((err as Error).message));
+  }, [baseUrl, token]);
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSaved(false);
+    setSaving(true);
+    try {
+      const updated = await updateInstanceSettings(baseUrl, token, {
+        smtpEnabled,
+        smtpHost: smtpHost.trim() || null,
+        smtpPort: smtpPort.trim() ? Number(smtpPort) : null,
+        smtpUsername: smtpUsername.trim() || null,
+        smtpFromAddress: smtpFromAddress.trim() || null,
+        // Empty = leave whatever's already stored alone (so re-saving the
+        // rest of this tab doesn't force retyping it); the password field
+        // is otherwise never pre-filled with the real value.
+        ...(smtpPassword.trim() ? { smtpPassword: smtpPassword.trim() } : {}),
+      });
+      setSettings(updated);
+      setSmtpPassword("");
+      setSaved(true);
+      onUpdated(updated);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loadError) return <p className="error">{loadError}</p>;
+  if (!settings) return <p className="subtitle">Loading…</p>;
+
+  return (
+    <form className="settings-section" onSubmit={handleSave}>
+      <p className="subtitle">
+        Configure an outbound mail server so members can reset a forgotten password themselves. Leave this off and
+        the instance owner can still reset a member's password directly from the Members tab.
+      </p>
+      <label className="checkbox-label">
+        <input type="checkbox" checked={smtpEnabled} onChange={(e) => setSmtpEnabled(e.target.checked)} />
+        Enable self-service password reset by email
+      </label>
+      <label>
+        SMTP Host
+        <input value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} placeholder="smtp.example.com" />
+      </label>
+      <label>
+        SMTP Port
+        <input
+          type="number"
+          value={smtpPort}
+          onChange={(e) => setSmtpPort(e.target.value)}
+          placeholder="587"
+          min={1}
+          max={65535}
+        />
+      </label>
+      <label>
+        SMTP Username
+        <input value={smtpUsername} onChange={(e) => setSmtpUsername(e.target.value)} />
+      </label>
+      <label>
+        SMTP Password
+        <input
+          type="password"
+          value={smtpPassword}
+          onChange={(e) => setSmtpPassword(e.target.value)}
+          placeholder={settings.smtpPasswordSet ? "•••••••• (unchanged)" : ""}
+        />
+      </label>
+      <label>
+        From Address
+        <input
+          type="email"
+          value={smtpFromAddress}
+          onChange={(e) => setSmtpFromAddress(e.target.value)}
+          placeholder="no-reply@example.com"
+        />
+      </label>
+      {error && <p className="error">{error}</p>}
+      {saved && !error && <p className="subtitle">Saved.</p>}
+      <div className="modal-actions">
         <button type="submit" className="btn" disabled={saving}>
           {saving ? "Saving…" : "Save"}
         </button>
@@ -523,7 +645,7 @@ export function InstanceSettingsModal({
   instanceInfo: InstanceInfo;
   channels: Channel[];
   onClose: () => void;
-  onUpdated: (info: InstanceInfo) => void;
+  onUpdated: (info: FullInstanceSettings) => void;
   onChannelUpdated: (channel: Channel) => void;
   customEmoji: CustomEmoji[];
   onCustomEmojiChanged: () => void;
@@ -537,6 +659,11 @@ export function InstanceSettingsModal({
         <button className={tab === "general" ? "active" : ""} onClick={() => setTab("general")}>
           General
         </button>
+        {isOwner && (
+          <button className={tab === "mail" ? "active" : ""} onClick={() => setTab("mail")}>
+            Mail
+          </button>
+        )}
         <button className={tab === "roles" ? "active" : ""} onClick={() => setTab("roles")}>
           Roles
         </button>
@@ -583,6 +710,7 @@ export function InstanceSettingsModal({
           onClose={onClose}
         />
       )}
+      {tab === "mail" && isOwner && <MailTab baseUrl={baseUrl} token={token} onUpdated={onUpdated} />}
       {tab === "roles" && <RolesTab baseUrl={baseUrl} token={token} />}
       {tab === "members" && <MembersTab baseUrl={baseUrl} token={token} isOwner={isOwner} />}
       {tab === "channels" && (

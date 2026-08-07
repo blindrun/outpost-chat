@@ -5,18 +5,29 @@ import {
   InstanceInfo,
   MfaChallenge,
   Theme,
+  forgotPassword,
   getInstanceInfo,
   login,
   mfaVerifyCode,
   mfaWebauthnLoginOptions,
   mfaWebauthnLoginVerify,
   register,
+  resetPassword,
   updateInstanceSettings,
 } from "./api";
 import { ThemePicker } from "./ThemePicker";
 import { TurnstileWidget } from "./TurnstileWidget";
 
-type Step = "address" | "connecting" | "auth" | "mfa" | "theme" | "intro" | "memberIntro";
+type Step =
+  | "address"
+  | "connecting"
+  | "auth"
+  | "mfa"
+  | "theme"
+  | "intro"
+  | "memberIntro"
+  | "forgotPassword"
+  | "resetPassword";
 
 // A short admin-only walkthrough shown once, right after the very first
 // owner finishes setup — points at real, already-built Instance Settings
@@ -81,14 +92,27 @@ function candidateBaseUrls(input: string): string[] {
 export function AddServerModal({
   initialBaseUrl,
   initialInviteCode,
+  initialResetToken,
   onConnected,
 }: {
   embedded?: boolean;
   initialBaseUrl?: string;
   initialInviteCode?: string;
+  initialResetToken?: string;
   onConnected: (instance: Instance, session: Session) => void;
 }) {
-  const [step, setStep] = useState<Step>(initialBaseUrl && initialInviteCode ? "connecting" : "address");
+  const [step, setStep] = useState<Step>(
+    initialBaseUrl && (initialInviteCode || initialResetToken) ? "connecting" : "address",
+  );
+  const [resetToken] = useState(initialResetToken);
+  const [resetPasswordValue, setResetPasswordValue] = useState("");
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetSubmitting, setResetSubmitting] = useState(false);
+  const [resetDone, setResetDone] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotError, setForgotError] = useState<string | null>(null);
+  const [forgotSubmitting, setForgotSubmitting] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
   const [address, setAddress] = useState(initialBaseUrl ?? "");
   const [label, setLabel] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
@@ -135,6 +159,11 @@ export function AddServerModal({
         const instanceInfo = await getInstanceInfo(candidate);
         setBaseUrl(candidate);
         setInfo(instanceInfo);
+        if (resetToken) {
+          setStep("resetPassword");
+          setProbing(false);
+          return;
+        }
         // An invite link always means "join via invite" — even though a
         // pre-existing instance normally defaults to the Log In tab.
         setAuthMode(instanceInfo.hasOwner && !initialInviteCode ? "login" : "register");
@@ -158,14 +187,14 @@ export function AddServerModal({
     probeAddress(address);
   }
 
-  // Invite links (`?invite=CODE`) arrive with both the address and the code
-  // already known — skip the manual "Connect" click and go straight to the
-  // auth step so the recipient doesn't have to figure out where to type
-  // anything.
+  // Invite links (`?invite=CODE`) and password-reset links (`?reset=TOKEN`)
+  // both arrive with the address already known (the link's own origin) —
+  // skip the manual "Connect" click and go straight to the auth/reset step
+  // so the recipient doesn't have to figure out where to type anything.
   const autoProbedRef = useRef(false);
   useEffect(() => {
     if (autoProbedRef.current) return;
-    if (initialBaseUrl && initialInviteCode) {
+    if (initialBaseUrl && (initialInviteCode || resetToken)) {
       autoProbedRef.current = true;
       probeAddress(initialBaseUrl);
     }
@@ -231,6 +260,35 @@ export function AddServerModal({
       setAuthError((err as Error).message);
     } finally {
       setAuthing(false);
+    }
+  }
+
+  async function handleForgotPasswordSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setForgotError(null);
+    setForgotSubmitting(true);
+    try {
+      await forgotPassword(baseUrl, forgotEmail);
+      setForgotSent(true);
+    } catch (err) {
+      setForgotError((err as Error).message);
+    } finally {
+      setForgotSubmitting(false);
+    }
+  }
+
+  async function handleResetPasswordSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!resetToken) return;
+    setResetError(null);
+    setResetSubmitting(true);
+    try {
+      await resetPassword(baseUrl, resetToken, resetPasswordValue);
+      setResetDone(true);
+    } catch (err) {
+      setResetError((err as Error).message);
+    } finally {
+      setResetSubmitting(false);
     }
   }
 
@@ -400,6 +458,20 @@ export function AddServerModal({
             Password
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </label>
+          {authMode === "login" && info?.passwordResetEnabled && (
+            <button
+              type="button"
+              className="link"
+              onClick={() => {
+                setForgotEmail(email.includes("@") ? email : "");
+                setForgotError(null);
+                setForgotSent(false);
+                setStep("forgotPassword");
+              }}
+            >
+              Forgot password?
+            </button>
+          )}
           {(authMode === "register" || !info?.hasOwner) && info?.requireInviteToRegister && (
             <label>
               Invite Code
@@ -431,6 +503,85 @@ export function AddServerModal({
             </button>
           </div>
         </form>
+      </div>
+    );
+  }
+
+  if (step === "forgotPassword") {
+    return (
+      <div className="add-server-form">
+        <h2>Reset Password</h2>
+        {forgotSent ? (
+          <>
+            <p className="subtitle">
+              If an account matches that email, a reset link is on its way — it expires in 1 hour.
+            </p>
+            <div className="modal-actions">
+              <button type="button" className="btn" onClick={() => setStep("auth")}>
+                Back to Log In
+              </button>
+            </div>
+          </>
+        ) : (
+          <form onSubmit={handleForgotPasswordSubmit}>
+            <p className="subtitle">Enter your account's email and we'll send you a reset link.</p>
+            <label>
+              Email
+              <input
+                type="email"
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                autoFocus
+              />
+            </label>
+            {forgotError && <p className="error">{forgotError}</p>}
+            <div className="modal-actions">
+              <button type="button" className="btn secondary" onClick={() => setStep("auth")}>
+                Back
+              </button>
+              <button type="submit" className="btn" disabled={forgotSubmitting || !forgotEmail.trim()}>
+                {forgotSubmitting ? "…" : "Send Reset Link"}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    );
+  }
+
+  if (step === "resetPassword") {
+    return (
+      <div className="add-server-form">
+        <h2>{info?.name ?? "Reset Password"}</h2>
+        {resetDone ? (
+          <>
+            <p className="subtitle">Your password has been reset — log in with your new password.</p>
+            <div className="modal-actions">
+              <button type="button" className="btn" onClick={() => setStep("auth")}>
+                Back to Log In
+              </button>
+            </div>
+          </>
+        ) : (
+          <form onSubmit={handleResetPasswordSubmit}>
+            <p className="subtitle">Choose a new password for your account.</p>
+            <label>
+              New Password
+              <input
+                type="password"
+                value={resetPasswordValue}
+                onChange={(e) => setResetPasswordValue(e.target.value)}
+                autoFocus
+              />
+            </label>
+            {resetError && <p className="error">{resetError}</p>}
+            <div className="modal-actions">
+              <button type="submit" className="btn" disabled={resetSubmitting || resetPasswordValue.length < 8}>
+                {resetSubmitting ? "…" : "Reset Password"}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     );
   }

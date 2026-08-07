@@ -9,6 +9,7 @@ import {
 } from "../util/permissions.js";
 import { createUniqueInviteCode, isInviteValid } from "../util/invites.js";
 import { broadcastChannelsUpdate } from "../gateway/channelBroadcast.js";
+import { mailConfigured } from "../util/mail.js";
 
 // Read once at module load rather than per-request — package.json doesn't
 // change at runtime, and the production image's CWD (/app) is where it's
@@ -29,7 +30,26 @@ const updateInstanceSettingsSchema = z.object({
   theme: z.enum(["business", "cyberpunk", "hacker", "esports"]).optional(),
   requireInviteToRegister: z.boolean().optional(),
   defaultChannelId: z.string().nullable().optional(),
+  smtpEnabled: z.boolean().optional(),
+  smtpHost: z.string().max(255).nullable().optional(),
+  smtpPort: z.number().int().min(1).max(65535).nullable().optional(),
+  smtpUsername: z.string().max(255).nullable().optional(),
+  // Omitted entirely = leave the stored password untouched (so re-saving
+  // other Mail-tab fields doesn't require retyping it); null = clear it;
+  // a string = set it. Same optional-vs-null convention as iconUrl above.
+  smtpPassword: z.string().max(255).nullable().optional(),
+  smtpFromAddress: z.string().email().nullable().optional(),
 });
+
+// smtpPassword never round-trips to a client, in either direction after the
+// initial write — same "credential the client just typed is fine to see
+// once, not on every subsequent read" posture as this app's bot tokens and
+// webhook URLs. smtpPasswordSet lets the admin UI show "already
+// configured" without ever re-displaying the value.
+function redactSettings<T extends { smtpPassword: string | null }>(settings: T) {
+  const { smtpPassword, ...rest } = settings;
+  return { ...rest, smtpPasswordSet: !!smtpPassword };
+}
 
 const createChannelSchema = z.object({
   name: z.string().min(2).max(64),
@@ -108,6 +128,11 @@ export async function instanceRoutes(app: FastifyInstance) {
       turnstileSiteKey: process.env.TURNSTILE_SITE_KEY || null,
       defaultChannelId: settings.defaultChannelId,
       levelingEnabled: botSettings?.levelingEnabled ?? false,
+      // Whether this instance can send a real "forgot password" email —
+      // just the capability flag, never any of the underlying SMTP config.
+      // Lets the client show/hide the self-service reset link instead of
+      // offering a flow that would just 503.
+      passwordResetEnabled: mailConfigured(settings),
       version: APP_VERSION,
     };
   });
@@ -145,6 +170,16 @@ export async function instanceRoutes(app: FastifyInstance) {
 </body></html>`);
   });
 
+  // Full settings including Mail-tab fields (smtpPassword redacted to a
+  // boolean) — owner-only, separate from the public GET /instance-info
+  // above since that endpoint is unauthenticated.
+  app.get("/instance/settings", { onRequest: [app.authenticate] }, async (req, reply) => {
+    const { sub: userId } = req.user as { sub: string };
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user?.isOwner) return reply.status(403).send({ error: "only the instance owner can view these settings" });
+    return redactSettings(await getOrCreateSettings());
+  });
+
   // Instance settings — owner-only.
   app.patch("/instance/settings", { onRequest: [app.authenticate] }, async (req, reply) => {
     const { sub: userId } = req.user as { sub: string };
@@ -169,6 +204,12 @@ export async function instanceRoutes(app: FastifyInstance) {
         ...(body.theme !== undefined ? { theme: body.theme } : {}),
         ...(body.requireInviteToRegister !== undefined ? { requireInviteToRegister: body.requireInviteToRegister } : {}),
         ...(body.defaultChannelId !== undefined ? { defaultChannelId: body.defaultChannelId } : {}),
+        ...(body.smtpEnabled !== undefined ? { smtpEnabled: body.smtpEnabled } : {}),
+        ...(body.smtpHost !== undefined ? { smtpHost: body.smtpHost } : {}),
+        ...(body.smtpPort !== undefined ? { smtpPort: body.smtpPort } : {}),
+        ...(body.smtpUsername !== undefined ? { smtpUsername: body.smtpUsername } : {}),
+        ...(body.smtpPassword !== undefined ? { smtpPassword: body.smtpPassword } : {}),
+        ...(body.smtpFromAddress !== undefined ? { smtpFromAddress: body.smtpFromAddress } : {}),
       },
       update: {
         ...(body.name !== undefined ? { name: body.name } : {}),
@@ -177,9 +218,15 @@ export async function instanceRoutes(app: FastifyInstance) {
         ...(body.theme !== undefined ? { theme: body.theme } : {}),
         ...(body.requireInviteToRegister !== undefined ? { requireInviteToRegister: body.requireInviteToRegister } : {}),
         ...(body.defaultChannelId !== undefined ? { defaultChannelId: body.defaultChannelId } : {}),
+        ...(body.smtpEnabled !== undefined ? { smtpEnabled: body.smtpEnabled } : {}),
+        ...(body.smtpHost !== undefined ? { smtpHost: body.smtpHost } : {}),
+        ...(body.smtpPort !== undefined ? { smtpPort: body.smtpPort } : {}),
+        ...(body.smtpUsername !== undefined ? { smtpUsername: body.smtpUsername } : {}),
+        ...(body.smtpPassword !== undefined ? { smtpPassword: body.smtpPassword } : {}),
+        ...(body.smtpFromAddress !== undefined ? { smtpFromAddress: body.smtpFromAddress } : {}),
       },
     });
-    return updated;
+    return redactSettings(updated);
   });
 
   // Member list — every registered user on this instance is implicitly a

@@ -153,6 +153,36 @@ model InstanceSettings {
   theme                   String  @default("business")
   requireInviteToRegister Boolean @default(false)
   defaultChannelId        String?
+  // Self-hoster-configured outbound SMTP, used only for the self-service
+  // "forgot password" email flow (see POST /auth/forgot-password) — off by
+  // default, since most self-hosted instances have no mail infra at all and
+  // the existing owner-triggered reset-password already covers that case.
+  // smtpPassword is plain text (no encryption-at-rest anywhere else in this
+  // app either, e.g. Webhook.token/User.totpSecret) — protected by the same
+  // DB-access boundary as those.
+  smtpEnabled     Boolean @default(false)
+  smtpHost        String?
+  smtpPort        Int?
+  smtpUsername    String?
+  smtpPassword    String?
+  smtpFromAddress String?
+}
+
+// A single-use, short-lived token for the self-service "forgot password"
+// email flow. tokenHash (not the raw token) is stored — same reasoning as
+// User.passwordHash: this is a bearer credential mailed to the user, so a DB
+// read alone shouldn't be enough to take over the account. Deleted once
+// consumed rather than flagged, so an expired/used token can't accumulate
+// forever; no formal relation to User (this app's other loose-FK models,
+// e.g. Invite.createdBy, follow the same plain-string-id pattern).
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 // One-time code an admin reads off the server console (like TeamSpeak's

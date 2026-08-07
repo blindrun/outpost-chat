@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { randomBytes, createHash } from "node:crypto";
 import type { AuthenticatorTransportFuture } from "@simplewebauthn/server";
 import { generateAuthenticationOptions, verifyAuthenticationResponse } from "@simplewebauthn/server";
 import { prisma } from "../plugins/db.js";
@@ -9,6 +10,7 @@ import { isInviteValid } from "../util/invites.js";
 import { postSystemMessage } from "../util/bot.js";
 import { consumeClaimCode } from "../util/claim.js";
 import { verifyTurnstileToken } from "../util/turnstile.js";
+import { mailConfigured, sendPasswordResetEmail } from "../util/mail.js";
 import {
   verifyTotpCode,
   findMatchingBackupCode,
@@ -44,6 +46,17 @@ const updatePasswordSchema = z.object({
   currentPassword: z.string(),
   newPassword: z.string().min(8),
 });
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  newPassword: z.string().min(8),
+});
+
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 
 const mfaVerifyCodeSchema = z.object({
   mfaToken: z.string(),
@@ -228,6 +241,70 @@ export async function authRoutes(app: FastifyInstance) {
     const token = app.jwt.sign({ sub: user.id, username: user.username });
     return reply.send({ token, user: toPublicUser(user) });
   });
+
+  // Self-service password recovery — off by default (InstanceSettings.
+  // smtpEnabled), since most self-hosted instances have no mail server to
+  // send from; the owner-triggered POST /moderation/:userId/reset-password
+  // is what covers account recovery until a self-hoster configures one.
+  // Always responds the same way whether or not the email matched a real
+  // account (only the presence/absence of a sent email would leak that
+  // otherwise) — the response never distinguishes "no such account" from
+  // "email sent", only "this server doesn't have email set up at all",
+  // which is public instance capability info, not anything about a
+  // specific user.
+  app.post(
+    "/auth/forgot-password",
+    { config: { rateLimit: { max: 5, timeWindow: "10 minutes" } } },
+    async (req, reply) => {
+      const body = forgotPasswordSchema.parse(req.body);
+      const settings = await prisma.instanceSettings.upsert({ where: { id: "singleton" }, create: {}, update: {} });
+      if (!mailConfigured(settings)) {
+        return reply.status(503).send({ error: "password reset by email isn't set up on this server" });
+      }
+
+      const user = await prisma.user.findUnique({ where: { email: body.email } });
+      if (user && !user.isBot) {
+        const rawToken = randomBytes(32).toString("hex");
+        const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+        // One live token per account — a fresh request supersedes any
+        // earlier unused one rather than leaving multiple valid links
+        // outstanding.
+        await prisma.passwordResetToken.deleteMany({ where: { userId: user.id } });
+        await prisma.passwordResetToken.create({
+          data: { userId: user.id, tokenHash, expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS) },
+        });
+        const { origin } = getRpConfig(req);
+        const resetUrl = `${origin}/?reset=${rawToken}`;
+        try {
+          await sendPasswordResetEmail(settings, user.email, resetUrl);
+        } catch (err) {
+          req.log.error(err, "failed to send password reset email");
+        }
+      }
+      return { ok: true };
+    },
+  );
+
+  app.post(
+    "/auth/reset-password",
+    { config: { rateLimit: { max: 10, timeWindow: "10 minutes" } } },
+    async (req, reply) => {
+      const body = resetPasswordSchema.parse(req.body);
+      const tokenHash = createHash("sha256").update(body.token).digest("hex");
+      const record = await prisma.passwordResetToken.findUnique({ where: { tokenHash } });
+      if (!record || record.expiresAt < new Date()) {
+        if (record) await prisma.passwordResetToken.delete({ where: { id: record.id } }).catch(() => {});
+        return reply.status(400).send({ error: "this reset link is invalid or has expired" });
+      }
+
+      const passwordHash = await bcrypt.hash(body.newPassword, 12);
+      await prisma.user.update({ where: { id: record.userId }, data: { passwordHash } });
+      // Same "one live token" rule as issuance — using it invalidates any
+      // other outstanding token for the account too.
+      await prisma.passwordResetToken.deleteMany({ where: { userId: record.userId } });
+      return { ok: true };
+    },
+  );
 
   // Second step of login for an MFA-enabled account — a 6-digit TOTP code
   // or one of the account's unused backup codes, either is accepted here.
