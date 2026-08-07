@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.7 — 2026-08-07
+
+- **Diagnostic-only iOS build**: native voice was still failing to connect on real devices after the v0.3.6 Multipath TCP fix, with the identical symptom. Investigation traced it to the signaling WebSocket completing its handshake successfully, then closing again within ~80ms with almost no data exchanged — but a server-initiated close was being silently treated as a clean local shutdown, discarding the real close code/reason and leaving only a generic 7-second join-response timeout visible in the app. This build surfaces the real code/reason from the server instead, to find the actual cause.
+
 ## v0.3.6 — 2026-08-06
 
 - **Fixed native iOS voice never connecting** ("Network error(Validation request failed...Timed out)" on every network tested). Root-caused by walking LiveKit's actual Swift SDK source: the signaling WebSocket explicitly opts into Multipath TCP "handover" mode (iOS-only), which hung until the SDK's own 7-second join-response timeout — while curl, Safari, and the JS SDK (used by the web app) all connect fine against the same server, since none of them use Multipath TCP. Matches a known, still-open upstream issue (a maintainer's own suspicion was "multipath handling with certain n/w providers"); the one-line fix existed but was closed unmerged for lack of reproduction, not disproven. Patched via a pinned fork (`multipathServiceType: .handover` → `.none`) rather than waiting on upstream.
