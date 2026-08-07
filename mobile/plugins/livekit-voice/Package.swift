@@ -31,7 +31,17 @@ let package = Package(
         // (multipathServiceType: .handover -> .none). Revert to a plain
         // upstream `from:` dependency if/when this lands upstream for
         // real.
-        .package(url: "https://github.com/blindrun/client-sdk-swift.git", revision: "b216a205b52a4dfe0f03acfc7b1697a1c6403ac8")
+        //
+        // 2026-08-07: added a second, diagnostic-only patch on the same
+        // fork branch -- a server-initiated WebSocket close (as opposed to
+        // one we initiate ourselves) was being silently swallowed as a
+        // "clean shutdown" with its actual close code/reason discarded,
+        // so a real-device voice-connect failure surfaced only as a
+        // generic 7s join-response timeout with zero indication the
+        // socket had already been closed by the server within ~80ms. Now
+        // throws a descriptive error with the real code/reason instead,
+        // to find out what the server is actually saying.
+        .package(url: "https://github.com/blindrun/client-sdk-swift.git", revision: "b592f3ebef7b14631064fe0b37072e996a0bce6d")
     ],
     targets: [
         .target(
