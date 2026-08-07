@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.3.11 — 2026-08-07
+
+- **Fixed the desktop app never detecting updates.** `electron/package.json`'s version had been stuck at `0.3.0` since it stopped getting bumped in lockstep with every release, so `electron-updater` on an already-installed 0.3.0+ desktop app always saw "up to date" no matter how many newer releases existed — this release resyncs it and every future release should update correctly again.
+- **Added a `MANAGE_SERVER` permission**, and fixed the Instance Settings gear icon being hardcoded to the instance owner only. Real gap: assigning a role every existing permission still didn't grant access to server settings (General/Mail tabs), because the endpoints backing them had no permission escape hatch — and even after adding one, the gear icon itself was owner-only, so a role with `MANAGE_CHANNELS`/`MANAGE_ROLES`/`MODERATE_MEMBERS` couldn't open the settings modal at all to reach the tabs it already had access to.
+
 ## v0.3.10 — 2026-08-07
 
 - Fixed a real GitHub Dependabot alert: `js-yaml` (a transitive dependency of the Electron build tooling) had a high-severity quadratic-CPU denial-of-service advisory. Confirmed it's only reachable via `electron-builder`/`electron-updater`'s own build-time YAML parsing, not user-facing input; patched via `npm audit fix`.
