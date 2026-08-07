@@ -138,7 +138,7 @@ model Warning {
 // Message.authorId having no FK (see messages.ts).
 model ModerationLogEntry {
   id        String   @id @default(uuid())
-  action    String // "ban" | "unban" | "kick" | "mute" | "unmute" | "reset_password"
+  action    String // "ban" | "unban" | "kick" | "voice_kick" | "mute" | "unmute" | "reset_password"
   actorId   String
   targetId  String
   detail    String?

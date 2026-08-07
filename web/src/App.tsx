@@ -16,6 +16,7 @@ import {
   getCurrentUser,
   getInstanceInfo,
   getThread,
+  kickFromVoice,
   listCustomEmoji,
   listMembers,
   listMessages,
@@ -580,6 +581,13 @@ function App() {
         if (activeInstanceId) localStorage.removeItem(`session:${activeInstanceId}`);
         setSession(null);
         setForceDisconnectReason(event.reason);
+      } else if (event.type === "VOICE_KICKED") {
+        // A moderator removed this client from just the voice channel it
+        // was in — the server already updated presence bookkeeping and
+        // broadcast VOICE_STATE_UPDATE to everyone else; voice.leave() is
+        // what actually tears down this client's own LiveKit connection,
+        // since nothing else would (the leave wasn't self-initiated).
+        voice.leave();
       } else if (event.type === "CONNECTION_STATE") {
         setConnectionState(event.state);
       } else if (event.type === "ERROR") {
@@ -1258,6 +1266,19 @@ function App() {
                             )}
                           </span>
                           <span className="voice-member-name">{member?.username ?? userId}</span>
+                          {canModerate && userId !== session.user.id && (
+                            <button
+                              type="button"
+                              className="voice-member-kick"
+                              title="Disconnect from voice channel"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                kickFromVoice(activeInstance.baseUrl, session.token, userId).catch(console.error);
+                              }}
+                            >
+                              ✕
+                            </button>
+                          )}
                         </div>
                       );
                     })}

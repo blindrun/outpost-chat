@@ -5,7 +5,8 @@ import bcrypt from "bcryptjs";
 import { prisma } from "../plugins/db.js";
 import { PERMISSIONS, hasPermission } from "../util/permissions.js";
 import { recordWarning } from "../util/bot.js";
-import { disconnectUser } from "../gateway/rooms.js";
+import { disconnectUser, leaveVoiceChannel, voiceChannelMembers, sendToUsers } from "../gateway/rooms.js";
+import { broadcastToChannel } from "../gateway/channelBroadcast.js";
 
 const warnSchema = z.object({
   reason: z.string().min(1).max(500),
@@ -115,6 +116,32 @@ export async function moderationRoutes(app: FastifyInstance) {
 
     disconnectUser(userId, "kicked");
     await logModerationAction("kick", requesterId, userId);
+    return reply.status(204).send();
+  });
+
+  // Distinct from the instance-wide kick above — disconnects a member from
+  // just the voice channel they're currently in, leaving their app session
+  // (and any text channel they have open) untouched. Presence bookkeeping
+  // is identical to a normal voice leave (leaveVoiceChannel + the same
+  // VOICE_STATE_UPDATE broadcast everyone else's client already handles);
+  // the one addition is a direct push to the target's own socket(s) so
+  // their client actually tears down its LiveKit connection too — nothing
+  // else would tell them to, since they didn't initiate this leave.
+  app.post("/moderation/:userId/voice-kick", { onRequest: [app.authenticate] }, async (req, reply) => {
+    const { sub: requesterId } = req.user as { sub: string };
+    if (!(await requireModerator(requesterId))) {
+      return reply.status(403).send({ error: "missing MODERATE_MEMBERS permission" });
+    }
+    const { userId } = req.params as { userId: string };
+    const target = await prisma.user.findUnique({ where: { id: userId } });
+    if (!target) return reply.status(404).send({ error: "member not found" });
+
+    const channelId = leaveVoiceChannel(userId);
+    if (!channelId) return reply.status(400).send({ error: "member is not in a voice channel" });
+
+    await broadcastToChannel(channelId, { type: "VOICE_STATE_UPDATE", channelId, userIds: voiceChannelMembers(channelId) });
+    sendToUsers([userId], { type: "VOICE_KICKED", channelId });
+    await logModerationAction("voice_kick", requesterId, userId);
     return reply.status(204).send();
   });
 
