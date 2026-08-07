@@ -185,6 +185,24 @@ model PasswordResetToken {
   @@index([userId])
 }
 
+// Per-user, per-channel "I've seen everything up to here" marker — covers
+// both regular channels and DMs, since both are rows in the same Channel
+// table. Written by POST /channels/:channelId/read (fired on the same
+// "opening a channel is what reads it" moment the client already had
+// purely client-side), read by the gateway at READY time to seed unread
+// state that survives a reload/new session instead of resetting to empty
+// every time, which is what happened before this existed. No row for a
+// given (userId, channelId) means "never explicitly read" — treated as
+// caught-up rather than retroactively unread, so this doesn't flag every
+// pre-existing channel unread the moment it ships.
+model ChannelReadState {
+  userId     String
+  channelId  String
+  lastReadAt DateTime @default(now())
+
+  @@id([userId, channelId])
+}
+
 // One-time code an admin reads off the server console (like TeamSpeak's
 // ServerAdmin privilege key) and enters in the client to claim ownership
 // of a fresh instance — replaces "whoever registers first becomes owner"

@@ -237,4 +237,31 @@ export async function messageRoutes(app: FastifyInstance) {
     const hydrated = await hydrateAuthors(messages);
     return hydrateReplyPreviews(hydrated);
   });
+
+  // Marks a channel (or DM) as read as of now — same "opening it is what
+  // reads it" moment the client already treats as read locally, now
+  // persisted so it survives a reload/new session (see ChannelReadState in
+  // schema.prisma). Idempotent upsert; no broadcast, since read state is
+  // read back by its own owner at their next gateway READY, not pushed live
+  // to anyone else.
+  app.post("/channels/:channelId/read", async (req, reply) => {
+    const { sub: userId } = req.user as { sub: string };
+    const { channelId } = req.params as { channelId: string };
+    const channel = await prisma.channel.findUnique({ where: { id: channelId } });
+    if (!channel) return reply.status(404).send({ error: "channel not found" });
+    if (channel.type === "DM") {
+      if (!(await assertDmAccess(channelId, userId))) {
+        return reply.status(403).send({ error: "not a participant in this channel" });
+      }
+    } else if (!(await canAccessChannel(userId, channel))) {
+      return reply.status(403).send({ error: "you don't have access to this channel" });
+    }
+
+    await prisma.channelReadState.upsert({
+      where: { userId_channelId: { userId, channelId } },
+      create: { userId, channelId },
+      update: { lastReadAt: new Date() },
+    });
+    return { ok: true };
+  });
 }

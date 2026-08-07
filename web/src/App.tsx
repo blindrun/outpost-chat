@@ -20,6 +20,7 @@ import {
   listMembers,
   listMessages,
   listRoles,
+  markChannelRead,
   openDM,
   reorderChannels,
   uploadFile,
@@ -425,10 +426,20 @@ function App() {
         // window (mobile app backgrounded, laptop slept, brief WiFi drop)
         // was silently missed forever. Refetch it here to close that gap.
         const currentChannelId = selectedChannelIdRef.current;
+        // unreadChannelIds is real, persisted state now (see
+        // ChannelReadState) — seeded fresh on every READY instead of
+        // resetting to empty on reload like it used to. The one exception
+        // is whatever channel is currently open: the user is looking right
+        // at it, so it's never shown unread, and re-marking it read keeps
+        // the server's copy fresh too (covers the reconnect-while-viewing
+        // case, where time passed without the channel-select effect below
+        // re-firing).
+        setUnreadChannelIds(new Set(event.unreadChannelIds.filter((id) => id !== currentChannelId)));
         if (currentChannelId) {
           listMessages(activeInstance.baseUrl, session.token, currentChannelId)
             .then((history) => setMessages((prev) => ({ ...prev, [currentChannelId]: history })))
             .catch(console.error);
+          markChannelRead(activeInstance.baseUrl, session.token, currentChannelId).catch(console.error);
         }
       } else if (event.type === "VOICE_STATE_UPDATE") {
         setVoiceState((prev) => ({ ...prev, [event.channelId]: event.userIds }));
@@ -589,6 +600,13 @@ function App() {
       next.delete(selectedChannelId);
       return next;
     });
+    // Persists the same "read" moment server-side (see ChannelReadState) so
+    // it survives a reload/new session instead of resetting to empty every
+    // time, which is what happened before this existed.
+    if (session && activeInstance) {
+      markChannelRead(activeInstance.baseUrl, session.token, selectedChannelId).catch(console.error);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedChannelId]);
 
   function handleConnected(instance: Instance, newSession: Session) {
