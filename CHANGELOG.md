@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.8 — 2026-08-07
+
+- v0.3.7's iOS build failed CI (a Swift Sendable-conformance compile error in the diagnostic patch, not caught locally since only CI builds iOS). Same diagnostic-only build described below, compile error fixed.
+
 ## v0.3.7 — 2026-08-07
 
 - **Diagnostic-only iOS build**: native voice was still failing to connect on real devices after the v0.3.6 Multipath TCP fix, with the identical symptom. Investigation traced it to the signaling WebSocket completing its handshake successfully, then closing again within ~80ms with almost no data exchanged — but a server-initiated close was being silently treated as a clean local shutdown, discarding the real close code/reason and leaving only a generic 7-second join-response timeout visible in the app. This build surfaces the real code/reason from the server instead, to find the actual cause.

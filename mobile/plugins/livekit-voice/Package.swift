@@ -41,7 +41,7 @@ let package = Package(
         // socket had already been closed by the server within ~80ms. Now
         // throws a descriptive error with the real code/reason instead,
         // to find out what the server is actually saying.
-        .package(url: "https://github.com/blindrun/client-sdk-swift.git", revision: "b592f3ebef7b14631064fe0b37072e996a0bce6d")
+        .package(url: "https://github.com/blindrun/client-sdk-swift.git", revision: "64294e7c44596417750677a3539b0da28c8459b3")
     ],
     targets: [
         .target(
