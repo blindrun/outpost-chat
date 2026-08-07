@@ -485,6 +485,10 @@ export function listMessages(baseUrl: string, token: string, channelId: string) 
   return request<Message[]>(baseUrl, `/channels/${channelId}/messages`, token);
 }
 
+export function markChannelRead(baseUrl: string, token: string, channelId: string) {
+  return request<{ ok: true }>(baseUrl, `/channels/${channelId}/read`, token, { method: "POST" });
+}
+
 export function searchMessages(baseUrl: string, token: string, q: string, channelId?: string) {
   const params = new URLSearchParams({ q });
   if (channelId) params.set("channelId", channelId);
@@ -856,6 +860,7 @@ type GatewayEvent =
       dmChannels: DMChannel[];
       onlineUserIds: string[];
       voiceState: Record<string, string[]>;
+      unreadChannelIds: string[];
     }
   | { type: "MESSAGE_CREATE"; message: Message }
   | { type: "MESSAGE_UPDATE"; message: Message }

@@ -34,6 +34,32 @@ async function dmParticipantIds(channelId: string): Promise<string[] | null> {
   return rows.length > 0 ? rows.map((r) => r.userId) : null;
 }
 
+// Seeds READY's unreadChannelIds from ChannelReadState (see schema.prisma)
+// — a channel only counts as unread here if it HAS a read-state row that's
+// now stale (someone else posted after the user's last visit), never for
+// one that's simply never been visited. That keeps this from retroactively
+// flagging every pre-existing channel unread the moment this feature
+// ships; going forward POST /channels/:channelId/read keeps the row fresh
+// every time the user actually opens it.
+async function computeUnreadChannelIds(userId: string, channelIds: string[]): Promise<string[]> {
+  if (channelIds.length === 0) return [];
+  const [readStates, latestMessages] = await Promise.all([
+    prisma.channelReadState.findMany({ where: { userId, channelId: { in: channelIds } } }),
+    prisma.message.groupBy({
+      by: ["channelId"],
+      where: { channelId: { in: channelIds }, authorId: { not: userId } },
+      _max: { createdAt: true },
+    }),
+  ]);
+  const lastReadByChannel = new Map(readStates.map((r) => [r.channelId, r.lastReadAt]));
+  return latestMessages
+    .filter((m) => {
+      const lastRead = lastReadByChannel.get(m.channelId);
+      return lastRead && m._max.createdAt && m._max.createdAt > lastRead;
+    })
+    .map((m) => m.channelId);
+}
+
 const clientMessageSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("MESSAGE_SEND"),
@@ -126,14 +152,16 @@ export async function gatewayRoutes(app: FastifyInstance) {
       where: { type: { notIn: ["THREAD", "DM"] } },
       orderBy: { position: "asc" },
     });
+    const visibleChannels = await filterVisibleChannels(userId, allChannels);
 
     socket.send(
       JSON.stringify({
         type: "READY",
-        channels: await filterVisibleChannels(userId, allChannels),
+        channels: visibleChannels,
         dmChannels,
         onlineUserIds: allOnlineUserIds(),
         voiceState: allVoiceState(),
+        unreadChannelIds: await computeUnreadChannelIds(userId, [...visibleChannels, ...dmChannels].map((c) => c.id)),
       }),
     );
 
