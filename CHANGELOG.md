@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.3.10 — 2026-08-07
+
+- Fixed a real GitHub Dependabot alert: `js-yaml` (a transitive dependency of the Electron build tooling) had a high-severity quadratic-CPU denial-of-service advisory. Confirmed it's only reachable via `electron-builder`/`electron-updater`'s own build-time YAML parsing, not user-facing input; patched via `npm audit fix`.
+- Fixed the profile settings modal's Save/Close buttons rendering as two separate stacked rows instead of one.
+- Fixed a real gap: reconnecting after a dropped connection (mobile app backgrounded, laptop slept, brief WiFi drop) never re-synced the currently open channel's messages, so a message deleted or edited during the gap stayed stale until a full reload.
+- **Added self-service password recovery.** Off by default — a self-hoster configures their own outbound SMTP under Instance Settings → Mail, and members get a real "Forgot password?" flow (single-use, 1-hour reset tokens, generic responses that never reveal whether an email matched a real account). The existing owner-triggered reset still works regardless.
+- **DM and channel unread state now persists** across a reload or a new session instead of resetting to empty every time — a channel only counts as unread if it's actually gone stale since your last visit, so this doesn't retroactively flag every channel unread for existing users.
+- **Added `#channel-name` autocomplete and clickable links** in messages, mirroring `@mention` — pick a channel from the popover and it renders as a real link that jumps you there.
+- Enabled spellcheck in the message composer.
+- **Added a sound when someone joins or leaves the voice channel you're in** — and when you yourself connect or disconnect.
+- **Admins can now kick a member from just the voice channel they're in**, without kicking them from the whole server.
+- **Added an AFK voice channel with a configurable idle timeout** (Discord-style) — a member connected to voice who hasn't spoken for the configured time gets automatically moved to a designated channel.
+- Fixed the voice channel details popover (mic/speaker controls) not opening automatically when you join — it needed an extra, undiscoverable click on the now-active channel.
+
 ## v0.3.9 — 2026-08-07
 
 - **Fixed native iOS voice never connecting, for real this time.** v0.3.7/v0.3.8's diagnostic build revealed the actual cause: the signaling WebSocket was completing its handshake successfully, then getting abruptly reset by the server (`code=1005`, no close frame at all) within ~80ms. Comparing against a working web/Safari connection to the same server found the real difference — the JS SDK connects via the newer `/rtc/v1` endpoint (join request embedded directly in the connect URL), while the pinned Swift SDK defaults to the legacy `/rtc` endpoint (join request sent as a follow-up WebSocket message), which this server version doesn't handle correctly. The SDK already fully implements the `/rtc/v1` path with a built-in fallback to legacy if a server doesn't support it — it was just never enabled. Turned on via `RoomOptions(singlePeerConnection: true)`, confirmed the same server already serves the working web client over `/rtc/v1` today.
