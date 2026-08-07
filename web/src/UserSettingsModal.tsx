@@ -27,11 +27,13 @@ function ProfileTab({
   token,
   user,
   onSessionUpdate,
+  onClose,
 }: {
   baseUrl: string;
   token: string;
   user: User;
   onSessionUpdate: (update: { token?: string; user: User }) => void;
+  onClose: () => void;
 }) {
   const [username, setUsername] = useState(user.username);
   const [email, setEmail] = useState(user.email);
@@ -116,6 +118,9 @@ function ProfileTab({
         <span className="char-counter">{bio.length}/240</span>
         {profileError && <p className="error">{profileError}</p>}
         <div className="modal-actions">
+          <button type="button" className="btn secondary" onClick={onClose}>
+            Close
+          </button>
           <button type="submit" className="btn" disabled={profileSaving}>
             {profileSaving ? "Saving…" : "Save Profile"}
           </button>
@@ -717,17 +722,19 @@ export function UserSettingsModal({
       </div>
 
       {tab === "profile" && (
-        <ProfileTab baseUrl={baseUrl} token={token} user={user} onSessionUpdate={onSessionUpdate} />
+        <ProfileTab baseUrl={baseUrl} token={token} user={user} onSessionUpdate={onSessionUpdate} onClose={onClose} />
       )}
       {tab === "password" && <PasswordTab baseUrl={baseUrl} token={token} />}
       {tab === "security" && <SecurityTab baseUrl={baseUrl} token={token} />}
       {tab === "voice" && <VoiceTab />}
 
-      <div className="modal-actions">
-        <button className="btn secondary" onClick={onClose}>
-          Close
-        </button>
-      </div>
+      {tab !== "profile" && (
+        <div className="modal-actions">
+          <button className="btn secondary" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      )}
     </Modal>
   );
 }
