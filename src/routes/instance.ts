@@ -39,6 +39,9 @@ const updateInstanceSettingsSchema = z.object({
   // a string = set it. Same optional-vs-null convention as iconUrl above.
   smtpPassword: z.string().max(255).nullable().optional(),
   smtpFromAddress: z.string().email().nullable().optional(),
+  afkChannelId: z.string().nullable().optional(),
+  // Same bounds Discord's own AFK timeout picker uses.
+  afkTimeoutMinutes: z.number().int().min(1).max(60).nullable().optional(),
 });
 
 // smtpPassword never round-trips to a client, in either direction after the
@@ -133,6 +136,12 @@ export async function instanceRoutes(app: FastifyInstance) {
       // Lets the client show/hide the self-service reset link instead of
       // offering a flow that would just 503.
       passwordResetEnabled: mailConfigured(settings),
+      // Public (not owner-only like the Mail tab's SMTP fields) — every
+      // connected voice client needs this to run its own idle timer, since
+      // the move-to-AFK decision is made client-side (see gateway/index.ts
+      // for why: LiveKit speaking activity isn't visible server-side).
+      afkChannelId: settings.afkChannelId,
+      afkTimeoutMinutes: settings.afkTimeoutMinutes,
       version: APP_VERSION,
     };
   });
@@ -194,6 +203,12 @@ export async function instanceRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "defaultChannelId must be an existing text channel" });
       }
     }
+    if (body.afkChannelId) {
+      const channel = await prisma.channel.findUnique({ where: { id: body.afkChannelId } });
+      if (!channel || channel.type !== "VOICE") {
+        return reply.status(400).send({ error: "afkChannelId must be an existing voice channel" });
+      }
+    }
 
     const updated = await prisma.instanceSettings.upsert({
       where: { id: "singleton" },
@@ -210,6 +225,8 @@ export async function instanceRoutes(app: FastifyInstance) {
         ...(body.smtpUsername !== undefined ? { smtpUsername: body.smtpUsername } : {}),
         ...(body.smtpPassword !== undefined ? { smtpPassword: body.smtpPassword } : {}),
         ...(body.smtpFromAddress !== undefined ? { smtpFromAddress: body.smtpFromAddress } : {}),
+        ...(body.afkChannelId !== undefined ? { afkChannelId: body.afkChannelId } : {}),
+        ...(body.afkTimeoutMinutes !== undefined ? { afkTimeoutMinutes: body.afkTimeoutMinutes } : {}),
       },
       update: {
         ...(body.name !== undefined ? { name: body.name } : {}),
@@ -224,6 +241,8 @@ export async function instanceRoutes(app: FastifyInstance) {
         ...(body.smtpUsername !== undefined ? { smtpUsername: body.smtpUsername } : {}),
         ...(body.smtpPassword !== undefined ? { smtpPassword: body.smtpPassword } : {}),
         ...(body.smtpFromAddress !== undefined ? { smtpFromAddress: body.smtpFromAddress } : {}),
+        ...(body.afkChannelId !== undefined ? { afkChannelId: body.afkChannelId } : {}),
+        ...(body.afkTimeoutMinutes !== undefined ? { afkTimeoutMinutes: body.afkTimeoutMinutes } : {}),
       },
     });
     return redactSettings(updated);

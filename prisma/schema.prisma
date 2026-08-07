@@ -166,6 +166,16 @@ model InstanceSettings {
   smtpUsername    String?
   smtpPassword    String?
   smtpFromAddress String?
+  // Discord-style AFK channel — a member connected to voice who hasn't
+  // spoken (per LiveKit's own speaking-detection, already used for the
+  // speaking-ring UI) for afkTimeoutMinutes gets auto-moved here. Entirely
+  // client-driven (the client that's idle calls the same voice.join() a
+  // manual channel switch uses) rather than a server-side timer, since only
+  // the client actually knows its own speaking history — LiveKit audio
+  // activity isn't visible server-side at all. Off unless both fields are
+  // set.
+  afkChannelId      String?
+  afkTimeoutMinutes Int?
 }
 
 // A single-use, short-lived token for the self-service "forgot password"
