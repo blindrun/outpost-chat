@@ -104,7 +104,20 @@ export interface InstanceInfo {
   turnstileSiteKey: string | null;
   defaultChannelId: string | null;
   levelingEnabled: boolean;
+  passwordResetEnabled: boolean;
   version: string;
+}
+
+// Owner-only, from GET/PATCH /instance/settings — a superset of
+// InstanceInfo with the Mail-tab fields; smtpPassword itself never appears
+// here, only whether one is currently set.
+export interface FullInstanceSettings extends Omit<InstanceInfo, "hasOwner" | "gifSearchEnabled" | "turnstileSiteKey" | "levelingEnabled" | "passwordResetEnabled" | "version"> {
+  smtpEnabled: boolean;
+  smtpHost: string | null;
+  smtpPort: number | null;
+  smtpUsername: string | null;
+  smtpPasswordSet: boolean;
+  smtpFromAddress: string | null;
 }
 
 export interface Gif {
@@ -566,11 +579,35 @@ export function updateInstanceSettings(
     theme?: Theme;
     requireInviteToRegister?: boolean;
     defaultChannelId?: string | null;
+    smtpEnabled?: boolean;
+    smtpHost?: string | null;
+    smtpPort?: number | null;
+    smtpUsername?: string | null;
+    smtpPassword?: string | null;
+    smtpFromAddress?: string | null;
   },
 ) {
-  return request<InstanceInfo>(baseUrl, "/instance/settings", token, {
+  return request<FullInstanceSettings>(baseUrl, "/instance/settings", token, {
     method: "PATCH",
     body: JSON.stringify(updates),
+  });
+}
+
+export function getInstanceSettings(baseUrl: string, token: string) {
+  return request<FullInstanceSettings>(baseUrl, "/instance/settings", token);
+}
+
+export function forgotPassword(baseUrl: string, email: string) {
+  return request<{ ok: true }>(baseUrl, "/auth/forgot-password", null, {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function resetPassword(baseUrl: string, token: string, newPassword: string) {
+  return request<{ ok: true }>(baseUrl, "/auth/reset-password", null, {
+    method: "POST",
+    body: JSON.stringify({ token, newPassword }),
   });
 }
 

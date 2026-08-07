@@ -94,6 +94,14 @@ function getInviteCodeFromUrl(): string | null {
   return new URLSearchParams(window.location.search).get("invite");
 }
 
+// A password-reset email link (`https://<instance>/?reset=TOKEN`) is
+// same-origin, just like an invite link above, so it's handled the same
+// way: read once, strip from the URL, no need for the recipient to know or
+// type the instance's address.
+function getResetTokenFromUrl(): string | null {
+  return new URLSearchParams(window.location.search).get("reset");
+}
+
 // The official public instance, run by the Outpost project itself — offered
 // as the default "Add a Server" address on a fresh install (no servers
 // configured yet, no invite link) so a first-time user has something real
@@ -115,7 +123,7 @@ function App() {
   // via lazy useState initializers (not a useEffect) so it's already correct
   // on AddServerModal's very first mount — an effect runs one render too
   // late, after the child has already locked in its initial "address" step.
-  const [addServerOpen, setAddServerOpen] = useState(() => !!getInviteCodeFromUrl());
+  const [addServerOpen, setAddServerOpen] = useState(() => !!getInviteCodeFromUrl() || !!getResetTokenFromUrl());
   const [contextMenuInstanceId, setContextMenuInstanceId] = useState<string | null>(null);
   // Captured at click time and rendered via `position: fixed` — the server
   // rail has `overflow-y: auto`, which per the CSS spec implicitly clips the
@@ -123,11 +131,12 @@ function App() {
   // the rail) gets silently clipped away instead of showing next to it.
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [deepLinkInvite, setDeepLinkInvite] = useState<string | null>(getInviteCodeFromUrl);
+  const [deepLinkReset, setDeepLinkReset] = useState<string | null>(getResetTokenFromUrl);
 
   // Strip the query param once mounted so reloading/bookmarking afterward
   // doesn't re-trigger the same flow.
   useEffect(() => {
-    if (deepLinkInvite) {
+    if (deepLinkInvite || deepLinkReset) {
       window.history.replaceState({}, "", window.location.pathname);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -641,8 +650,9 @@ function App() {
         <div className="auth-form">
           <AddServerModal
             embedded
-            initialBaseUrl={deepLinkInvite ? window.location.origin : PRIMARY_SERVER_URL}
+            initialBaseUrl={deepLinkInvite || deepLinkReset ? window.location.origin : PRIMARY_SERVER_URL}
             initialInviteCode={deepLinkInvite ?? undefined}
+            initialResetToken={deepLinkReset ?? undefined}
             onConnected={handleConnected}
           />
         </div>
@@ -958,11 +968,13 @@ function App() {
           onClose={() => {
             setAddServerOpen(false);
             setDeepLinkInvite(null);
+            setDeepLinkReset(null);
           }}
         >
           <AddServerModal
-            initialBaseUrl={deepLinkInvite ? window.location.origin : undefined}
+            initialBaseUrl={deepLinkInvite || deepLinkReset ? window.location.origin : undefined}
             initialInviteCode={deepLinkInvite ?? undefined}
+            initialResetToken={deepLinkReset ?? undefined}
             onConnected={handleConnected}
           />
           <div className="modal-actions">
@@ -971,6 +983,7 @@ function App() {
               onClick={() => {
                 setAddServerOpen(false);
                 setDeepLinkInvite(null);
+                setDeepLinkReset(null);
               }}
             >
               Close
@@ -1266,7 +1279,13 @@ function App() {
           channels={channels}
           onClose={() => setInstanceSettingsOpen(false)}
           onUpdated={(updated) => {
-            setInstanceInfo(updated);
+            // The PATCH response (FullInstanceSettings) only covers the
+            // owner-editable fields — merge onto the existing InstanceInfo
+            // rather than replacing it outright, so derived/public-only
+            // fields (hasOwner, gifSearchEnabled, turnstileSiteKey,
+            // levelingEnabled, passwordResetEnabled, version) survive a
+            // settings save instead of silently disappearing from state.
+            setInstanceInfo((prev) => (prev ? { ...prev, ...updated } : prev));
             document.documentElement.dataset.theme = updated.theme;
           }}
           onChannelUpdated={(channel) => setChannels((prev) => prev.map((c) => (c.id === channel.id ? channel : c)))}
