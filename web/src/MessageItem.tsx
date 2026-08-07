@@ -19,7 +19,14 @@ const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🎉"];
 // off in renderInline/extractFirstLinkPreviewUrl rather than tightened here,
 // since a stricter pattern risks truncating real URLs that legitimately end
 // in punctuation-like path segments.
-const MENTION_OR_INLINE_CODE_PATTERN = /@([a-zA-Z0-9_]+)|`([^`\n]+)`|:([a-zA-Z0-9_]+):|(https?:\/\/[^\s<]+)/g;
+// Group 2 (channel name) intentionally uses the same bare character class
+// as usernames plus a hyphen (channel names commonly look like
+// "dev-talk") rather than trying to match this app's actual channel-name
+// validation (min(2).max(64), no character restriction at all — a name
+// with spaces or unicode just won't get picked up as a link, same
+// pre-existing limitation @mention already has for a username outside
+// [a-zA-Z0-9_]).
+const MENTION_OR_INLINE_CODE_PATTERN = /@([a-zA-Z0-9_]+)|#([a-zA-Z0-9_-]+)|`([^`\n]+)`|:([a-zA-Z0-9_]+):|(https?:\/\/[^\s<]+)/g;
 // ```lang\n...\n``` — lang is optional, kept only for the header label.
 const CODE_BLOCK_PATTERN = /```([a-zA-Z0-9_+-]*)\n?([\s\S]*?)```/g;
 const TRAILING_PUNCTUATION_PATTERN = /[.,!?;:'")\]]+$/;
@@ -71,6 +78,8 @@ function renderInline(
   text: string,
   memberUsernames: Set<string>,
   customEmojiByName: Map<string, string>,
+  channelIdByName: Map<string, string>,
+  onChannelClick: (channelId: string) => void,
   keyPrefix: string,
   baseUrl: string,
   token: string,
@@ -83,15 +92,32 @@ function renderInline(
   while ((match = MENTION_OR_INLINE_CODE_PATTERN.exec(text))) {
     if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
     const username = match[1];
-    const inlineCode = match[2];
-    const emojiName = match[3];
-    const rawUrl = match[4];
+    const channelName = match[2];
+    const inlineCode = match[3];
+    const emojiName = match[4];
+    const rawUrl = match[5];
     if (username !== undefined) {
       if (memberUsernames.has(username)) {
         parts.push(
           <span key={`${keyPrefix}-${key++}`} className="mention">
             @{username}
           </span>,
+        );
+      } else {
+        parts.push(match[0]);
+      }
+    } else if (channelName !== undefined) {
+      const channelId = channelIdByName.get(channelName);
+      if (channelId) {
+        parts.push(
+          <button
+            key={`${keyPrefix}-${key++}`}
+            type="button"
+            className="mention channel-mention"
+            onClick={() => onChannelClick(channelId)}
+          >
+            #{channelName}
+          </button>,
         );
       } else {
         parts.push(match[0]);
@@ -141,6 +167,8 @@ function renderContent(
   content: string,
   memberUsernames: Set<string>,
   customEmojiByName: Map<string, string>,
+  channelIdByName: Map<string, string>,
+  onChannelClick: (channelId: string) => void,
   baseUrl: string,
   token: string,
 ): React.ReactNode[] {
@@ -151,7 +179,9 @@ function renderContent(
   CODE_BLOCK_PATTERN.lastIndex = 0;
   while ((match = CODE_BLOCK_PATTERN.exec(content))) {
     if (match.index > lastIndex) {
-      parts.push(...renderInline(content.slice(lastIndex, match.index), memberUsernames, customEmojiByName, `pre${key}`, baseUrl, token));
+      parts.push(
+        ...renderInline(content.slice(lastIndex, match.index), memberUsernames, customEmojiByName, channelIdByName, onChannelClick, `pre${key}`, baseUrl, token),
+      );
     }
     const lang = match[1];
     const code = match[2].replace(/\n$/, "");
@@ -164,7 +194,9 @@ function renderContent(
     lastIndex = match.index + match[0].length;
   }
   if (lastIndex < content.length) {
-    parts.push(...renderInline(content.slice(lastIndex), memberUsernames, customEmojiByName, `post${key}`, baseUrl, token));
+    parts.push(
+      ...renderInline(content.slice(lastIndex), memberUsernames, customEmojiByName, channelIdByName, onChannelClick, `post${key}`, baseUrl, token),
+    );
   }
   return parts;
 }
@@ -180,6 +212,8 @@ export function MessageItem({
   memberUsernames,
   usernameByUserId,
   customEmojiByName,
+  channelIdByName,
+  onChannelClick,
   customEmoji,
   onEdit,
   onDelete,
@@ -209,6 +243,11 @@ export function MessageItem({
   // name (no colons) -> image URL, for rendering :name: shortcodes inline
   // (message text) and as a reaction (reaction pills).
   customEmojiByName: Map<string, string>;
+  // TEXT-channel name -> id, for rendering a #channel-name token as a real
+  // clickable link — scoped to TEXT channels only (voice channels aren't a
+  // "jump here" destination the same way).
+  channelIdByName: Map<string, string>;
+  onChannelClick: (channelId: string) => void;
   // Same data as customEmojiByName, un-derived — the reaction picker's
   // EmojiPicker needs the raw list (id/name/imageUrl per tile), not a map.
   customEmoji: CustomEmoji[];
@@ -362,7 +401,7 @@ export function MessageItem({
         ) : (
           message.content && (
             <div className="message-content">
-              {renderContent(message.content, memberUsernames, customEmojiByName, baseUrl, token)}
+              {renderContent(message.content, memberUsernames, customEmojiByName, channelIdByName, onChannelClick, baseUrl, token)}
               {message.editedAt && <span className="edited-tag"> (edited)</span>}
             </div>
           )

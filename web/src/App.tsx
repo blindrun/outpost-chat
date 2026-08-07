@@ -51,6 +51,14 @@ function getMentionQuery(text: string, cursor: number): string | null {
   return match ? match[1] : null;
 }
 
+// Same trailing-token approach as getMentionQuery, for a "#partial" channel
+// token instead of "@partial".
+function getChannelMentionQuery(text: string, cursor: number): string | null {
+  const upToCursor = text.slice(0, cursor);
+  const match = upToCursor.match(/(?:^|\s)#([a-zA-Z0-9_-]*)$/);
+  return match ? match[1] : null;
+}
+
 // Consecutive messages from the same author within this window collapse
 // into one visual group (Discord-style) — same threshold Discord itself
 // uses.
@@ -269,6 +277,7 @@ function App() {
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [replyTarget, setReplyTarget] = useState<Message | null>(null);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [channelMentionQuery, setChannelMentionQuery] = useState<string | null>(null);
   const gatewayRef = useRef<Gateway | null>(null);
   const typingTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const micPromptedRef = useRef(false);
@@ -803,7 +812,9 @@ function App() {
     const value = e.target.value;
     setDraft(value);
     handleTyping();
-    setMentionQuery(getMentionQuery(value, e.target.selectionStart ?? value.length));
+    const cursor = e.target.selectionStart ?? value.length;
+    setMentionQuery(getMentionQuery(value, cursor));
+    setChannelMentionQuery(getChannelMentionQuery(value, cursor));
   }
 
   // Replaces the "@partial" token the popover was opened for with the full
@@ -822,6 +833,27 @@ function App() {
     setDraft(next);
     setMentionQuery(null);
     const newCursor = before.length + username.length + 2;
+    requestAnimationFrame(() => {
+      input?.focus();
+      input?.setSelectionRange(newCursor, newCursor);
+    });
+  }
+
+  // Same replace-the-trailing-token approach as handleMentionSelect, for a
+  // "#channel-name" token instead of "@username".
+  function handleChannelMentionSelect(channelName: string) {
+    const input = draftInputRef.current;
+    const cursor = input?.selectionStart ?? draft.length;
+    const upToCursor = draft.slice(0, cursor);
+    const match = upToCursor.match(/(?:^|\s)#([a-zA-Z0-9_-]*)$/);
+    if (!match) return;
+    const hashIndex = upToCursor.length - match[1].length - 1;
+    const before = draft.slice(0, hashIndex);
+    const after = draft.slice(cursor);
+    const next = `${before}#${channelName} ${after}`;
+    setDraft(next);
+    setChannelMentionQuery(null);
+    const newCursor = before.length + channelName.length + 2;
     requestAnimationFrame(() => {
       input?.focus();
       input?.setSelectionRange(newCursor, newCursor);
@@ -908,6 +940,13 @@ function App() {
       : [];
 
   const textChannels = channels.filter((c) => c.type === "TEXT");
+  // Scoped to TEXT channels only — a #channel-mention is a "jump here" link,
+  // and a voice channel isn't a place text navigation lands the same way.
+  const channelIdByName = new Map(textChannels.map((c) => [c.name, c.id]));
+  const channelMentionMatches =
+    channelMentionQuery !== null
+      ? textChannels.filter((c) => c.name.toLowerCase().startsWith(channelMentionQuery.toLowerCase())).slice(0, 8)
+      : [];
   const voiceChannels = channels.filter((c) => c.type === "VOICE");
   const dmChannels = channels.filter((c): c is Channel & { type: "DM"; otherUserId: string } => c.type === "DM") as (Channel & {
     otherUserId: string;
@@ -1426,6 +1465,8 @@ function App() {
                   memberUsernames={memberUsernames}
                   usernameByUserId={usernameByUserId}
                   customEmojiByName={customEmojiByName}
+                  channelIdByName={channelIdByName}
+                  onChannelClick={selectChannel}
                   customEmoji={customEmoji}
                   onEdit={(id, content) => gatewayRef.current?.editMessage(id, content)}
                   onDelete={(id) => gatewayRef.current?.deleteMessage(id)}
@@ -1497,6 +1538,20 @@ function App() {
                   ))}
                 </div>
               )}
+              {channelMentionQuery !== null && channelMentionMatches.length > 0 && (
+                <div className="mention-popover">
+                  {channelMentionMatches.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      className="mention-option"
+                      onClick={() => handleChannelMentionSelect(c.name)}
+                    >
+                      #{c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
               <form onSubmit={handleSend} className="send-form">
                 <label className="attach-label">
                   {uploadingAttachment ? "…" : "📎"}
@@ -1515,6 +1570,7 @@ function App() {
                   onChange={handleDraftChange}
                   onKeyDown={(e) => {
                     if (e.key === "Escape" && mentionQuery !== null) setMentionQuery(null);
+                    if (e.key === "Escape" && channelMentionQuery !== null) setChannelMentionQuery(null);
                     // Enter sends, Shift+Enter inserts a real newline —
                     // needed for multi-line messages/code blocks, which a
                     // plain single-line <input> could never support (Enter
