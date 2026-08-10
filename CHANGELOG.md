@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.13 — 2026-08-10
+
+- **Every server in the left rail now shows its own icon, not just the one you're currently on.** Server icons live behind each server's own login, so the app could only ever draw the active one and fell back to text initials for the rest the moment you clicked away. Each server's icon is now downscaled and cached on your own machine, so all of them render immediately on startup — and keep rendering even if a server is temporarily offline.
+- **Push-to-talk no longer clips the end of what you were saying.** The mic used to cut the instant you released the key, so letting go on the last word chopped it off. It now stays open for a moment after release.
+- **Voice sensitivity now adjusts itself automatically, and is the default.** The old "sensitivity threshold" slider had no correct value: the right setting depends on your room, your mic and whatever's making noise nearby, and getting it wrong is invisible to you — too low and you transmit every keystroke, too high and you're the person nobody can hear. Outpost now tracks your background noise continuously and keeps the threshold just above it, re-tuning as things change. The mic meter in Voice settings shows where it currently sits and lights up when you're actually transmitting. **If you'd previously tuned the slider by hand, this replaces it** — untick "Adjust sensitivity automatically" in User Settings → Voice to go back to setting it yourself.
+
 ## v0.3.12 — 2026-08-10
 
 - **Added self-service account deletion** (User Settings → Profile → Delete Account). Previously the only way off an instance was asking its owner to remove you by hand. Deleting requires your password and your typed username, plus your two-factor code if you have 2FA enabled, and takes effect immediately on every device you're signed in on. Your account, profile, avatar, friends and reactions are removed; **messages you already sent stay in their channels, shown as "Deleted User"**, so the conversations other people took part in don't end up full of holes. Instance owners can't delete their own account — a server with no owner can't be administered by anyone.

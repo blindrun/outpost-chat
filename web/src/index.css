@@ -1469,7 +1469,11 @@ button, input, select {
 
 .mic-meter { position: relative; height: 10px; border-radius: 5px; background: var(--bg-input); overflow: hidden; }
 .mic-meter-fill { height: 100%; background: var(--green); transition: width 60ms linear; }
-.mic-meter-threshold { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text-muted); }
+.mic-meter-threshold { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text-muted); transition: left 200ms linear; }
+/* In automatic mode the marker moves on its own, so the meter also has to say
+   whether the gate is actually open right now — otherwise a moving line is
+   just unexplained motion. Brightening the marker is the whole tell. */
+.mic-meter.transmitting .mic-meter-threshold { background: var(--green); width: 3px; }
 
 /* Buttons that only exist to switch panes on a mobile-width viewport —
    hidden on desktop, where all panes show at once. Shown by the mobile

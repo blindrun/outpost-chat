@@ -1,6 +1,7 @@
 import { MutableRefObject, useCallback, useRef, useState } from "react";
 import { Channel, Gateway, getVoiceToken } from "./api";
 import { AudioSettings, loadAudioSettings } from "./audioSettings";
+import { createAdaptiveGate } from "./vadAuto";
 import { createVoiceEngine } from "./voice/createVoiceEngine";
 import { ParticipantInfo, VoiceEngine } from "./voice/VoiceEngine";
 import { playVoiceJoinSound, playVoiceLeaveSound } from "./voiceSounds";
@@ -9,6 +10,15 @@ import { playVoiceJoinSound, playVoiceLeaveSound } from "./voiceSounds";
 // VAD doesn't clip the tail end of words.
 const VAD_HANGOVER_MS = 300;
 const VAD_POLL_MS = 50;
+
+// The same idea for push-to-talk, which had none: the mic cut the instant the
+// key came up, so releasing on the last syllable clipped it, and anyone who
+// let go a shade early got chopped off mid-word. Holding the gate open a
+// beat after release fixes both. Longer than VAD's hangover because a key
+// release is a deliberate "I'm done" rather than a lull the speaker may be
+// about to fill, so there's no risk of it latching open on background noise —
+// the only cost is transmitting a little room tone.
+const PTT_RELEASE_HANGOVER_MS = 400;
 
 export type { ParticipantInfo };
 
@@ -26,6 +36,8 @@ function setupPushToTalk(
   setPttActive: (v: boolean) => void,
   gateRef: MutableRefObject<((active: boolean) => void) | null>,
 ): () => void {
+  let releaseTimer: ReturnType<typeof setTimeout> | null = null;
+
   function applyGate(active: boolean) {
     setPttActive(active);
     if (mutedRef.current) return;
@@ -35,7 +47,26 @@ function setupPushToTalk(
       .catch((err) => console.warn("PTT mic toggle failed:", err));
   }
 
-  gateRef.current = applyGate;
+  // Press opens immediately; release closes after the hangover. Re-pressing
+  // inside that window cancels the pending close instead of stacking a second
+  // one, so rapid tapping (or a key repeat quirk) can't leave a timer running
+  // that closes the mic mid-sentence a moment later.
+  function gate(active: boolean) {
+    if (releaseTimer) {
+      clearTimeout(releaseTimer);
+      releaseTimer = null;
+    }
+    if (active) {
+      applyGate(true);
+      return;
+    }
+    releaseTimer = setTimeout(() => {
+      releaseTimer = null;
+      applyGate(false);
+    }, PTT_RELEASE_HANGOVER_MS);
+  }
+
+  gateRef.current = gate;
 
   // Start gated closed — join() enables the mic before this runs (so a
   // permission prompt/track exists to gate at all), but "hold to talk"
@@ -45,6 +76,7 @@ function setupPushToTalk(
 
   if (!settings.pttKey) {
     return () => {
+      if (releaseTimer) clearTimeout(releaseTimer);
       gateRef.current = null;
     };
   }
@@ -52,11 +84,11 @@ function setupPushToTalk(
 
   function onKeyDown(e: KeyboardEvent) {
     if (e.code !== pttKey || e.repeat || !isCurrent()) return;
-    applyGate(true);
+    gate(true);
   }
   function onKeyUp(e: KeyboardEvent) {
     if (e.code !== pttKey || !isCurrent()) return;
-    applyGate(false);
+    gate(false);
   }
 
   window.addEventListener("keydown", onKeyDown);
@@ -65,6 +97,9 @@ function setupPushToTalk(
   return () => {
     window.removeEventListener("keydown", onKeyDown);
     window.removeEventListener("keyup", onKeyUp);
+    // Without this, leaving a voice channel mid-hangover fires applyGate on a
+    // torn-down engine a few hundred ms later.
+    if (releaseTimer) clearTimeout(releaseTimer);
     gateRef.current = null;
   };
 }
@@ -113,6 +148,10 @@ function setupVoiceActivity(
     .then(() => isCurrent() && setMicEnabled(false))
     .catch(() => {});
 
+  // Auto mode tracks the room's noise floor instead of using the stored
+  // threshold; see vadAuto.ts for why that's the default now.
+  const adaptive = settings.vadAuto ? createAdaptiveGate() : null;
+
   const interval = setInterval(() => {
     analyser.getByteTimeDomainData(data);
     let sumSquares = 0;
@@ -123,7 +162,12 @@ function setupVoiceActivity(
     const level = Math.min(100, Math.sqrt(sumSquares / data.length) * 300);
     if (isCurrent()) setVadLevel(level);
 
-    if (level >= settings.vadThreshold) {
+    // The hangover below is still worth having in auto mode: hysteresis stops
+    // the gate chattering around the threshold, but only a time-based tail
+    // keeps a natural pause mid-sentence from cutting the next word off.
+    const speaking = adaptive ? adaptive.update(level) : level >= settings.vadThreshold;
+
+    if (speaking) {
       if (hangoverTimer) {
         clearTimeout(hangoverTimer);
         hangoverTimer = null;

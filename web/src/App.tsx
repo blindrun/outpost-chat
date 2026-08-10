@@ -27,6 +27,7 @@ import {
   uploadFile,
 } from "./api";
 import { VoicePanel } from "./VoicePanel";
+import { clearCachedIcon, loadCachedIcon, refreshInstanceIcon } from "./instanceIcons";
 import { useVoiceSession } from "./useVoiceSession";
 import { playVoiceJoinSound, playVoiceLeaveSound } from "./voiceSounds";
 import { MessageItem, messageIdentityKey } from "./MessageItem";
@@ -128,6 +129,17 @@ function App() {
   );
   const [session, setSession] = useState<Session | null>(null);
   const [instanceInfo, setInstanceInfo] = useState<InstanceInfo | null>(null);
+  // instanceId -> cached icon data URL, seeded synchronously from
+  // localStorage so the rail paints every server's real icon on first frame
+  // rather than flashing initials while a fetch resolves.
+  const [instanceIcons, setInstanceIcons] = useState<Record<string, string>>(() => {
+    const seed: Record<string, string> = {};
+    for (const instance of loadInstances()) {
+      const cached = loadCachedIcon(instance.id);
+      if (cached) seed[instance.id] = cached;
+    }
+    return seed;
+  });
   // A shared invite link (`https://<instance>/?invite=CODE`) always points
   // back at the instance that issued it, so the address is just this page's
   // own origin — the recipient never has to know or type it. Must be read
@@ -431,6 +443,30 @@ function App() {
       .catch(console.error);
   }, [activeInstance?.baseUrl]);
 
+  // Keep every bookmarked server's cached icon fresh, not just the active
+  // one's — the whole point is that the rail can draw a server you aren't
+  // currently signed in to. Runs on mount and whenever the bookmark list
+  // changes; each server is refreshed with its own stored token, since that's
+  // the only credential its private upload route will accept. Failures are
+  // silent by design (see instanceIcons.ts) — a server being down must not
+  // blank an icon that's already cached.
+  useEffect(() => {
+    let cancelled = false;
+    for (const instance of instances) {
+      const stored = loadSession(instance.id);
+      if (!stored) continue;
+      refreshInstanceIcon(instance.id, instance.baseUrl, stored.token)
+        .then((dataUrl) => {
+          if (cancelled || !dataUrl) return;
+          setInstanceIcons((prev) => ({ ...prev, [instance.id]: dataUrl }));
+        })
+        .catch(() => {});
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [instances]);
+
   // Prompt for mic access right after login instead of waiting for the
   // first voice-channel join — asking cold mid-join was a rougher first
   // experience (click Join Voice, get interrupted by a permission popup,
@@ -726,6 +762,12 @@ function App() {
   // the "Add a Server" screen if none are.
   function leaveInstance(id: string) {
     localStorage.removeItem(`session:${id}`);
+    clearCachedIcon(id);
+    setInstanceIcons((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
     setInstances((prev) => {
       const next = prev.filter((i) => i.id !== id);
       saveInstances(next);
@@ -1083,6 +1125,11 @@ function App() {
             >
               {instance.id === activeInstanceId && instanceInfo?.iconUrl ? (
                 <img src={authedMediaUrl(instanceInfo.iconUrl, activeInstance.baseUrl, session.token)} alt="" />
+              ) : instanceIcons[instance.id] ? (
+                // Every server other than the active one draws from the local
+                // cache — its icon lives behind that server's own auth, which
+                // this page can't present at paint time. See instanceIcons.ts.
+                <img src={instanceIcons[instance.id]} alt="" />
               ) : (
                 initials(instance.label)
               )}

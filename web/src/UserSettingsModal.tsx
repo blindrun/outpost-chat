@@ -20,6 +20,7 @@ import {
 } from "./api";
 import { Modal } from "./Modal";
 import { AudioSettings, VoiceMode, loadAudioSettings, saveAudioSettings } from "./audioSettings";
+import { createAdaptiveGate } from "./vadAuto";
 
 type Tab = "profile" | "password" | "security" | "voice";
 
@@ -627,6 +628,10 @@ function VoiceTab() {
   const [devicesError, setDevicesError] = useState<string | null>(null);
   const [capturingKey, setCapturingKey] = useState(false);
   const [meterLevel, setMeterLevel] = useState(0);
+  // Live readout of the adaptive gate, so "Automatic" is something you can
+  // watch working rather than a black box you have to trust.
+  const [autoThreshold, setAutoThreshold] = useState(0);
+  const [autoOpen, setAutoOpen] = useState(false);
   const meterStreamRef = useRef<MediaStream | null>(null);
 
   function update(partial: Partial<AudioSettings>) {
@@ -703,6 +708,11 @@ function VoiceTab() {
         source.connect(analyser);
         const data = new Uint8Array(analyser.frequencyBinCount);
 
+        // Its own instance, not the voice session's — this meter runs whether
+        // or not you're connected to a channel. Same algorithm, so what the
+        // marker shows here is what the gate will actually do.
+        const adaptive = createAdaptiveGate();
+
         function tick() {
           analyser!.getByteTimeDomainData(data);
           let sumSquares = 0;
@@ -711,7 +721,10 @@ function VoiceTab() {
             sumSquares += v * v;
           }
           const rms = Math.sqrt(sumSquares / data.length);
-          setMeterLevel(Math.min(100, Math.round(rms * 300)));
+          const level = Math.min(100, Math.round(rms * 300));
+          setMeterLevel(level);
+          setAutoOpen(adaptive.update(level));
+          setAutoThreshold(adaptive.threshold);
           raf = requestAnimationFrame(tick);
         }
         tick();
@@ -801,19 +814,38 @@ function VoiceTab() {
 
       {settings.mode === "vad" && (
         <>
-          <label>
-            Sensitivity Threshold ({settings.vadThreshold})
+          <label className="checkbox-label">
             <input
-              type="range"
-              min={0}
-              max={100}
-              value={settings.vadThreshold}
-              onChange={(e) => update({ vadThreshold: Number(e.target.value) })}
+              type="checkbox"
+              checked={settings.vadAuto}
+              onChange={(e) => update({ vadAuto: e.target.checked })}
             />
+            Adjust sensitivity automatically
           </label>
-          <div className="mic-meter">
+          {settings.vadAuto ? (
+            <p className="settings-hint">
+              Outpost listens to your room's background noise and moves the threshold to sit just above it,
+              adjusting as things change. The marker below shows where it currently sits — talk normally and
+              watch it settle. Turn this off if you'd rather set it by hand.
+            </p>
+          ) : (
+            <label>
+              Sensitivity Threshold ({settings.vadThreshold})
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={settings.vadThreshold}
+                onChange={(e) => update({ vadThreshold: Number(e.target.value) })}
+              />
+            </label>
+          )}
+          <div className={`mic-meter ${settings.vadAuto && autoOpen ? "transmitting" : ""}`}>
             <div className="mic-meter-fill" style={{ width: `${meterLevel}%` }} />
-            <div className="mic-meter-threshold" style={{ left: `${settings.vadThreshold}%` }} />
+            <div
+              className="mic-meter-threshold"
+              style={{ left: `${settings.vadAuto ? autoThreshold : settings.vadThreshold}%` }}
+            />
           </div>
         </>
       )}
