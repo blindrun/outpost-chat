@@ -1478,28 +1478,37 @@ button, input, select {
     position: relative;
     height: 100dvh;
     overflow: hidden;
-    /* Edge-to-edge WKWebView on iOS (no viewport-fit=cover-aware inset from
-       the native side) -- without this, every full-screen mobile pane below
-       renders under the notch/Dynamic Island and home indicator instead of
-       clear of them. Each pane inherits this via inset:0, which positions
-       against the containing block's *padding* edge, not its border edge --
-       so this one rule insets all four consistently. Zero on browsers/
-       Android, which don't report a safe-area-inset. */
-    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
-      env(safe-area-inset-left);
-    box-sizing: border-box;
   }
+  /* Edge-to-edge WKWebView on iOS (no viewport-fit=cover-aware inset from
+     the native side) -- without an inset here, every full-screen mobile
+     pane renders under the notch/Dynamic Island and home indicator.
+
+     The inset has to live on the panes themselves. .app previously carried
+     a single `padding: env(safe-area-inset-*)` rule instead, on the premise
+     that inset:0 children would be pushed in by it -- they are not. An
+     absolutely positioned box resolves its offsets against its containing
+     block's *padding box*, and the padding box's edges sit on the outside
+     of the padding, so `top: 0` landed on .app's border edge and each pane
+     covered the padding it was supposed to be held back by. The panes are
+     the only non-fixed children .app has on mobile, so that padding did
+     nothing at all. Zero on browsers/Android, which report no inset. */
   .server-rail,
   .sidebar,
   .chat-pane,
   .member-sidebar {
     position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
+    top: env(safe-area-inset-top);
+    right: env(safe-area-inset-right);
+    bottom: env(safe-area-inset-bottom);
+    left: env(safe-area-inset-left);
+    /* Width/height derive from the four offsets -- the previous 100%/100%
+       would resolve against the full padding box and re-overflow the
+       inset. */
+    width: auto;
+    height: auto;
   }
-  .server-rail { z-index: 2; width: 72px; }
-  .sidebar { z-index: 1; left: 72px; width: calc(100% - 72px); }
+  .server-rail { z-index: 2; width: 72px; right: auto; }
+  .sidebar { z-index: 1; left: calc(72px + env(safe-area-inset-left)); }
 
   .app:not(.mobile-pane-nav) .server-rail,
   .app:not(.mobile-pane-nav) .sidebar { display: none; }
