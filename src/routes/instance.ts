@@ -270,6 +270,9 @@ export async function instanceRoutes(app: FastifyInstance) {
       banned: u.banned,
       isOwner: u.isOwner,
       isBot: u.isBot,
+      // Published so a client can encrypt a DM to this member without a
+      // separate round trip. Null means they haven't set up encryption yet.
+      publicKey: u.publicKey,
       roles: u.memberRoles.map((mr) => ({ id: mr.role.id, name: mr.role.name })),
     }));
   });

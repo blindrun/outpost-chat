@@ -45,6 +45,17 @@ model User {
   // text (not hashed, unlike passwordHash) because the server has to
   // recompute the expected code from it on every login, same tradeoff every
   // TOTP implementation makes.
+  // Base64 SPKI of this user's ECDH P-256 public key, published so other
+  // members can encrypt DMs to them. The matching private key is generated on
+  // the user's own device and never sent here — the server cannot decrypt
+  // anything with this, and its only power is to hand out the wrong key,
+  // which is exactly what the client's trust-on-first-use pinning and the
+  // per-conversation fingerprint exist to catch.
+  //
+  // Null means "hasn't set up encryption yet": DMs with that user stay
+  // plaintext, with a visible notice, rather than failing to send.
+  publicKey   String?
+
   totpSecret  String?
   totpEnabled Boolean  @default(false)
   // bcrypt-hashed one-time recovery codes, generated alongside TOTP

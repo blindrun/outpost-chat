@@ -53,6 +53,14 @@ const forgotPasswordSchema = z.object({
   email: z.string().email(),
 });
 
+// Base64 SPKI of an ECDH P-256 public key. 91 raw bytes, so ~124 base64
+// characters — the bound is a sanity check against junk, not a security
+// control (the server never uses this key for anything, it only republishes
+// it, and a malformed one simply fails to import on the recipient's side).
+const publicKeySchema = z.object({
+  publicKey: z.string().min(40).max(400),
+});
+
 // Deleting an account is irreversible, so it re-proves identity the same way
 // every other destructive self-service action here does (password, plus the
 // second factor when one is enabled) rather than trusting the session token
@@ -495,6 +503,20 @@ export async function authRoutes(app: FastifyInstance) {
 
     const passwordHash = await bcrypt.hash(body.newPassword, 12);
     await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+    return reply.status(204).send();
+  });
+
+  // Publishes this user's DM encryption public key. Deliberately overwritable:
+  // someone who loses their recovery code and sets up encryption again gets a
+  // new keypair, and their contacts should see a "security key changed"
+  // warning rather than this endpoint refusing and leaving them unable to use
+  // encrypted DMs at all. Detecting that change is the client's job (see the
+  // trust-on-first-use pinning in the DM crypto), not something the server can
+  // be trusted to report about itself.
+  app.put("/auth/me/public-key", { onRequest: [app.authenticate] }, async (req, reply) => {
+    const { sub: userId } = req.user as { sub: string };
+    const body = publicKeySchema.parse(req.body);
+    await prisma.user.update({ where: { id: userId }, data: { publicKey: body.publicKey } });
     return reply.status(204).send();
   });
 
