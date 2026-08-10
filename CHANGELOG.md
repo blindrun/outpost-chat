@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.14 — 2026-08-10
+
+- **Fixed the voice panel's left edge being swallowed by the server rail on mobile.** On a phone, the panel's title showed as "agnostic-test" instead of "diagnostic-test" and its button read "eave Voice", while everything inside it sat off-centre — the panel was being drawn underneath the server icon rail rather than beside it. It now opens in the space next to the rail, fully visible.
+
 ## v0.3.13 — 2026-08-10
 
 - **Every server in the left rail now shows its own icon, not just the one you're currently on.** Server icons live behind each server's own login, so the app could only ever draw the active one and fell back to text initials for the rest the moment you clicked away. Each server's icon is now downscaled and cached on your own machine, so all of them render immediately on startup — and keep rendering even if a server is temporarily offline.

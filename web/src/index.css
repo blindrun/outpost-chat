@@ -1538,12 +1538,27 @@ button, input, select {
      sheet instead, still clear of the channel list underneath since panes
      are mutually exclusive full-screen overlays here anyway. */
   /* This popover is position:fixed, so it's relative to the viewport, not
-     .app's now-safe-area-padded box -- the fixed 4.5rem bottom offset alone
-     left it sitting under/against the home indicator on a real notched
-     iPhone. Added on top of, not instead of, the existing clearance. */
+     .app's box -- the fixed 4.5rem bottom offset alone left it sitting
+     under/against the home indicator on a real notched iPhone. Added on top
+     of, not instead of, the existing clearance.
+
+     `left` clears the server rail rather than spanning the full viewport,
+     which fixes the real-device bug where the popover's left edge was
+     swallowed: its title read "agnostic-test" and its button "eave Voice",
+     while everything inside it stayed centred on the *screen* rather than on
+     the visible panel.
+
+     The cause is stacking, not clipping. `.sidebar` is position:absolute with
+     z-index:1 in this same media block, so it establishes a stacking context;
+     the popover is a descendant, so its z-index:50 only ever competes inside
+     that context, and `.server-rail` at z-index:2 paints over the whole
+     sidebar subtree -- popover included. Raising the popover's z-index can
+     never win that fight from inside. Moving it out from under the rail
+     sidesteps the stacking question entirely, and would equally fix it if the
+     mechanism were ancestor clipping instead. */
   .voice-details-popover {
-    left: 0.5rem;
-    right: 0.5rem;
+    left: calc(72px + env(safe-area-inset-left) + 0.5rem);
+    right: calc(0.5rem + env(safe-area-inset-right));
     bottom: calc(4.5rem + env(safe-area-inset-bottom));
     width: auto;
   }
