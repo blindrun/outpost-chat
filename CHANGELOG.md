@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.3.12 — 2026-08-10
+
+- **Added self-service account deletion** (User Settings → Profile → Delete Account). Previously the only way off an instance was asking its owner to remove you by hand. Deleting requires your password and your typed username, plus your two-factor code if you have 2FA enabled, and takes effect immediately on every device you're signed in on. Your account, profile, avatar, friends and reactions are removed; **messages you already sent stay in their channels, shown as "Deleted User"**, so the conversations other people took part in don't end up full of holes. Instance owners can't delete their own account — a server with no owner can't be administered by anyone.
+- Messages from an account that no longer exists now show as "Deleted User" instead of a raw account ID, and no longer open a profile card for an account that's gone. This also covers bot accounts an owner has removed.
+- Fixed a login session for a deleted account returning a server error instead of a clean "signed out" — the app now correctly treats it as an expired session.
+- **Fixed the app rendering under the status bar / notch on iOS.** The main screen's server rail, channel list and sidebar header (including the settings gear) sat partly under the camera housing and were hard to tap. The safe-area rule that was supposed to prevent this had never actually applied to that screen.
+
 ## v0.3.11 — 2026-08-07
 
 - **Fixed the desktop app never detecting updates.** `electron/package.json`'s version had been stuck at `0.3.0` since it stopped getting bumped in lockstep with every release, so `electron-updater` on an already-installed 0.3.0+ desktop app always saw "up to date" no matter how many newer releases existed — this release resyncs it and every future release should update correctly again.
