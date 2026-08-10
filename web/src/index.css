@@ -1500,6 +1500,21 @@ button, input, select {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Shown exactly once, so it has to be easy to select and copy in one go and
+   obviously not a normal editable field. */
+.recovery-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  word-break: break-all;
+  background: var(--bg-input);
+  color: var(--text-normal);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 0.6rem;
+  resize: vertical;
+}
+
 .mic-meter { position: relative; height: 10px; border-radius: 5px; background: var(--bg-input); overflow: hidden; }
 .mic-meter-fill { height: 100%; background: var(--green); transition: width 60ms linear; }
 .mic-meter-threshold { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text-muted); transition: left 200ms linear; }

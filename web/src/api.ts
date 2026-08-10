@@ -12,6 +12,9 @@ export interface User {
   avatarUrl?: string | null;
   bio?: string | null;
   isOwner: boolean;
+  // Base64 SPKI of this account's DM encryption public key; null until they
+  // opt in. See crypto/keys.ts.
+  publicKey?: string | null;
 }
 
 export interface WebauthnCredentialInfo {
@@ -244,6 +247,9 @@ export interface Member {
   banned: boolean;
   isOwner: boolean;
   isBot: boolean;
+  // Null means this member hasn't turned on encrypted DMs, so a conversation
+  // with them stays plaintext.
+  publicKey?: string | null;
   roles: { id: string; name: string }[];
 }
 
@@ -577,6 +583,15 @@ export function updatePassword(baseUrl: string, token: string, currentPassword: 
   return request<void>(baseUrl, "/auth/me/password", token, {
     method: "PATCH",
     body: JSON.stringify({ currentPassword, newPassword }),
+  });
+}
+
+// Publishes this device's DM encryption public key. The private half never
+// leaves the browser — see crypto/keys.ts.
+export function publishPublicKey(baseUrl: string, token: string, publicKey: string) {
+  return request<void>(baseUrl, "/auth/me/public-key", token, {
+    method: "PUT",
+    body: JSON.stringify({ publicKey }),
   });
 }
 

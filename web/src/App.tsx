@@ -1502,6 +1502,7 @@ function App() {
         <UserSettingsModal
           baseUrl={activeInstance.baseUrl}
           token={session.token}
+          instanceId={activeInstance.id}
           user={session.user}
           onClose={() => setUserSettingsOpen(false)}
           onSessionUpdate={handleSessionUpdate}

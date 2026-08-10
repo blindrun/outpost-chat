@@ -100,8 +100,19 @@ export function toPublicUser(user: {
   avatarUrl: string | null;
   bio: string | null;
   isOwner: boolean;
+  publicKey?: string | null;
 }) {
-  return { id: user.id, username: user.username, email: user.email, avatarUrl: user.avatarUrl, bio: user.bio, isOwner: user.isOwner };
+  return {
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    avatarUrl: user.avatarUrl,
+    bio: user.bio,
+    isOwner: user.isOwner,
+    // Needed by the client to verify a restored recovery code actually
+    // matches this account before it trusts the key for anything.
+    publicKey: user.publicKey ?? null,
+  };
 }
 
 export async function authRoutes(app: FastifyInstance) {

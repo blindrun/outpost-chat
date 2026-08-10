@@ -8,7 +8,9 @@ import {
   deleteAccount,
   deleteWebauthnCredential,
   disableTotp,
+  getCurrentUser,
   getMfaStatus,
+  publishPublicKey,
   regenerateBackupCodes,
   setupTotp,
   updatePassword,
@@ -21,6 +23,8 @@ import {
 import { Modal } from "./Modal";
 import { AudioSettings, VoiceMode, loadAudioSettings, saveAudioSettings } from "./audioSettings";
 import { createAdaptiveGate } from "./vadAuto";
+import { deriveConversationKey, generateIdentity, importPrivateKey, importPublicKey } from "./crypto/keys";
+import { StoredIdentity, loadIdentity, saveIdentity } from "./crypto/store";
 
 type Tab = "profile" | "password" | "security" | "voice";
 
@@ -333,7 +337,178 @@ function BackupCodesReveal({ codes, onDismiss }: { codes: string[]; onDismiss: (
   );
 }
 
-function SecurityTab({ baseUrl, token }: { baseUrl: string; token: string }) {
+// Opt-in, deliberately. Turning this on is the only action in the app whose
+// consequence a password reset cannot undo: resetting a password restores
+// account access but not encrypted history, because the key is not derived
+// from the password and no amount of server-side help can change that. Making
+// it a choice means nobody loses history they never chose to encrypt, and the
+// warning lands at the moment of choosing rather than months later.
+function EncryptedDmsSection({
+  baseUrl,
+  token,
+  instanceId,
+}: {
+  baseUrl: string;
+  token: string;
+  instanceId: string;
+}) {
+  const [identity, setIdentity] = useState<StoredIdentity | null | undefined>(undefined);
+  const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [restoreCode, setRestoreCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadIdentity(instanceId)
+      .then((found) => !cancelled && setIdentity(found ?? null))
+      .catch(() => !cancelled && setIdentity(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [instanceId]);
+
+  async function handleEnable() {
+    setError(null);
+    setBusy(true);
+    try {
+      const generated = await generateIdentity();
+      // Published before it's stored locally on purpose: if publishing fails
+      // there is nothing to clean up, whereas a key saved locally but never
+      // published would leave contacts unable to encrypt to you while the UI
+      // insisted encryption was on.
+      await publishPublicKey(baseUrl, token, generated.publicKey);
+      const stored: StoredIdentity = {
+        privateKey: generated.privateKey,
+        publicKey: generated.publicKey,
+        createdAt: Date.now(),
+      };
+      await saveIdentity(instanceId, stored);
+      setIdentity(stored);
+      setRecoveryCode(generated.recoveryCode);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRestore(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      const privateKey = await importPrivateKey(restoreCode.trim());
+      // The public half isn't in the recovery code, so it's taken from the
+      // account's published key. If that doesn't actually match this private
+      // key, every decryption would fail later with no explanation — so prove
+      // the pair agrees now, while there's still something useful to say.
+      const me = await getCurrentUser(baseUrl, token);
+      if (!me.publicKey) throw new Error("this account has no published encryption key to restore against");
+      const check = await deriveConversationKey(privateKey, await importPublicKey(me.publicKey));
+      if (!check) throw new Error("recovery code did not produce a usable key");
+      const stored: StoredIdentity = { privateKey, publicKey: me.publicKey, createdAt: Date.now() };
+      await saveIdentity(instanceId, stored);
+      setIdentity(stored);
+      setRestoreOpen(false);
+      setRestoreCode("");
+    } catch {
+      setError("That recovery code doesn't match this account's encryption key.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (identity === undefined) return null;
+
+  if (recoveryCode) {
+    return (
+      <div className="settings-section danger-zone">
+        <h3>Save your recovery code</h3>
+        <p className="settings-hint">
+          This is shown <strong>once</strong>. It's the only way to read your encrypted messages on another
+          device, or on this one after clearing site data. <strong>Resetting your password will not recover
+          it</strong> — nobody, including this server's owner, can retrieve it for you.
+        </p>
+        <textarea className="recovery-code" readOnly rows={4} value={recoveryCode} onFocus={(e) => e.target.select()} />
+        <label className="checkbox-label">
+          <input type="checkbox" checked={acknowledged} onChange={(e) => setAcknowledged(e.target.checked)} />
+          I've saved this somewhere safe
+        </label>
+        <div className="modal-actions">
+          <button type="button" className="btn" disabled={!acknowledged} onClick={() => setRecoveryCode(null)}>
+            Done
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="settings-section">
+      <h3>Encrypted Direct Messages</h3>
+      {identity ? (
+        <>
+          <p className="settings-hint">
+            <strong>On.</strong> New direct messages are encrypted on your device whenever the other person has
+            also turned this on — you'll see which conversations are covered. Messages in servers' channels are
+            not encrypted, and never have been.
+          </p>
+          <p className="settings-hint">
+            Lost your recovery code? Turn this off and on again to start over with a new one. You'll keep being
+            able to read messages on this device, but not on any new one.
+          </p>
+        </>
+      ) : (
+        <>
+          <p className="settings-hint">
+            Off. Direct messages are stored on the server in plain text, so whoever runs it can read them.
+            Turning this on encrypts new DMs so that only you and the person you're talking to can — including
+            against the server itself.
+          </p>
+          <p className="settings-hint">
+            <strong>The catch, up front:</strong> you get a recovery code shown once. Without it you can't read
+            your encrypted messages on a new device, and <strong>a password reset won't bring them back</strong>.
+          </p>
+          {error && <p className="error">{error}</p>}
+          <div className="modal-actions">
+            <button type="button" className="btn secondary" onClick={() => setRestoreOpen((v) => !v)} disabled={busy}>
+              I have a recovery code
+            </button>
+            <button type="button" className="btn" onClick={handleEnable} disabled={busy}>
+              {busy ? "Setting up…" : "Turn On"}
+            </button>
+          </div>
+          {restoreOpen && (
+            <form onSubmit={handleRestore}>
+              <label>
+                Recovery code
+                <textarea rows={4} value={restoreCode} onChange={(e) => setRestoreCode(e.target.value)} />
+              </label>
+              <div className="modal-actions">
+                <button type="submit" className="btn" disabled={busy || !restoreCode.trim()}>
+                  {busy ? "Checking…" : "Restore"}
+                </button>
+              </div>
+            </form>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function SecurityTab({
+  baseUrl,
+  token,
+  instanceId,
+}: {
+  baseUrl: string;
+  token: string;
+  instanceId: string;
+}) {
   const [status, setStatus] = useState<MfaStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -474,6 +649,8 @@ function SecurityTab({ baseUrl, token }: { baseUrl: string; token: string }) {
   return (
     <div className="settings-section">
       {error && <p className="error">{error}</p>}
+
+      <EncryptedDmsSection baseUrl={baseUrl} token={token} instanceId={instanceId} />
 
       <h3>Authenticator App</h3>
       {!status ? (
@@ -856,6 +1033,7 @@ function VoiceTab() {
 export function UserSettingsModal({
   baseUrl,
   token,
+  instanceId,
   user,
   onClose,
   onSessionUpdate,
@@ -863,6 +1041,7 @@ export function UserSettingsModal({
 }: {
   baseUrl: string;
   token: string;
+  instanceId: string;
   user: User;
   onClose: () => void;
   onSessionUpdate: (update: { token?: string; user: User }) => void;
@@ -899,7 +1078,7 @@ export function UserSettingsModal({
         />
       )}
       {tab === "password" && <PasswordTab baseUrl={baseUrl} token={token} />}
-      {tab === "security" && <SecurityTab baseUrl={baseUrl} token={token} />}
+      {tab === "security" && <SecurityTab baseUrl={baseUrl} token={token} instanceId={instanceId} />}
       {tab === "voice" && <VoiceTab />}
 
       {tab !== "profile" && (
