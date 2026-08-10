@@ -67,6 +67,12 @@ const clientMessageSchema = z.discriminatedUnion("type", [
     content: z.string().max(4000),
     attachmentUrl: z.string().url().optional(),
     replyToId: z.string().optional(),
+    // An end-to-end encrypted body, sent instead of `content` (which arrives
+    // empty). Opaque to the server — see Message.encryptedPayload. Generously
+    // bounded because base64 ciphertext is ~4/3 the plaintext plus the
+    // envelope's own JSON.
+    encryptedPayload: z.string().max(8000).optional(),
+    encryptionVersion: z.number().int().positive().optional(),
   }),
   z.object({ type: z.literal("TYPING_START"), channelId: z.string() }),
   z.object({ type: z.literal("MESSAGE_EDIT"), messageId: z.string(), content: z.string().min(1).max(4000) }),
@@ -218,8 +224,18 @@ export async function gatewayRoutes(app: FastifyInstance) {
             sendError("cannot send messages in a voice channel");
             return;
           }
-          if (!parsed.content.trim() && !parsed.attachmentUrl) {
+          if (!parsed.content.trim() && !parsed.attachmentUrl && !parsed.encryptedPayload) {
             sendError("message must have content or an attachment");
+            return;
+          }
+
+          // Encryption is a DM-only feature: every other channel type is read
+          // server-side by search, the bot and automod, so accepting a payload
+          // there would silently create messages nobody can moderate or find.
+          // Rejecting loudly beats storing something the rest of the app can't
+          // reason about.
+          if (parsed.encryptedPayload && !dmMembers) {
+            sendError("encrypted messages are only supported in direct messages");
             return;
           }
 
@@ -228,6 +244,10 @@ export async function gatewayRoutes(app: FastifyInstance) {
             return;
           }
 
+          // Automod can only inspect what it can read. An encrypted DM body is
+          // opaque here by design, so this simply doesn't apply — see the
+          // e2ee plan: policing private messages between two people was always
+          // the weakest case for automod, and losing it is the accepted cost.
           if (parsed.content.trim() && (await isAutomodBlocked(parsed.content))) {
             const result = await recordWarning(userId, "message blocked by automod (banned word)", "automod");
             sendError(
@@ -254,6 +274,8 @@ export async function gatewayRoutes(app: FastifyInstance) {
                 channelId: parsed.channelId,
                 authorId: userId,
                 content: parsed.content,
+                encryptedPayload: parsed.encryptedPayload,
+                encryptionVersion: parsed.encryptedPayload ? (parsed.encryptionVersion ?? 1) : undefined,
                 attachmentUrl: parsed.attachmentUrl,
                 replyToId,
               },

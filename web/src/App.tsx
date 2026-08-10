@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Channel,
+  DMChannel,
   CustomEmoji,
   Gateway,
   Gif,
@@ -28,6 +29,7 @@ import {
 } from "./api";
 import { VoicePanel } from "./VoicePanel";
 import { clearCachedIcon, loadCachedIcon, refreshInstanceIcon } from "./instanceIcons";
+import { DmCryptoState, decryptForDm, encryptForDm, resolveDmCrypto } from "./crypto/dm";
 import { useVoiceSession } from "./useVoiceSession";
 import { playVoiceJoinSound, playVoiceLeaveSound } from "./voiceSounds";
 import { MessageItem, messageIdentityKey } from "./MessageItem";
@@ -190,6 +192,11 @@ function App() {
   // join/leave already has direct UI feedback.
   const [voiceToasts, setVoiceToasts] = useState<{ id: number; userId: string; kind: "joined" | "left" }[]>([]);
   const voiceToastSeqRef = useRef(0);
+  // Encryption state for the currently open DM, and the plaintext of every
+  // encrypted message decrypted so far (null = we hold no key that can read
+  // it, which is a permanent state rather than a transient failure).
+  const [dmCrypto, setDmCrypto] = useState<DmCryptoState>({ active: false });
+  const [decrypted, setDecrypted] = useState<Record<string, string | null>>({});
   const [roles, setRoles] = useState<Role[]>([]);
   const [customEmoji, setCustomEmoji] = useState<CustomEmoji[]>([]);
   const [typingByChannel, setTypingByChannel] = useState<Record<string, string>>({});
@@ -451,6 +458,58 @@ function App() {
       })
       .catch(console.error);
   }, [activeInstance?.baseUrl]);
+
+  // Resolve whether the open DM is encrypted. Derived from `channels` rather
+  // than the `selectedChannel` const, which is computed further down — after
+  // this component's early returns, so anything depending on it can't live in
+  // a hook.
+  useEffect(() => {
+    const channel = channels.find((c) => c.id === selectedChannelId);
+    const peerId = channel?.type === "DM" ? (channel as DMChannel).otherUserId : null;
+    if (!peerId || !activeInstanceId) {
+      setDmCrypto({ active: false });
+      return;
+    }
+    let cancelled = false;
+    const peer = members.find((m) => m.userId === peerId);
+    resolveDmCrypto(activeInstanceId, peerId, peer?.publicKey)
+      .then((state) => !cancelled && setDmCrypto(state))
+      .catch(() => !cancelled && setDmCrypto({ active: false }));
+    return () => {
+      cancelled = true;
+    };
+  }, [channels, selectedChannelId, activeInstanceId, members]);
+
+  // Decrypt anything encrypted that hasn't been decrypted yet, including the
+  // bodies of quoted reply targets. Keyed by message id and kept across
+  // channel switches so scrolling back doesn't redo the work.
+  useEffect(() => {
+    if (!dmCrypto.key || !selectedChannelId) return;
+    const pending = (messages[selectedChannelId] ?? []).flatMap((m) => {
+      const items: { id: string; payload: string }[] = [];
+      if (m.encryptedPayload && decrypted[m.id] === undefined) items.push({ id: m.id, payload: m.encryptedPayload });
+      if (m.replyTo?.encryptedPayload && decrypted[m.replyTo.id] === undefined) {
+        items.push({ id: m.replyTo.id, payload: m.replyTo.encryptedPayload });
+      }
+      return items;
+    });
+    if (pending.length === 0) return;
+
+    let cancelled = false;
+    Promise.all(
+      pending.map(async (item) => [item.id, await decryptForDm(dmCrypto.key, item.payload)] as const),
+    ).then((results) => {
+      if (cancelled) return;
+      setDecrypted((prev) => {
+        const next = { ...prev };
+        for (const [id, text] of results) next[id] = text;
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [messages, selectedChannelId, dmCrypto.key, decrypted]);
 
   // Keep every bookmarked server's cached icon fresh, not just the active
   // one's — the whole point is that the rail can draw a server you aren't
@@ -919,15 +978,39 @@ function App() {
     }
   }
 
-  function handleSend(e: React.FormEvent) {
+  async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     if ((!draft.trim() && !pendingAttachment) || !selectedChannelId || !gatewayRef.current) return;
     setComposerNotice(null);
-    gatewayRef.current.sendMessage(selectedChannelId, draft.trim(), pendingAttachment?.url, replyTarget?.id);
+
+    const text = draft.trim();
+    // Cleared before the await so a slow encrypt can't leave the composer
+    // holding text the user already "sent", or let a second Enter send twice.
     setDraft("");
     setPendingAttachment(null);
     setOpenPicker(null);
     setReplyTarget(null);
+
+    let encryptedPayload: string | undefined;
+    if (dmCrypto.active && dmCrypto.key && text) {
+      try {
+        encryptedPayload = await encryptForDm(dmCrypto.key, text);
+      } catch {
+        // Never silently downgrade to plaintext: someone who turned this on
+        // would have no way to know the message went out in the clear.
+        setComposerNotice("Couldn't encrypt that message, so it wasn't sent.");
+        setDraft(text);
+        return;
+      }
+    }
+
+    gatewayRef.current.sendMessage(
+      selectedChannelId,
+      encryptedPayload ? "" : text,
+      pendingAttachment?.url,
+      replyTarget?.id,
+      encryptedPayload,
+    );
   }
 
   // Opens a message's existing thread, or creates one first if it doesn't
@@ -1063,7 +1146,30 @@ function App() {
   }
 
   const selectedChannel = channels.find((c) => c.id === selectedChannelId) ?? null;
-  const channelMessages = selectedChannelId ? messages[selectedChannelId] ?? [] : [];
+  const rawChannelMessages = selectedChannelId ? messages[selectedChannelId] ?? [] : [];
+  // MessageItem renders `content` and knows nothing about encryption; the
+  // substitution happens here so there's exactly one place where ciphertext
+  // becomes text, and every downstream feature (grouping, search highlight,
+  // reply quotes) keeps working unchanged.
+  const channelMessages = rawChannelMessages.map((m) => {
+    if (!m.encryptedPayload && !m.replyTo?.encryptedPayload) return m;
+    const resolve = (id: string, payload: string | null | undefined, fallback: string) => {
+      if (!payload) return fallback;
+      const text = decrypted[id];
+      if (text === undefined) return "Decrypting…";
+      // Undecryptable is permanent, not transient: it means this device holds
+      // no key that can read it — they rotated, or this identity was restored
+      // from a different recovery code. Saying so beats an empty message.
+      return text ?? "🔒 Can't decrypt this message on this device";
+    };
+    return {
+      ...m,
+      content: resolve(m.id, m.encryptedPayload, m.content),
+      ...(m.replyTo
+        ? { replyTo: { ...m.replyTo, content: resolve(m.replyTo.id, m.replyTo.encryptedPayload, m.replyTo.content) } }
+        : {}),
+    };
+  });
   const typingLabel = selectedChannelId ? typingByChannel[selectedChannelId] : null;
 
   function handleMessagesScroll() {
@@ -1721,6 +1827,24 @@ function App() {
                     ✕
                   </button>
                 </div>
+              )}
+              {/* Only ever shown in a DM. Says which of the three states this
+                  conversation is in, because "encrypted" that quietly isn't is
+                  worse than no indicator at all. */}
+              {selectedChannel?.type === "DM" && (
+                <p className={`dm-crypto-status ${dmCrypto.active ? "on" : ""}`}>
+                  {dmCrypto.active ? (
+                    dmCrypto.trust === "changed" ? (
+                      <>⚠️ This person's security key changed. If that wasn't them setting up a new device, stop and check.</>
+                    ) : (
+                      <>🔒 Encrypted end-to-end — the server can't read these messages.</>
+                    )
+                  ) : dmCrypto.reason === "self" ? (
+                    <>Not encrypted. Turn on encrypted DMs in User Settings → Security.</>
+                  ) : (
+                    <>Not encrypted — {selectedChannel.name} hasn't turned on encrypted DMs.</>
+                  )}
+                </p>
               )}
               {uploadError && <p className="error">{uploadError}</p>}
               {composerNotice && (

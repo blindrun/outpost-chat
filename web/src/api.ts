@@ -190,6 +190,9 @@ export interface ReplyPreview {
   authorUsername?: string;
   isWebhook: boolean;
   isSystemBot?: boolean;
+  // The quoted message may itself be encrypted; the server can't trim a
+  // preview it can't read, so the envelope comes through for the client.
+  encryptedPayload?: string | null;
 }
 
 export interface Message {
@@ -209,6 +212,10 @@ export interface Message {
   // user deleted it, or the owner removed an API bot). The message stays;
   // its author is rendered as a non-clickable "Deleted User".
   authorDeleted?: boolean;
+  // Opaque end-to-end encrypted body (see crypto/dm.ts). When set, `content`
+  // is empty and the real text only exists once decrypted on the client.
+  encryptedPayload?: string | null;
+  encryptionVersion?: number | null;
   pinned?: boolean;
   replyToId?: string | null;
   replyTo?: ReplyPreview | null;
@@ -1009,8 +1016,27 @@ export class Gateway {
     return () => this.listeners.delete(listener);
   }
 
-  sendMessage(channelId: string, content: string, attachmentUrl?: string, replyToId?: string) {
-    this.ws.send(JSON.stringify({ type: "MESSAGE_SEND", channelId, content, attachmentUrl, replyToId }));
+  // `encryptedPayload` carries an end-to-end encrypted body instead of
+  // `content`, which is sent empty in that case. DM channels only — the
+  // server rejects it anywhere else, since every other channel type is read
+  // server-side by search, the bot and automod.
+  sendMessage(
+    channelId: string,
+    content: string,
+    attachmentUrl?: string,
+    replyToId?: string,
+    encryptedPayload?: string,
+  ) {
+    this.ws.send(
+      JSON.stringify({
+        type: "MESSAGE_SEND",
+        channelId,
+        content,
+        attachmentUrl,
+        replyToId,
+        ...(encryptedPayload ? { encryptedPayload, encryptionVersion: 1 } : {}),
+      }),
+    );
   }
 
   sendTyping(channelId: string) {

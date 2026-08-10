@@ -309,7 +309,20 @@ model Message {
   webhookId     String?
   webhook       Webhook?  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
   isSystemBot   Boolean   @default(false)
+  // Plaintext body. Empty string when encryptedPayload is set — the two are
+  // mutually exclusive, and `content` stays non-null so every existing query,
+  // serializer and index keeps working untouched.
   content       String
+  // End-to-end encrypted body: the JSON envelope from web/src/crypto/keys.ts
+  // ({v, iv, ct}), opaque here. DM channels only, and only when both
+  // participants have published a public key. The server cannot read this and
+  // has no key to read it with — it stores and forwards it, nothing more.
+  //
+  // Version lives in its own column rather than only inside the JSON so a
+  // future scheme can be found and migrated with a query instead of parsing
+  // every row.
+  encryptedPayload  String?
+  encryptionVersion Int?
   attachmentUrl String?
   // Per-send persona override for a webhook message (Discord/Slack
   // convention — one webhook, many personas). Stored per-message rather than

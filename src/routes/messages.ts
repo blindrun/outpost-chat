@@ -91,13 +91,27 @@ const REPLY_PREVIEW_LENGTH = 200;
 // search so both show full reply context, not just a dangling replyToId.
 export async function hydrateReplyPreviews<
   T extends {
-    replyTo: { id: string; content: string; authorId: string | null; webhookId: string | null; isSystemBot?: boolean } | null;
+    replyTo: {
+      id: string;
+      content: string;
+      authorId: string | null;
+      webhookId: string | null;
+      isSystemBot?: boolean;
+      encryptedPayload?: string | null;
+    } | null;
   },
 >(
   messages: T[],
 ): Promise<
   (Omit<T, "replyTo"> & {
-    replyTo: { id: string; content: string; authorUsername?: string; isWebhook: boolean; isSystemBot: boolean } | null;
+    replyTo: {
+      id: string;
+      content: string;
+      authorUsername?: string;
+      isWebhook: boolean;
+      isSystemBot: boolean;
+      encryptedPayload?: string | null;
+    } | null;
   })[]
 > {
   const targets = messages.filter((m): m is T & { replyTo: NonNullable<T["replyTo"]> } => !!m.replyTo).map((m) => m.replyTo);
@@ -115,6 +129,10 @@ export async function hydrateReplyPreviews<
             authorUsername: target.authorUsername,
             isWebhook: target.isWebhook,
             isSystemBot: target.isSystemBot,
+            // Passed through so the client can decrypt the quoted message too
+            // — the server can't trim a preview it can't read, so an encrypted
+            // reply target would otherwise render as an empty quote.
+            encryptedPayload: target.encryptedPayload ?? null,
           }
         : null,
     };

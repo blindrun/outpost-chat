@@ -1467,6 +1467,16 @@ button, input, select {
 .ptt-hold-btn { user-select: none; touch-action: none; }
 .ptt-hold-btn.active { background: var(--green); color: #fff; }
 
+/* Encryption state for the open DM. Deliberately quiet when off — it's the
+   normal state for most conversations and shouldn't read as an error — and
+   only coloured when it's actually saying something. */
+.dm-crypto-status {
+  margin: 0 0 0.4rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.dm-crypto-status.on { color: var(--green); }
+
 /* Voice join/leave notices. position:fixed at .app level (see App.tsx) so the
    pane stacking contexts on mobile can't bury them. Bottom-centre keeps them
    clear of the header controls and the notch on both orientations. */
