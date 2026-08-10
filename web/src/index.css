@@ -1467,6 +1467,39 @@ button, input, select {
 .ptt-hold-btn { user-select: none; touch-action: none; }
 .ptt-hold-btn.active { background: var(--green); color: #fff; }
 
+/* Voice join/leave notices. position:fixed at .app level (see App.tsx) so the
+   pane stacking contexts on mobile can't bury them. Bottom-centre keeps them
+   clear of the header controls and the notch on both orientations. */
+.voice-toasts {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(1rem + env(safe-area-inset-bottom));
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: center;
+  pointer-events: none;
+  max-width: min(90vw, 22rem);
+}
+.voice-toast {
+  background: var(--bg-primary);
+  color: var(--text-normal);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--green);
+  border-radius: 6px;
+  padding: 0.5rem 0.8rem;
+  font-size: 0.85rem;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  animation: voice-toast-in 140ms ease-out;
+}
+.voice-toast.left { border-left-color: var(--text-muted); }
+@keyframes voice-toast-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .mic-meter { position: relative; height: 10px; border-radius: 5px; background: var(--bg-input); overflow: hidden; }
 .mic-meter-fill { height: 100%; background: var(--green); transition: width 60ms linear; }
 .mic-meter-threshold { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text-muted); transition: left 200ms linear; }

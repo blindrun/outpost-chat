@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.15 — 2026-08-10
+
+- **You now see who joined or left the voice channel you're in.** A sound already played, but it never told you *who* — and it's easy to miss entirely with your volume down. Brief notices now name the person, stacking if several people arrive at once.
+
 ## v0.3.14 — 2026-08-10
 
 - **Fixed the voice panel's left edge being swallowed by the server rail on mobile.** On a phone, the panel's title showed as "agnostic-test" instead of "diagnostic-test" and its button read "eave Voice", while everything inside it sat off-centre — the panel was being drawn underneath the server icon rail rather than beside it. It now opens in the space next to the rail, fully visible.

@@ -122,6 +122,10 @@ function getResetTokenFromUrl(): string | null {
 // and it's just as leave-able as any other added server.
 const PRIMARY_SERVER_URL = "https://outpost.sonofatech.com";
 
+// Long enough to read a name without turning a busy channel into a wall of
+// notices — several people arriving at once each get their own, stacked.
+const VOICE_TOAST_MS = 4000;
+
 function App() {
   const [instances, setInstances] = useState<Instance[]>(loadInstances);
   const [activeInstanceId, setActiveInstanceId] = useState<string | null>(
@@ -181,6 +185,11 @@ function App() {
   // not worth threading a shared cache through for just the sidebar's
   // voice-channel avatars.
   const [members, setMembers] = useState<Member[]>([]);
+  // Transient "X joined/left the voice channel" notices, for the channel this
+  // client is actually connected to. Only ever for *other* people — your own
+  // join/leave already has direct UI feedback.
+  const [voiceToasts, setVoiceToasts] = useState<{ id: number; userId: string; kind: "joined" | "left" }[]>([]);
+  const voiceToastSeqRef = useRef(0);
   const [roles, setRoles] = useState<Role[]>([]);
   const [customEmoji, setCustomEmoji] = useState<CustomEmoji[]>([]);
   const [typingByChannel, setTypingByChannel] = useState<Record<string, string>>({});
@@ -544,6 +553,25 @@ function App() {
           const left = previousIds.filter((id) => id !== session.user.id && !event.userIds.includes(id));
           if (joined.length > 0) playVoiceJoinSound();
           if (left.length > 0) playVoiceLeaveSound();
+
+          // The sound alone tells you *something* happened but not who, and
+          // it's easy to miss entirely if your volume is low. Stores the user
+          // id rather than a rendered string so the name is resolved at paint
+          // time — the member list may not have loaded yet when this fires,
+          // and resolving here would freeze in whatever the closure saw.
+          const arrivals = [
+            ...joined.map((userId) => ({ userId, kind: "joined" as const })),
+            ...left.map((userId) => ({ userId, kind: "left" as const })),
+          ];
+          if (arrivals.length > 0) {
+            const entries = arrivals.map((a) => ({ ...a, id: ++voiceToastSeqRef.current }));
+            setVoiceToasts((prev) => [...prev, ...entries]);
+            for (const entry of entries) {
+              setTimeout(() => {
+                setVoiceToasts((prev) => prev.filter((t) => t.id !== entry.id));
+              }, VOICE_TOAST_MS);
+            }
+          }
         }
         setVoiceState((prev) => ({ ...prev, [event.channelId]: event.userIds }));
       } else if (event.type === "MESSAGE_CREATE") {
@@ -1093,6 +1121,21 @@ function App() {
     <div className={`app mobile-pane-${mobileActivePane} ${memberListOpen ? "" : "member-list-collapsed"}`}>
       {connectionState === "reconnecting" && (
         <div className="connection-banner">Reconnecting…</div>
+      )}
+      {/* Rendered here, as a direct child of .app, rather than inside the
+          sidebar next to the voice panel — .sidebar is position:absolute with
+          z-index:1 on mobile, which makes it a stacking context that would
+          bury these under the server rail exactly like the voice popover was
+          (see the mobile .voice-details-popover rules). */}
+      {voiceToasts.length > 0 && (
+        <div className="voice-toasts">
+          {voiceToasts.map((toast) => (
+            <div key={toast.id} className={`voice-toast ${toast.kind}`}>
+              <strong>{usernameByUserId.get(toast.userId) ?? "Someone"}</strong>
+              {toast.kind === "joined" ? " joined the voice channel" : " left the voice channel"}
+            </div>
+          ))}
+        </div>
       )}
       <nav className="server-rail">
         {instances.map((instance) => (
