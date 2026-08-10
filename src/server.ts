@@ -94,7 +94,18 @@ app.decorate("authenticate", async (req, reply) => {
     // request rather than only at login — otherwise a banned user's
     // already-issued JWT would keep working indefinitely.
     const user = await prisma.user.findUnique({ where: { id: sub }, select: { banned: true } });
-    if (user?.banned) {
+    // The account is gone — self-deleted (DELETE /auth/me) or an API bot the
+    // owner removed — while a never-expiring token for it is still in the
+    // wild. Without this, that token stayed "valid" here and only blew up
+    // further in, where handlers assume their own user row exists (GET
+    // /auth/me's findUniqueOrThrow turned it into a 500 instead of a 401,
+    // which reads to the client as a server fault rather than a dead
+    // session).
+    if (!user) {
+      reply.status(401).send({ error: "unauthorized" });
+      return;
+    }
+    if (user.banned) {
       reply.status(403).send({ error: "banned" });
       return;
     }

@@ -440,6 +440,10 @@ button, input, select {
 .btn.secondary:hover { background: var(--interactive-active); border-color: var(--border-subtle); }
 .btn.secondary.danger { color: var(--red); border-color: rgba(230, 72, 63, 0.35); }
 .btn.secondary.danger:hover { background: rgba(230, 72, 63, 0.12); border-color: var(--red); }
+/* Solid red, unlike .btn.secondary.danger's outline treatment — reserved for
+   an irreversible confirm (account deletion), not a merely destructive one. */
+.btn.danger { background: var(--red); border-color: var(--red); }
+.btn.danger:hover { background: #c53b35; border-color: #c53b35; }
 .btn:disabled { opacity: 0.5; cursor: default; transform: none; box-shadow: none; }
 
 /* ---------- Sidebar (channel list) ---------- */
@@ -1273,6 +1277,16 @@ button, input, select {
   border-bottom: 1px solid var(--border-subtle);
 }
 .settings-section:last-of-type { border-bottom: none; }
+/* Visually fenced off from the ordinary profile fields above it so the
+   irreversible action doesn't read as just another settings row. */
+.danger-zone {
+  border: 1px solid rgba(230, 72, 63, 0.35);
+  border-radius: 6px;
+  padding: 0.9rem;
+  margin-top: 0.4rem;
+}
+.danger-zone h3 { color: var(--red); }
+.danger-zone form { display: flex; flex-direction: column; gap: 0.6rem; }
 .settings-section label:not(.checkbox-label) {
   display: flex;
   flex-direction: column;

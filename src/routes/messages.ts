@@ -34,7 +34,15 @@ export async function hydrateAuthors<
   },
 >(
   messages: T[],
-): Promise<(T & { authorUsername?: string; authorAvatarUrl?: string | null; isWebhook: boolean; isSystemBot: boolean })[]> {
+): Promise<
+  (T & {
+    authorUsername?: string;
+    authorAvatarUrl?: string | null;
+    isWebhook: boolean;
+    isSystemBot: boolean;
+    authorDeleted?: boolean;
+  })[]
+> {
   const authorIds = [...new Set(messages.filter((m) => m.authorId).map((m) => m.authorId as string))];
   const webhookIds = [...new Set(messages.filter((m) => m.webhookId).map((m) => m.webhookId as string))];
   const needsBotSettings = messages.some((m) => m.isSystemBot);
@@ -57,12 +65,20 @@ export async function hydrateAuthors<
       };
     }
     const webhook = m.webhookId ? webhookById.get(m.webhookId) : undefined;
+    // A real authorId that no longer resolves means the account is gone —
+    // self-deleted (DELETE /auth/me) or an API bot the owner removed. Their
+    // messages stay (no FK, by design), so they get a stable display name
+    // here rather than falling through to the client's old `?? authorId`
+    // fallback, which rendered a raw UUID as the author's name.
+    const authorDeleted = !!m.authorId && !webhook && !authorById.has(m.authorId);
     return {
       ...m,
-      authorUsername: m.overrideUsername ?? webhook?.name ?? authorById.get(m.authorId ?? "")?.username,
+      authorUsername:
+        m.overrideUsername ?? webhook?.name ?? authorById.get(m.authorId ?? "")?.username ?? (authorDeleted ? "Deleted User" : undefined),
       authorAvatarUrl: m.overrideAvatarUrl ?? webhook?.avatarUrl ?? authorById.get(m.authorId ?? "")?.avatarUrl,
       isWebhook: !!webhook,
       isSystemBot: false,
+      ...(authorDeleted ? { authorDeleted: true } : {}),
     };
   });
 }

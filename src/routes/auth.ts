@@ -5,6 +5,8 @@ import { randomBytes, createHash } from "node:crypto";
 import type { AuthenticatorTransportFuture } from "@simplewebauthn/server";
 import { generateAuthenticationOptions, verifyAuthenticationResponse } from "@simplewebauthn/server";
 import { prisma } from "../plugins/db.js";
+import { minioClient, BUCKET, PUBLIC_URL } from "../plugins/storage.js";
+import { disconnectUser } from "../gateway/rooms.js";
 import { EVERYONE_ROLE_NAME, DEFAULT_EVERYONE_PERMISSIONS } from "../util/permissions.js";
 import { isInviteValid } from "../util/invites.js";
 import { postSystemMessage } from "../util/bot.js";
@@ -49,6 +51,17 @@ const updatePasswordSchema = z.object({
 
 const forgotPasswordSchema = z.object({
   email: z.string().email(),
+});
+
+// Deleting an account is irreversible, so it re-proves identity the same way
+// every other destructive self-service action here does (password, plus the
+// second factor when one is enabled) rather than trusting the session token
+// alone. `username` is the client's typed-confirmation field — checked
+// server-side too so the guard isn't purely cosmetic.
+const deleteAccountSchema = z.object({
+  password: z.string(),
+  username: z.string(),
+  code: z.string().min(6).max(11).optional(),
 });
 
 const resetPasswordSchema = z.object({
@@ -484,4 +497,93 @@ export async function authRoutes(app: FastifyInstance) {
     await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
     return reply.status(204).send();
   });
+
+  // Self-service account deletion. Before this, the only way out was asking
+  // the instance owner to do it by hand (the delete-account URL declared to
+  // Google Play pointed at outpost-chat.com's contact form) — a real gap for
+  // a self-hosted app that stores an email address and a password hash.
+  //
+  // What's removed vs. what deliberately stays:
+  //   - Removed: the User row itself (which cascades WebauthnCredential,
+  //     UserRole, Warning, Friendship and DMParticipant via real FKs), every
+  //     non-FK row keyed by userId (reactions, level/XP, read state,
+  //     outstanding reset tokens), any invite this account minted, and the
+  //     avatar image. Invites go on the same "revoke a departing member's
+  //     credentials" principle that applies anywhere else — an invite is a
+  //     live join credential, and one left behind keeps admitting new members
+  //     on the authority of an account that no longer exists. (The owner can
+  //     see and revoke every invite instance-wide, so this isn't about them
+  //     being unreachable; it's about not making the owner notice.)
+  //   - Kept: their messages, which lose their author link the same way a
+  //     deleted bot's already do (Message.authorId is a plain string, no FK)
+  //     and render as "Deleted User". Deleting them instead would punch holes
+  //     through every conversation they took part in, including other
+  //     people's replies and quotes. Also kept: their non-avatar uploads,
+  //     which are the attachments on exactly those messages, and their
+  //     ModerationLogEntry rows, which have no FK precisely so the audit
+  //     trail survives a deleted account.
+  app.delete(
+    "/auth/me",
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 5, timeWindow: "10 minutes" } } },
+    async (req, reply) => {
+      const { sub: userId } = req.user as { sub: string };
+      const body = deleteAccountSchema.parse(req.body);
+
+      const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+
+      // The owner is the instance's only un-droppable role — there's no
+      // ownership-transfer mechanism in this app, so letting them delete
+      // themselves would strand the instance with no one able to reach
+      // Instance Settings, reset a password, or claim it back (the claim
+      // code is consumed at first registration and never reissued).
+      if (user.isOwner) {
+        return reply.status(400).send({
+          error: "the instance owner can't delete their own account — an owner-less instance can't be administered",
+        });
+      }
+
+      const valid = await bcrypt.compare(body.password, user.passwordHash);
+      if (!valid) return reply.status(401).send({ error: "password is incorrect" });
+      if (body.username !== user.username) {
+        return reply.status(400).send({ error: "the username you typed doesn't match this account" });
+      }
+
+      // Same second-factor check as login (TOTP or a backup code) — an
+      // attacker sitting on a stolen session shouldn't be able to destroy
+      // the account when they couldn't have logged in to create it.
+      if (user.totpEnabled) {
+        if (!body.code) return reply.status(401).send({ error: "two-factor code required" });
+        let ok = user.totpSecret ? await verifyTotpCode(user.totpSecret, body.code) : false;
+        if (!ok && user.backupCodes.length > 0) {
+          ok = (await findMatchingBackupCode(user.backupCodes, body.code)) >= 0;
+        }
+        if (!ok) return reply.status(401).send({ error: "invalid code" });
+      }
+
+      // Best-effort, and deliberately before the row disappears — a failure
+      // here (MinIO down, object already gone) must not abort a deletion the
+      // user has already fully authenticated for and can't retry halfway.
+      if (user.avatarUrl?.startsWith(PUBLIC_URL)) {
+        const key = user.avatarUrl.slice(PUBLIC_URL.length + 1);
+        await minioClient.removeObject(BUCKET, key).catch((err) => {
+          req.log.error({ err, key }, "failed to remove avatar object during account deletion");
+        });
+      }
+
+      await prisma.$transaction([
+        prisma.reaction.deleteMany({ where: { userId } }),
+        prisma.userLevel.deleteMany({ where: { userId } }),
+        prisma.channelReadState.deleteMany({ where: { userId } }),
+        prisma.passwordResetToken.deleteMany({ where: { userId } }),
+        prisma.invite.deleteMany({ where: { createdBy: userId } }),
+        prisma.user.delete({ where: { id: userId } }),
+      ]);
+
+      // Their own other tabs/devices are still holding a JWT that now points
+      // at nothing; this drops those sockets immediately instead of leaving
+      // them live until the next failed request, mirroring what ban does.
+      disconnectUser(userId, "account_deleted");
+      return reply.status(204).send();
+    },
+  );
 }

@@ -183,7 +183,9 @@ function App() {
   const [pendingAttachment, setPendingAttachment] = useState<{ url: string; name: string } | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [composerNotice, setComposerNotice] = useState<string | null>(null);
-  const [forceDisconnectReason, setForceDisconnectReason] = useState<"kicked" | "banned" | null>(null);
+  const [forceDisconnectReason, setForceDisconnectReason] = useState<"kicked" | "banned" | "account_deleted" | null>(
+    null,
+  );
   const [connectionState, setConnectionState] = useState<"connected" | "reconnecting" | "disconnected">("connected");
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [openPicker, setOpenPicker] = useState<"emoji" | "gif" | null>(null);
@@ -599,6 +601,16 @@ function App() {
         // leaves the account itself untouched, so logging back in works
         // immediately; a ban's account-level block kicks in server-side on
         // the next login attempt regardless of what happens here.
+        //
+        // Account deletion is the exception: it arrives on this user's
+        // *other* tabs/devices (the one that initiated it already tore
+        // itself down), and there's no account left to log back into, so it
+        // drops the bookmark outright the same way Leave Server does.
+        if (event.reason === "account_deleted") {
+          setForceDisconnectReason("account_deleted");
+          if (activeInstanceId) leaveInstance(activeInstanceId);
+          return;
+        }
         if (activeInstanceId) localStorage.removeItem(`session:${activeInstanceId}`);
         setSession(null);
         setForceDisconnectReason(event.reason);
@@ -738,6 +750,14 @@ function App() {
     return (
       <div className="auth-screen">
         <div className="auth-form">
+          {/* Deleting your account drops its bookmark, which lands most
+              people here (one bookmarked server is the common case) rather
+              than on the per-instance login screen below — so the notice has
+              to exist on both, or the last bookmark would just silently
+              vanish. */}
+          {forceDisconnectReason === "account_deleted" && (
+            <p className="error force-disconnect-notice">Your account on that server has been deleted.</p>
+          )}
           <AddServerModal
             embedded
             initialBaseUrl={deepLinkInvite || deepLinkReset ? window.location.origin : PRIMARY_SERVER_URL}
@@ -763,7 +783,9 @@ function App() {
             <p className="error force-disconnect-notice">
               {forceDisconnectReason === "banned"
                 ? "You've been banned from this server."
-                : "You've been disconnected by a moderator. You can log back in."}
+                : forceDisconnectReason === "account_deleted"
+                  ? "Your account on this server has been deleted."
+                  : "You've been disconnected by a moderator. You can log back in."}
             </p>
           )}
           <AddServerModal
@@ -1393,6 +1415,17 @@ function App() {
           user={session.user}
           onClose={() => setUserSettingsOpen(false)}
           onSessionUpdate={handleSessionUpdate}
+          onAccountDeleted={() => {
+            // The account is gone server-side, so unlike a kick this drops
+            // the whole bookmark, not just the stored session — leaving it
+            // would put a server on the rail that this client can never log
+            // back into. Same teardown as Leave Server, which already
+            // handles falling back to another instance or the "Add a
+            // Server" screen.
+            setUserSettingsOpen(false);
+            setForceDisconnectReason("account_deleted");
+            if (activeInstanceId) leaveInstance(activeInstanceId);
+          }}
         />
       )}
       {viewingProfileUserId && (

@@ -5,6 +5,7 @@ import {
   User,
   authedMediaUrl,
   confirmTotp,
+  deleteAccount,
   deleteWebauthnCredential,
   disableTotp,
   getMfaStatus,
@@ -28,12 +29,14 @@ function ProfileTab({
   user,
   onSessionUpdate,
   onClose,
+  onAccountDeleted,
 }: {
   baseUrl: string;
   token: string;
   user: User;
   onSessionUpdate: (update: { token?: string; user: User }) => void;
   onClose: () => void;
+  onAccountDeleted: () => void;
 }) {
   const [username, setUsername] = useState(user.username);
   const [email, setEmail] = useState(user.email);
@@ -126,7 +129,137 @@ function ProfileTab({
           </button>
         </div>
       </form>
+
+      <DangerZone baseUrl={baseUrl} token={token} user={user} onAccountDeleted={onAccountDeleted} />
     </>
+  );
+}
+
+// Deliberately collapsed behind a button, and behind a typed-username
+// confirmation once expanded — this is the only action in the app a user
+// can take that nothing can undo, including the instance owner (their
+// messages survive, but the account and its identity don't). The instance
+// owner sees an explanation instead of a form: the server refuses their
+// deletion outright (no ownership transfer exists), so offering the form
+// would just be a guaranteed error.
+function DangerZone({
+  baseUrl,
+  token,
+  user,
+  onAccountDeleted,
+}: {
+  baseUrl: string;
+  token: string;
+  user: User;
+  onAccountDeleted: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [confirmUsername, setConfirmUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  // Fetched only once the section is expanded, not on every Profile-tab
+  // render — the code field has to be shown for a 2FA account and hidden
+  // otherwise, and this is the one thing the client can't already tell from
+  // the session user.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    getMfaStatus(baseUrl, token)
+      .then((status) => {
+        if (!cancelled) setMfaEnabled(status.totpEnabled);
+      })
+      .catch(() => {
+        // Non-fatal: leaving the field hidden just means the server asks
+        // for the code by rejecting once, which the error line surfaces.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, baseUrl, token]);
+
+  async function handleDelete(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      await deleteAccount(baseUrl, token, password, confirmUsername, code || undefined);
+      onAccountDeleted();
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  }
+
+  if (user.isOwner) {
+    return (
+      <div className="settings-section danger-zone">
+        <h3>Delete Account</h3>
+        <p className="settings-hint">
+          You own this instance, so your account can't be deleted — an instance with no owner can't be
+          administered by anyone. To shut it down, take the server itself offline.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="settings-section danger-zone">
+      <h3>Delete Account</h3>
+      <p className="settings-hint">
+        Permanently deletes your account, profile and friends. Messages you've already sent stay in their
+        channels, shown as “Deleted User”. This can't be undone.
+      </p>
+      {!open ? (
+        <button type="button" className="btn danger" onClick={() => setOpen(true)}>
+          Delete Account
+        </button>
+      ) : (
+        <form onSubmit={handleDelete}>
+          <label>
+            Type your username (<strong>{user.username}</strong>) to confirm
+            <input value={confirmUsername} onChange={(e) => setConfirmUsername(e.target.value)} autoComplete="off" />
+          </label>
+          <label>
+            Password
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </label>
+          {mfaEnabled && (
+            <label>
+              Two-factor code
+              <input value={code} onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" />
+            </label>
+          )}
+          {error && <p className="error">{error}</p>}
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => {
+                setOpen(false);
+                setConfirmUsername("");
+                setPassword("");
+                setCode("");
+                setError(null);
+              }}
+              disabled={busy}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn danger"
+              disabled={busy || confirmUsername !== user.username || !password || (mfaEnabled && !code)}
+            >
+              {busy ? "Deleting…" : "Permanently Delete"}
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
   );
 }
 
@@ -694,12 +827,14 @@ export function UserSettingsModal({
   user,
   onClose,
   onSessionUpdate,
+  onAccountDeleted,
 }: {
   baseUrl: string;
   token: string;
   user: User;
   onClose: () => void;
   onSessionUpdate: (update: { token?: string; user: User }) => void;
+  onAccountDeleted: () => void;
 }) {
   const [tab, setTab] = useState<Tab>("profile");
 
@@ -722,7 +857,14 @@ export function UserSettingsModal({
       </div>
 
       {tab === "profile" && (
-        <ProfileTab baseUrl={baseUrl} token={token} user={user} onSessionUpdate={onSessionUpdate} onClose={onClose} />
+        <ProfileTab
+          baseUrl={baseUrl}
+          token={token}
+          user={user}
+          onSessionUpdate={onSessionUpdate}
+          onClose={onClose}
+          onAccountDeleted={onAccountDeleted}
+        />
       )}
       {tab === "password" && <PasswordTab baseUrl={baseUrl} token={token} />}
       {tab === "security" && <SecurityTab baseUrl={baseUrl} token={token} />}

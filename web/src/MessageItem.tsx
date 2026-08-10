@@ -280,6 +280,9 @@ export function MessageItem({
   const [pickerOpensBelow, setPickerOpensBelow] = useState(false);
   const messageRef = useRef<HTMLDivElement>(null);
   const isOwn = message.authorId === currentUserId;
+  // The server names a vanished author "Deleted User"; the `?? authorId`
+  // fallback is only still here for live MESSAGE_CREATE broadcasts, which
+  // aren't hydrated server-side.
   const authorName = message.authorUsername ?? message.authorId;
 
   const reactionCounts = new Map<string, { count: number; reactedByMe: boolean; reactorNames: string[] }>();
@@ -321,7 +324,10 @@ export function MessageItem({
     setFullPickerOpen(true);
   }
 
-  const isRealUser = !message.isWebhook && !message.isSystemBot && !!message.authorId;
+  // `authorDeleted` matters here as well as for the name — without it the
+  // avatar and username stay clickable and open a profile card for an
+  // account that no longer exists.
+  const isRealUser = !message.isWebhook && !message.isSystemBot && !!message.authorId && !message.authorDeleted;
   const linkPreviewUrl = message.content ? extractFirstLinkPreviewUrl(message.content) : null;
 
   return (

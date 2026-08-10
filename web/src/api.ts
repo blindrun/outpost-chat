@@ -202,6 +202,10 @@ export interface Message {
   reactions?: Reaction[];
   isWebhook?: boolean;
   isSystemBot?: boolean;
+  // Set by the server when authorId no longer resolves to an account (the
+  // user deleted it, or the owner removed an API bot). The message stays;
+  // its author is rendered as a non-clickable "Deleted User".
+  authorDeleted?: boolean;
   pinned?: boolean;
   replyToId?: string | null;
   replyTo?: ReplyPreview | null;
@@ -576,6 +580,16 @@ export function updatePassword(baseUrl: string, token: string, currentPassword: 
   });
 }
 
+// Irreversible. `username` is the typed-confirmation field (verified
+// server-side, not just in the form); `code` is required only when the
+// account has two-factor enabled.
+export function deleteAccount(baseUrl: string, token: string, password: string, username: string, code?: string) {
+  return request<void>(baseUrl, "/auth/me", token, {
+    method: "DELETE",
+    body: JSON.stringify({ password, username, ...(code ? { code } : {}) }),
+  });
+}
+
 export function updateInstanceSettings(
   baseUrl: string,
   token: string,
@@ -880,7 +894,7 @@ type GatewayEvent =
   | { type: "TYPING_START"; channelId: string; userId: string; username: string }
   | { type: "VOICE_STATE_UPDATE"; channelId: string; userIds: string[] }
   | { type: "THREAD_CREATE"; parentMessageId: string; thread: ThreadChannel }
-  | { type: "FORCE_DISCONNECT"; reason: "kicked" | "banned" }
+  | { type: "FORCE_DISCONNECT"; reason: "kicked" | "banned" | "account_deleted" }
   | { type: "VOICE_KICKED"; channelId: string }
   | { type: "CHANNELS_UPDATE"; channels: Channel[] }
   | { type: "DM_CHANNEL_CREATE"; channel: DMChannel }

@@ -49,11 +49,13 @@ export function allOnlineUserIds(): string[] {
 
 // Forcibly ends every live connection for a user — used by kick (a
 // momentary disruption; their still-valid JWT lets them reconnect right
-// away) and ban (paired with the DB flag that then rejects that same JWT
+// away), ban (paired with the DB flag that then rejects that same JWT
 // on its next use, so this is what makes the ban take effect immediately
-// instead of only at their next login attempt). Sends a typed message
-// first so the client can show why, rather than a bare dropped connection.
-export function disconnectUser(userId: string, reason: "kicked" | "banned") {
+// instead of only at their next login attempt), and self-service account
+// deletion (the row is already gone, so every other tab/device is holding a
+// token that resolves to nothing). Sends a typed message first so the
+// client can show why, rather than a bare dropped connection.
+export function disconnectUser(userId: string, reason: "kicked" | "banned" | "account_deleted") {
   for (const [socket, meta] of connections) {
     if (meta.userId !== userId) continue;
     if (socket.readyState === socket.OPEN) {
