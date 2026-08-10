@@ -160,7 +160,9 @@ export async function messageRoutes(app: FastifyInstance) {
   // channel's own access, and the instance-wide case narrows the query to
   // just the channels the searcher can currently see. DM channels are the
   // one exception: excluded from the instance-wide search entirely, and
-  // only searchable directly (via channelId) by their two participants.
+  // excluded from instance-wide search entirely, and — since 2026-08-10 —
+  // not searchable directly either, because encrypted bodies make the result
+  // silently empty rather than wrong-looking.
   app.get("/messages/search", async (req, reply) => {
     const { sub: userId } = req.user as { sub: string };
     const query = searchQuerySchema.parse(req.query);
@@ -171,6 +173,16 @@ export async function messageRoutes(app: FastifyInstance) {
         if (!(await assertDmAccess(channel.id, userId))) {
           return reply.status(403).send({ error: "not a participant in this channel" });
         }
+        // Searching a DM is switched off rather than left to quietly fail.
+        // This query matches on `content`, which is an empty string for every
+        // end-to-end encrypted message — so once a conversation is encrypted,
+        // search would return nothing and look broken rather than unsupported.
+        // Client-side search over locally decrypted history is the real
+        // answer (Phase 4 in projects/e2ee-plan.md); until then an explicit
+        // refusal is the honest behaviour. Note the current web client never
+        // sends channelId at all — instance-wide search already excludes DMs
+        // — so this only closes the API-level path.
+        return reply.status(400).send({ error: "search isn't available in direct messages" });
       } else if (!(await canAccessChannel(userId, channel))) {
         return reply.status(403).send({ error: "you don't have access to this channel" });
       }
