@@ -1636,7 +1636,21 @@ function App() {
         </div>
         <div ref={voice.audioContainerRef} style={{ display: "none" }} />
       </aside>
-      <div ref={voice.videoContainerRef} className="screen-share-overlay" />
+      {/* One container, two presentations — never two containers. The video
+          elements are appended imperatively by the voice engine, so moving
+          this div in the React tree would unmount it and take the live
+          streams with it. Only its class changes.
+
+          Looking at the voice channel you're connected to gives the stream
+          the whole channel pane, Discord-style. Anywhere else it stays the
+          small floating tile, which is what makes a share watchable while
+          you read another channel. */}
+      <div
+        ref={voice.videoContainerRef}
+        className={`screen-share-overlay${
+          voice.activeChannel && selectedChannelId === voice.activeChannel.id ? " stage" : ""
+        }`}
+      />
 
       {userSettingsOpen && (
         <UserSettingsModal

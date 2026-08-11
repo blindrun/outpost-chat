@@ -1239,6 +1239,39 @@ button, input, select {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 .screen-share-video { display: block; width: 100%; max-height: 40vh; }
+
+/* Stage mode: the share fills the channel pane while you're looking at the
+   voice channel it belongs to. The container is a direct child of .app's
+   grid, so dropping position:fixed and claiming column 3 lands it exactly
+   over .chat-pane — no measuring of sidebar widths, and it keeps working
+   when the member list collapses and the grid becomes three columns.
+   Later in DOM order than .chat-pane, so it paints on top without a
+   z-index fight. */
+.screen-share-overlay.stage {
+  position: static;
+  grid-column: 3;
+  grid-row: 1;
+  max-width: none;
+  padding: 0.6rem;
+  background: var(--bg-primary);
+  min-height: 0;
+  overflow: hidden;
+}
+/* Tiles share the height rather than each taking 40vh — two people sharing
+   at once should halve the space, not overflow the pane. */
+.screen-share-overlay.stage .screen-share-tile {
+  flex: 1 1 0;
+  min-height: 0;
+  box-shadow: none;
+}
+/* contain, not cover: a shared screen is information. Cropping it to fill
+   an odd aspect ratio would cut off exactly what someone is pointing at. */
+.screen-share-overlay.stage .screen-share-video {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
+}
 .screen-share-label {
   position: absolute;
   bottom: 0.4rem;
@@ -1728,4 +1761,23 @@ button, input, select {
     width: 100%;
     height: auto;
   }
+}
+
+/* Stage mode is a desktop-grid behaviour. On mobile .app is display:block,
+   so grid-column means nothing and position:static would drop a bare block
+   into the middle of the single-pane layout. Fall back to the floating tile
+   -- a full-bleed stage on a phone needs its own design (somewhere to put a
+   back affordance, at minimum), not a reused desktop rule. */
+@media (max-width: 768px) {
+  .screen-share-overlay.stage {
+    position: fixed;
+    grid-column: auto;
+    grid-row: auto;
+    max-width: min(480px, 60vw);
+    padding: 0;
+    background: none;
+    overflow: visible;
+  }
+  .screen-share-overlay.stage .screen-share-tile { flex: 0 0 auto; }
+  .screen-share-overlay.stage .screen-share-video { height: auto; max-height: 40vh; }
 }
