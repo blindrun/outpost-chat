@@ -7,14 +7,18 @@ import {
   Theme,
   forgotPassword,
   getInstanceInfo,
+  getOidcConfig,
   login,
   mfaVerifyCode,
   mfaWebauthnLoginOptions,
   mfaWebauthnLoginVerify,
+  oidcExchange,
+  oidcStartUrl,
   register,
   resetPassword,
   updateInstanceSettings,
 } from "./api";
+import { desktopBridge } from "./desktop";
 import { ThemePicker } from "./ThemePicker";
 import { TurnstileWidget } from "./TurnstileWidget";
 
@@ -89,20 +93,47 @@ function candidateBaseUrls(input: string): string[] {
   return [`https://${trimmed}`, `http://${trimmed}`];
 }
 
+// Single sign-on leaves this page entirely, so it can only finish somewhere
+// that can receive the result back.
+//
+// In a browser that means the instance's own origin, because that's where
+// the provider returns to -- which rules out adding instance B from a web
+// client served by instance A, and rules out the mobile shells, whose
+// origin is capacitor:// or a localhost of their own.
+//
+// The desktop app is the exception: it can't receive a redirect at all
+// (it's loaded from file://), but it registers the outpost:// scheme, so
+// the OS hands the result back to it after the sign-in happens in the
+// user's real browser.
+function ssoCanCompleteHere(baseUrl: string): boolean {
+  if (desktopBridge()) return true;
+  try {
+    return window.location.origin === new URL(baseUrl).origin;
+  } catch {
+    return false;
+  }
+}
+
 export function AddServerModal({
   initialBaseUrl,
   initialInviteCode,
   initialResetToken,
+  initialOidcCode,
+  initialOidcError,
   onConnected,
 }: {
   embedded?: boolean;
   initialBaseUrl?: string;
   initialInviteCode?: string;
   initialResetToken?: string;
+  initialOidcCode?: string;
+  initialOidcError?: string;
   onConnected: (instance: Instance, session: Session) => void;
 }) {
   const [step, setStep] = useState<Step>(
-    initialBaseUrl && (initialInviteCode || initialResetToken) ? "connecting" : "address",
+    initialBaseUrl && (initialInviteCode || initialResetToken || initialOidcCode || initialOidcError)
+      ? "connecting"
+      : "address",
   );
   const [resetToken] = useState(initialResetToken);
   const [resetPasswordValue, setResetPasswordValue] = useState("");
@@ -119,6 +150,13 @@ export function AddServerModal({
   const [info, setInfo] = useState<InstanceInfo | null>(null);
   const [probeError, setProbeError] = useState<string | null>(null);
   const [probing, setProbing] = useState(false);
+  // Null until the instance has been probed and asked. A server older than
+  // SSO support answers with a 404, which reads the same as "not enabled".
+  const [oidc, setOidc] = useState<{ enabled: boolean; displayName?: string } | null>(null);
+  // Desktop only: the sign-in is happening in the user's browser, and this
+  // window is waiting for the OS to hand the result back. Worth showing,
+  // because otherwise clicking the button appears to do nothing at all.
+  const [ssoWaiting, setSsoWaiting] = useState(false);
 
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
@@ -159,8 +197,28 @@ export function AddServerModal({
         const instanceInfo = await getInstanceInfo(candidate);
         setBaseUrl(candidate);
         setInfo(instanceInfo);
+        // Never allowed to fail the connection: an instance without SSO
+        // configured, or one running a build that predates it, should still
+        // reach the normal login form.
+        const oidcInfo = await getOidcConfig(candidate).catch(() => ({ enabled: false }));
+        setOidc(oidcInfo);
         if (resetToken) {
           setStep("resetPassword");
+          setProbing(false);
+          return;
+        }
+        // Returning from the identity provider. The code is single-use and
+        // already in hand, so this goes straight to a session rather than
+        // showing a login form the user has just finished with.
+        if (initialOidcCode) {
+          setProbing(false);
+          await redeemOidcCode(candidate, initialOidcCode, instanceInfo);
+          return;
+        }
+        if (initialOidcError) {
+          setAuthError(initialOidcError);
+          setAuthMode("login");
+          setStep("auth");
           setProbing(false);
           return;
         }
@@ -182,6 +240,62 @@ export function AddServerModal({
     setProbing(false);
   }
 
+  // Deliberately takes the address rather than reading `baseUrl` state:
+  // this runs inside the same tick that probeAddress called setBaseUrl, so
+  // the state value is still the previous render's. The same reasoning is
+  // why it builds the Instance itself instead of going through finishLogin,
+  // which reads `info` — also not updated yet at this point.
+  async function redeemOidcCode(candidateBaseUrl: string, code: string, instanceInfo: InstanceInfo) {
+    setAuthError(null);
+    setAuthing(true);
+    try {
+      const result = await oidcExchange(candidateBaseUrl, code);
+      if ("mfaRequired" in result) {
+        setMfaChallenge(result);
+        setMfaError(null);
+        setMfaCode("");
+        setStep("mfa");
+        return;
+      }
+      onConnected(
+        {
+          id: crypto.randomUUID(),
+          label: label.trim() || instanceInfo.name || address,
+          baseUrl: candidateBaseUrl,
+        },
+        result,
+      );
+    } catch (err) {
+      setAuthError((err as Error).message);
+      setAuthMode("login");
+      setStep("auth");
+    } finally {
+      setAuthing(false);
+    }
+  }
+
+  // Desktop only. The browser half of the sign-in finishes out of process
+  // and the OS delivers the result through the outpost:// handler, which
+  // can land at any moment — including before this component mounted, which
+  // is why the bridge replays a buffered result on subscribe.
+  //
+  // Deliberately keyed on baseUrl rather than mounted once: the code is
+  // only redeemable against the instance that issued it, and re-subscribing
+  // when the target instance changes is what keeps those in step.
+  useEffect(() => {
+    const bridge = desktopBridge();
+    if (!bridge || !baseUrl || !info) return;
+    return bridge.onSsoResult(({ code, error }) => {
+      setSsoWaiting(false);
+      if (error) {
+        setAuthError(error);
+        return;
+      }
+      if (code) void redeemOidcCode(baseUrl, code, info);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseUrl, info]);
+
   function handleProbe(e: React.FormEvent) {
     e.preventDefault();
     probeAddress(address);
@@ -194,7 +308,7 @@ export function AddServerModal({
   const autoProbedRef = useRef(false);
   useEffect(() => {
     if (autoProbedRef.current) return;
-    if (initialBaseUrl && (initialInviteCode || resetToken)) {
+    if (initialBaseUrl && (initialInviteCode || resetToken || initialOidcCode || initialOidcError)) {
       autoProbedRef.current = true;
       probeAddress(initialBaseUrl);
     }
@@ -423,6 +537,55 @@ export function AddServerModal({
             </button>
           </div>
         )}
+        {/* Only on an instance that already has an owner: the very first
+            account is deliberately not creatable through an identity
+            provider (see resolveUser in routes/oidc.ts), so offering the
+            button during the claim step would only lead to a refusal.
+            A full-page link, not a fetch — the provider renders its own
+            login page and won't be framed. */}
+        {oidc?.enabled &&
+          info?.hasOwner &&
+          (ssoCanCompleteHere(baseUrl) ? (
+            <div className="sso-block">
+              {/* In the desktop app this opens the user's own browser
+                  rather than navigating this window — they're most likely
+                  already signed in to their provider there, and an
+                  embedded window would neither carry that session nor
+                  reach their password manager. The result comes back
+                  through the outpost:// handler. */}
+              {desktopBridge() ? (
+                <button
+                  type="button"
+                  className="btn sso-btn"
+                  onClick={() => {
+                    setAuthError(null);
+                    setSsoWaiting(true);
+                    desktopBridge()?.openExternal(`${oidcStartUrl(baseUrl)}?target=native`);
+                  }}
+                >
+                  {ssoWaiting ? `Waiting for ${oidc.displayName}…` : `Continue with ${oidc.displayName}`}
+                </button>
+              ) : (
+                <a className="btn sso-btn" href={oidcStartUrl(baseUrl)}>
+                  Continue with {oidc.displayName}
+                </a>
+              )}
+              {ssoWaiting && (
+                <p className="settings-hint">
+                  Finish signing in with {oidc.displayName} in your browser — this window will pick it up
+                  automatically.
+                </p>
+              )}
+              <div className="sso-divider">
+                <span>or</span>
+              </div>
+            </div>
+          ) : (
+            <p className="settings-hint">
+              This server supports signing in with {oidc.displayName}, but that has to be done in a browser at
+              its own address — open {baseUrl} to use it.
+            </p>
+          ))}
         <form onSubmit={handleAuth}>
           {!info?.hasOwner && (
             <label>

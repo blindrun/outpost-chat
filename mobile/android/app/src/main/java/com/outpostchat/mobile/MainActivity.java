@@ -10,6 +10,8 @@ import android.os.Build;
 import android.os.Bundle;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
+import java.util.ArrayList;
+import java.util.List;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.BridgeActivity;
@@ -32,10 +34,21 @@ import com.getcapacitor.BridgeActivity;
 // WebView has none of that). Requested once here, right before granting,
 // rather than for the app's whole lifetime, since it only matters while
 // voice capture is actually starting.
+// Camera capture (video in voice channels) goes through the same bridge:
+// this handler used to deny every non-audio resource outright, so a page
+// calling getUserMedia({ video: true }) got NotAllowedError with no OS
+// prompt -- the exact failure RECORD_AUDIO had before this class existed.
+// Video needs no AudioManager equivalent; the audio-mode/focus dance above
+// is specific to the WebView's audio capturer.
 public class MainActivity extends BridgeActivity {
-    private static final int RECORD_AUDIO_REQUEST_CODE = 1001;
+    private static final int MEDIA_PERMISSION_REQUEST_CODE = 1001;
 
     private PermissionRequest pendingWebViewRequest;
+    // The WebView resources the pending request asked for, so the callback
+    // grants exactly what was requested and backed by a granted permission
+    // -- not a fixed list, and not everything that was asked for.
+    private boolean pendingWantsAudio;
+    private boolean pendingWantsVideo;
     private AudioFocusRequest audioFocusRequest;
 
     @Override
@@ -47,30 +60,42 @@ public class MainActivity extends BridgeActivity {
             public void onPermissionRequest(final PermissionRequest request) {
                 runOnUiThread(() -> {
                     boolean wantsAudio = false;
+                    boolean wantsVideo = false;
                     for (String resource : request.getResources()) {
                         if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)) {
                             wantsAudio = true;
+                        } else if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)) {
+                            wantsVideo = true;
                         }
                     }
 
-                    // Only audio capture is ever requested by this app (voice
-                    // channels) -- deny anything else (e.g. camera) outright
-                    // rather than silently granting an unused permission.
-                    if (!wantsAudio) {
+                    // Anything that isn't mic or camera (e.g. protected media
+                    // playback) is still denied rather than silently granted.
+                    if (!wantsAudio && !wantsVideo) {
                         request.deny();
                         return;
                     }
 
-                    if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO)
-                            == PackageManager.PERMISSION_GRANTED) {
-                        grantAudioCapture(request);
-                    } else {
-                        pendingWebViewRequest = request;
-                        ActivityCompat.requestPermissions(
-                                MainActivity.this,
-                                new String[] { Manifest.permission.RECORD_AUDIO },
-                                RECORD_AUDIO_REQUEST_CODE);
+                    List<String> missing = new ArrayList<>();
+                    if (wantsAudio && !hasPermission(Manifest.permission.RECORD_AUDIO)) {
+                        missing.add(Manifest.permission.RECORD_AUDIO);
                     }
+                    if (wantsVideo && !hasPermission(Manifest.permission.CAMERA)) {
+                        missing.add(Manifest.permission.CAMERA);
+                    }
+
+                    if (missing.isEmpty()) {
+                        grantCapture(request, wantsAudio, wantsVideo);
+                        return;
+                    }
+
+                    pendingWebViewRequest = request;
+                    pendingWantsAudio = wantsAudio;
+                    pendingWantsVideo = wantsVideo;
+                    ActivityCompat.requestPermissions(
+                            MainActivity.this,
+                            missing.toArray(new String[0]),
+                            MEDIA_PERMISSION_REQUEST_CODE);
                 });
             }
         });
@@ -80,22 +105,43 @@ public class MainActivity extends BridgeActivity {
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 
-        if (requestCode != RECORD_AUDIO_REQUEST_CODE || pendingWebViewRequest == null) {
+        if (requestCode != MEDIA_PERMISSION_REQUEST_CODE || pendingWebViewRequest == null) {
             return;
         }
 
-        boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
-        if (granted) {
-            grantAudioCapture(pendingWebViewRequest);
+        // Read each result against its own permission rather than assuming a
+        // single-element array: a request for mic *and* camera can come back
+        // half-granted, and granting the resource whose permission the user
+        // just refused would hand the page a track it can never open.
+        boolean audioOk = pendingWantsAudio && hasPermission(Manifest.permission.RECORD_AUDIO);
+        boolean videoOk = pendingWantsVideo && hasPermission(Manifest.permission.CAMERA);
+
+        if (audioOk || videoOk) {
+            grantCapture(pendingWebViewRequest, audioOk, videoOk);
         } else {
             pendingWebViewRequest.deny();
         }
         pendingWebViewRequest = null;
+        pendingWantsAudio = false;
+        pendingWantsVideo = false;
     }
 
-    private void grantAudioCapture(PermissionRequest request) {
-        prepareAudioManagerForCapture();
-        request.grant(new String[] { PermissionRequest.RESOURCE_AUDIO_CAPTURE });
+    private boolean hasPermission(String permission) {
+        return ContextCompat.checkSelfPermission(MainActivity.this, permission)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void grantCapture(PermissionRequest request, boolean audio, boolean video) {
+        List<String> resources = new ArrayList<>();
+        if (audio) {
+            // Only for audio -- see prepareAudioManagerForCapture's comment.
+            prepareAudioManagerForCapture();
+            resources.add(PermissionRequest.RESOURCE_AUDIO_CAPTURE);
+        }
+        if (video) {
+            resources.add(PermissionRequest.RESOURCE_VIDEO_CAPTURE);
+        }
+        request.grant(resources.toArray(new String[0]));
     }
 
     private void prepareAudioManagerForCapture() {

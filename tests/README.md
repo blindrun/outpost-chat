@@ -1,0 +1,91 @@
+# Tests
+
+Plain `node` scripts, no test runner. There isn't one in this project yet,
+and adding a framework as a side effect of a feature seemed like the wrong
+trade — these run with the Node that's already here.
+
+Each script prints `PASS`/`FAIL` per check and exits non-zero if any failed.
+
+A note on what they're for: the negative cases are the point. A suite that
+only proves the happy path still passes when a security check has been
+removed entirely, which is exactly the failure this project has already hit
+once — a block-filter test that passed against an empty fixture while the
+real bug would have dropped every webhook and bot message.
+
+## No setup needed
+
+```bash
+node tests/voice/audio-capture-merge.mjs   # LiveKit capture-option merging
+node tests/oidc/oidc-verify-check.mjs      # ID token signature verification
+node tests/oidc/electron-url-check.mjs     # outpost:// hand-off URL parsing
+```
+
+`oidc-verify-check.mjs` needs the backend built first (`npm run build`) — it
+imports the compiled `dist/util/oidc.js` rather than a copy of the logic.
+
+It generates its own keys and serves its own JWKS, then checks that a
+tampered payload, a key that isn't in the JWKS, `alg: none`, an HS256
+algorithm-confusion forgery, a wrong audience, a wrong issuer, an expired
+token and a replayed nonce are all rejected.
+
+`electron-url-check.mjs` pulls `parseSsoUrl` straight out of
+`electron/main.js` and runs it — Electron itself can't be launched headless,
+but that function sees every argv entry the OS hands the app, so a false
+positive gets acted on and a false negative silently drops a finished
+sign-in.
+
+## Needs a running server
+
+These drive the real server against a real database, with a fake — but
+honest — identity provider: real discovery document, real PKCE verification,
+real RS256 ID tokens signed with a key it publishes over JWKS.
+
+```bash
+# 1. a database, and the backend built
+docker compose up -d postgres
+npm run build && npx prisma migrate deploy
+
+# 2. the fake provider
+node tests/oidc/fake-idp.mjs &
+
+# 3. the server, pointed at it
+OIDC_ISSUER=http://127.0.0.1:39190 \
+OIDC_CLIENT_ID=outpost \
+OIDC_CLIENT_SECRET=outpost-secret \
+OIDC_DISPLAY_NAME=FakeIdP \
+PORT=8099 node dist/server.js &
+
+# 4. the suites, in this order
+node tests/oidc/oidc-e2e.mjs        # the whole sign-in, plus replay attempts
+node tests/oidc/oidc-native.mjs     # the desktop outpost:// hand-off
+node tests/oidc/oidc-mfa.mjs        # 2FA is still enforced on an SSO login
+node tests/oidc/oidc-linking.mjs <existing-email> <existing-username>   # last
+```
+
+**Order matters.** `oidc-linking.mjs` runs the provider itself — restarting
+it between cases so it can assert different claims each time — and stops it
+when it finishes. Run it last, or the others lose their provider mid-suite.
+
+**If you start the provider with non-default claims**, pass the same
+`IDP_EMAIL` / `IDP_USERNAME` to `oidc-e2e.mjs`, which checks the account it
+created matches what the provider asserted.
+
+The instance must already have an owner, or sign-in is refused by design —
+the first account can't be created through an identity provider.
+
+**`/auth/oidc/start` is rate limited to 20 requests per 10 minutes**, and
+these suites spend several each. Running them repeatedly will hit it; the
+scripts detect the 429 and say so rather than failing obscurely. Restarting
+the server resets the counter.
+
+`oidc-linking.mjs` takes an existing local account to link against, and
+restarts the fake provider between cases so it can assert different claims
+each time. It checks the rules where a mistake means account takeover rather
+than a broken login: an unverified email matching an existing account is
+refused, a verified one links without renaming anything, and the identity
+stays the provider's subject even after the email changes.
+
+**Kill a previous `fake-idp.mjs` before starting a new one.** A stale copy
+keeps the port, the new one fails to bind silently, and the suite then
+asserts against the wrong provider's claims — which looks exactly like a
+real regression.

@@ -23,6 +23,20 @@ const webauthnRegisterVerifySchema = z.object({
   nickname: z.string().min(1).max(64),
 });
 
+// Every endpoint below re-proves identity with the account password before
+// weakening or removing a second factor. An account created through single
+// sign-on has no password, so there is nothing to re-prove with -- and
+// refusing outright would leave those users permanently unable to remove a
+// security key or turn TOTP off. They pass on the strength of the session
+// alone, which is one factor weaker than a password user gets here. The
+// stronger fix is to demand the current TOTP code instead of a password on
+// SSO accounts; it needs a request-shape and UI change, so it isn't folded
+// into the change that introduced passwordless accounts.
+async function reprovedIdentity(user: { passwordHash: string | null }, password: string): Promise<boolean> {
+  if (!user.passwordHash) return true;
+  return bcrypt.compare(password, user.passwordHash);
+}
+
 export async function mfaRoutes(app: FastifyInstance) {
   app.addHook("onRequest", app.authenticate);
 
@@ -80,7 +94,7 @@ export async function mfaRoutes(app: FastifyInstance) {
     const body = passwordSchema.parse(req.body);
 
     const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
-    if (!(await bcrypt.compare(body.password, user.passwordHash))) {
+    if (!(await reprovedIdentity(user, body.password))) {
       return reply.status(401).send({ error: "incorrect password" });
     }
 
@@ -99,7 +113,7 @@ export async function mfaRoutes(app: FastifyInstance) {
 
     const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
     if (!user.totpEnabled) return reply.status(400).send({ error: "TOTP is not enabled" });
-    if (!(await bcrypt.compare(body.password, user.passwordHash))) {
+    if (!(await reprovedIdentity(user, body.password))) {
       return reply.status(401).send({ error: "incorrect password" });
     }
 
@@ -188,7 +202,7 @@ export async function mfaRoutes(app: FastifyInstance) {
       prisma.user.findUniqueOrThrow({ where: { id: userId } }),
       prisma.webauthnCredential.findUnique({ where: { id: credentialId } }),
     ]);
-    if (!(await bcrypt.compare(body.password, user.passwordHash))) {
+    if (!(await reprovedIdentity(user, body.password))) {
       return reply.status(401).send({ error: "incorrect password" });
     }
     if (!credential || credential.userId !== userId) {

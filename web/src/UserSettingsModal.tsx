@@ -21,8 +21,16 @@ import {
   webauthnRegisterVerify,
 } from "./api";
 import { Modal } from "./Modal";
-import { AudioSettings, VoiceMode, loadAudioSettings, saveAudioSettings } from "./audioSettings";
+import {
+  AudioSettings,
+  VoiceMode,
+  audioProcessingOf,
+  loadAudioSettings,
+  saveAudioSettings,
+  toCaptureConstraints,
+} from "./audioSettings";
 import { createAdaptiveGate } from "./vadAuto";
+import { voiceCapabilities } from "./voice/createVoiceEngine";
 import { deriveConversationKey, generateIdentity, importPrivateKey, importPublicKey } from "./crypto/keys";
 import { StoredIdentity, loadIdentity, saveIdentity } from "./crypto/store";
 
@@ -802,6 +810,7 @@ function VoiceTab() {
   const [settings, setSettings] = useState<AudioSettings>(() => loadAudioSettings());
   const [inputs, setInputs] = useState<MediaDeviceInfo[]>([]);
   const [outputs, setOutputs] = useState<MediaDeviceInfo[]>([]);
+  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [devicesError, setDevicesError] = useState<string | null>(null);
   const [capturingKey, setCapturingKey] = useState(false);
   const [meterLevel, setMeterLevel] = useState(0);
@@ -831,6 +840,7 @@ function VoiceTab() {
         // permission prompt here shouldn't wipe out the list we already have.
         setInputs(devices.filter((d) => d.kind === "audioinput"));
         setOutputs(devices.filter((d) => d.kind === "audiooutput"));
+        setCameras(devices.filter((d) => d.kind === "videoinput"));
 
         const needsLabels = devices.some((d) => d.kind === "audioinput" && !d.label);
         if (needsLabels) {
@@ -841,6 +851,11 @@ function VoiceTab() {
             if (cancelled) return;
             setInputs(relabeled.filter((d) => d.kind === "audioinput"));
             setOutputs(relabeled.filter((d) => d.kind === "audiooutput"));
+            // Cameras stay generically labeled until camera permission has
+            // been granted at least once. Deliberately not forced here:
+            // opening voice settings should not turn on a webcam light to
+            // populate a dropdown.
+            setCameras(relabeled.filter((d) => d.kind === "videoinput"));
           } catch (permErr) {
             if (!cancelled) setDevicesError((permErr as Error).message);
           }
@@ -870,8 +885,16 @@ function VoiceTab() {
 
     (async () => {
       try {
+        // Captured with the same processing the voice session will use --
+        // otherwise the meter reads a differently-processed signal from the
+        // one the gate will see, and the marker stops meaning what the
+        // paragraph above it says it means. Noise suppression in particular
+        // moves the noise floor, which is the exact number auto mode tracks.
         const stream = await navigator.mediaDevices.getUserMedia({
-          audio: settings.inputDeviceId ? { deviceId: { exact: settings.inputDeviceId } } : true,
+          audio: {
+            ...toCaptureConstraints(audioProcessingOf(settings)),
+            ...(settings.inputDeviceId ? { deviceId: { exact: settings.inputDeviceId } } : {}),
+          } as MediaTrackConstraints,
         });
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
@@ -918,7 +941,15 @@ function VoiceTab() {
       audioCtx?.close();
       setMeterLevel(0);
     };
-  }, [settings.mode, settings.inputDeviceId]);
+    // Re-opens the capture when a processing toggle flips, so the meter
+    // shows the effect of the switch you just moved rather than going stale.
+  }, [
+    settings.mode,
+    settings.inputDeviceId,
+    settings.noiseSuppression,
+    settings.echoCancellation,
+    settings.autoGainControl,
+  ]);
 
   useEffect(() => {
     if (!capturingKey) return;
@@ -963,7 +994,60 @@ function VoiceTab() {
           ))}
         </select>
       </label>
+      {voiceCapabilities().camera && (
+        <label>
+          Camera
+          <select
+            value={settings.videoDeviceId ?? ""}
+            onChange={(e) => update({ videoDeviceId: e.target.value || null })}
+          >
+            <option value="">System Default</option>
+            {cameras.map((d) => (
+              <option key={d.deviceId} value={d.deviceId}>
+                {d.label || `Camera ${d.deviceId.slice(0, 6)}`}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {devicesError && <p className="error">{devicesError}</p>}
+
+      {voiceCapabilities().audioProcessing && (
+        <>
+          <h4 className="settings-subheading">Microphone Processing</h4>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={settings.noiseSuppression}
+              onChange={(e) => update({ noiseSuppression: e.target.checked })}
+            />
+            Noise suppression
+          </label>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={settings.echoCancellation}
+              onChange={(e) => update({ echoCancellation: e.target.checked })}
+            />
+            Echo cancellation
+          </label>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={settings.autoGainControl}
+              onChange={(e) => update({ autoGainControl: e.target.checked })}
+            />
+            Automatic gain control
+          </label>
+          <p className="settings-hint">
+            All three are on by default and suit most people. Turn noise suppression off if you play an
+            instrument or share music — it's tuned for speech and treats anything else as noise. Turn echo
+            cancellation off only if you're on headphones and it's clipping you. Turn automatic gain control
+            off if your volume audibly swells during quiet moments. Changes apply the next time you join a
+            voice channel.
+          </p>
+        </>
+      )}
 
       <label>
         Input Mode

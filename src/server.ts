@@ -10,6 +10,7 @@ import fastifyMultipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import fastifyRateLimit from "@fastify/rate-limit";
 import { prisma } from "./plugins/db.js";
+import { oidcRoutes } from "./routes/oidc.js";
 import { authRoutes } from "./routes/auth.js";
 import { instanceRoutes } from "./routes/instance.js";
 import { messageRoutes } from "./routes/messages.js";
@@ -118,6 +119,7 @@ app.decorate("authenticate", async (req, reply) => {
 app.get("/health", async () => ({ ok: true }));
 
 app.register(authRoutes);
+app.register(oidcRoutes);
 app.register(instanceRoutes);
 app.register(messageRoutes);
 app.register(voiceRoutes);

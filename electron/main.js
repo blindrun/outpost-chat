@@ -1,9 +1,48 @@
-const { app, BrowserWindow, desktopCapturer, session, Menu, dialog, shell } = require("electron");
+const { app, BrowserWindow, desktopCapturer, session, Menu, dialog, shell, ipcMain } = require("electron");
 const path = require("node:path");
 const { autoUpdater } = require("electron-updater");
 
 let mainWindow = null;
 let updateDownloaded = false;
+// Holds an SSO result that arrived before the renderer was listening --
+// including the case where the protocol URL is what launched the app in the
+// first place. Replayed via the "sso-take-pending" handler, then cleared so
+// a stale code can't be redeemed twice.
+let pendingSsoResult = null;
+
+const PROTOCOL = "outpost";
+
+// Turns the OS's outpost://auth?oidc=... hand-off into something the
+// renderer understands. Returns null for anything that isn't ours, since
+// argv on Windows/Linux is full of things that aren't this URL.
+function parseSsoUrl(rawUrl) {
+  if (typeof rawUrl !== "string" || !rawUrl.startsWith(`${PROTOCOL}://`)) return null;
+  try {
+    const url = new URL(rawUrl);
+    const code = url.searchParams.get("oidc");
+    const error = url.searchParams.get("oidc_error");
+    if (!code && !error) return null;
+    return { code, error };
+  } catch {
+    return null;
+  }
+}
+
+function deliverSsoResult(rawUrl) {
+  const result = parseSsoUrl(rawUrl);
+  if (!result) return;
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+    mainWindow.webContents.send("sso-result", result);
+    // Still buffered: the window can exist while the React tree that
+    // subscribes hasn't mounted yet, and a dropped code means the user
+    // silently ends up back at a login screen having just signed in.
+    pendingSsoResult = result;
+  } else {
+    pendingSsoResult = result;
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -17,6 +56,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      preload: path.join(__dirname, "preload.js"),
     },
   });
 
@@ -167,6 +207,63 @@ function initAutoUpdater() {
     console.error("[auto-update] check failed:", err);
   });
 }
+
+// Registers this build as the handler for outpost:// URLs. In a packaged
+// app the installer's own registration is what matters on Windows and
+// Linux, but this call is still what makes it work when running unpackaged,
+// and is harmless (idempotent) otherwise. The dev branch has to name the
+// script explicitly, since the executable there is Electron itself.
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [path.resolve(process.argv[1])]);
+  }
+} else {
+  app.setAsDefaultProtocolClient(PROTOCOL);
+}
+
+// Without the single-instance lock, opening outpost://... would launch a
+// SECOND copy of the app holding the sign-in result, while the window the
+// user was actually looking at sits there still logged out.
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  // Windows and Linux deliver the URL as an argv entry on the new instance,
+  // which this (the original instance) receives here.
+  app.on("second-instance", (_event, argv) => {
+    for (const arg of argv) deliverSsoResult(arg);
+  });
+  // macOS delivers it as an event instead, to the running instance.
+  app.on("open-url", (event, url) => {
+    event.preventDefault();
+    deliverSsoResult(url);
+  });
+  // Cold start: the protocol URL is what launched the app, so it's sitting
+  // in this process's own argv rather than arriving as an event.
+  for (const arg of process.argv) deliverSsoResult(arg);
+}
+
+ipcMain.handle("open-external", (_event, url) => {
+  // Re-checked here rather than trusted from the renderer: shell.openExternal
+  // will hand a url: to whatever the OS has registered for it, so anything
+  // but http(s) is refused outright.
+  if (typeof url !== "string") return false;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false;
+  shell.openExternal(url);
+  return true;
+});
+
+ipcMain.handle("sso-take-pending", () => {
+  const pending = pendingSsoResult;
+  pendingSsoResult = null;
+  return pending;
+});
 
 app.whenReady().then(() => {
   // Required for LiveKit voice/video to work at all — a packaged Electron

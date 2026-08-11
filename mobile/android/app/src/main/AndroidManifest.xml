@@ -47,4 +47,12 @@
          with NotReadableError ("could not start audio source") even once
          RECORD_AUDIO itself is granted. -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Video in voice channels, through the same WebView PermissionRequest
+         bridge in MainActivity as RECORD_AUDIO above. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Declaring CAMERA implies a hardware requirement to the Play Store,
+         which would hide the app from any device without a camera. Video is
+         optional here, so this says so explicitly rather than narrowing who
+         can install a chat app over a feature most of its users never open. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 </manifest>

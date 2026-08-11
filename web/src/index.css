@@ -390,6 +390,28 @@ button, input, select {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 .modal h2 { margin: 0; font-size: 1.25rem; color: var(--header-primary); }
+/* Single sign-on sits above the password form with a divider, the
+   convention everywhere this pattern appears — it reads as "or use a
+   password instead" rather than as an afterthought below the button people
+   are already reaching for. */
+.sso-block { display: flex; flex-direction: column; gap: 0.75rem; }
+.sso-btn { display: block; text-align: center; text-decoration: none; }
+.sso-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+.sso-divider::before,
+.sso-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--bg-secondary);
+}
+
 .modal-tabs { display: flex; gap: 0.5rem; }
 .modal-tabs button {
   flex: 1;
@@ -1272,6 +1294,39 @@ button, input, select {
   max-height: none;
   object-fit: contain;
 }
+/* Cameras are a wrapping row inside the same overlay, so faces sit across
+   the top and a screen share keeps the column below to itself. Tiles are a
+   fixed aspect so a row of them stays even whatever each webcam reports. */
+.camera-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+}
+.camera-tile {
+  position: relative;
+  flex: 1 1 160px;
+  max-width: 240px;
+  aspect-ratio: 4 / 3;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+/* cover, not contain: a webcam feed is a face, and letterboxing one to
+   preserve every pixel of the ceiling helps nobody. The opposite call from
+   .screen-share-video, for the opposite reason. */
+.camera-video { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* Your own preview only — a mirror is what you expect of yourself and
+   wrong for everyone else, whose lanyards and t-shirts would read backwards. */
+.camera-tile.local .camera-video { transform: scaleX(-1); }
+/* A peer who muted their camera rather than unpublishing it: hidden
+   outright, because a paused video element keeps showing its last frame
+   and a frozen face looks exactly like a live one. */
+.camera-tile.camera-muted { display: none; }
+.screen-share-overlay.stage .camera-strip { flex: 0 0 auto; }
+.screen-share-overlay.stage .camera-tile { box-shadow: none; }
+
 .screen-share-label {
   position: absolute;
   bottom: 0.4rem;
@@ -1331,6 +1386,16 @@ button, input, select {
   letter-spacing: 0.02em;
 }
 .settings-section h3 { margin: 0; font-size: 0.9rem; color: var(--header-primary); }
+/* Groups related switches under a heading that reads as a peer of the
+   uppercase field labels above it, not as a new section. */
+.settings-subheading {
+  margin: 0.5rem 0 -0.1rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
 .reaction-role-group { display: flex; flex-direction: column; gap: 0.3rem; }
 .reaction-role-group h4 { margin: 0.4rem 0 0; font-size: 0.8rem; color: var(--text-muted); }
 .char-counter { align-self: flex-end; font-size: 0.7rem; color: var(--text-faint); margin-top: -0.4rem; }

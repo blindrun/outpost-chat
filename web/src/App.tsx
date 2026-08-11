@@ -117,6 +117,17 @@ function getResetTokenFromUrl(): string | null {
   return new URLSearchParams(window.location.search).get("reset");
 }
 
+// Where an identity provider drops the user after a successful sign-in
+// (`?oidc=CODE`) or a failed one (`?oidc_error=MESSAGE`). Same-origin like
+// the two above, because the instance's own server is what redirected here.
+function getOidcCodeFromUrl(): string | null {
+  return new URLSearchParams(window.location.search).get("oidc");
+}
+
+function getOidcErrorFromUrl(): string | null {
+  return new URLSearchParams(window.location.search).get("oidc_error");
+}
+
 // The official public instance, run by the Outpost project itself — offered
 // as the default "Add a Server" address on a fresh install (no servers
 // configured yet, no invite link) so a first-time user has something real
@@ -157,7 +168,9 @@ function App() {
   // via lazy useState initializers (not a useEffect) so it's already correct
   // on AddServerModal's very first mount — an effect runs one render too
   // late, after the child has already locked in its initial "address" step.
-  const [addServerOpen, setAddServerOpen] = useState(() => !!getInviteCodeFromUrl() || !!getResetTokenFromUrl());
+  const [addServerOpen, setAddServerOpen] = useState(
+    () => !!getInviteCodeFromUrl() || !!getResetTokenFromUrl() || !!getOidcCodeFromUrl() || !!getOidcErrorFromUrl(),
+  );
   const [contextMenuInstanceId, setContextMenuInstanceId] = useState<string | null>(null);
   // Captured at click time and rendered via `position: fixed` — the server
   // rail has `overflow-y: auto`, which per the CSS spec implicitly clips the
@@ -166,11 +179,15 @@ function App() {
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [deepLinkInvite, setDeepLinkInvite] = useState<string | null>(getInviteCodeFromUrl);
   const [deepLinkReset, setDeepLinkReset] = useState<string | null>(getResetTokenFromUrl);
+  const [deepLinkOidc, setDeepLinkOidc] = useState<string | null>(getOidcCodeFromUrl);
+  const [deepLinkOidcError, setDeepLinkOidcError] = useState<string | null>(getOidcErrorFromUrl);
 
   // Strip the query param once mounted so reloading/bookmarking afterward
-  // doesn't re-trigger the same flow.
+  // doesn't re-trigger the same flow. It matters most for the SSO code:
+  // that one is a credential, and leaving it in the address bar leaves it
+  // in history and in anything the user pastes the URL into.
   useEffect(() => {
-    if (deepLinkInvite || deepLinkReset) {
+    if (deepLinkInvite || deepLinkReset || deepLinkOidc || deepLinkOidcError) {
       window.history.replaceState({}, "", window.location.pathname);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -911,9 +928,15 @@ function App() {
           )}
           <AddServerModal
             embedded
-            initialBaseUrl={deepLinkInvite || deepLinkReset ? window.location.origin : PRIMARY_SERVER_URL}
+            initialBaseUrl={
+              deepLinkInvite || deepLinkReset || deepLinkOidc || deepLinkOidcError
+                ? window.location.origin
+                : PRIMARY_SERVER_URL
+            }
             initialInviteCode={deepLinkInvite ?? undefined}
             initialResetToken={deepLinkReset ?? undefined}
+            initialOidcCode={deepLinkOidc ?? undefined}
+            initialOidcError={deepLinkOidcError ?? undefined}
             onConnected={handleConnected}
           />
         </div>
@@ -1342,12 +1365,20 @@ function App() {
             setAddServerOpen(false);
             setDeepLinkInvite(null);
             setDeepLinkReset(null);
+            setDeepLinkOidc(null);
+            setDeepLinkOidcError(null);
           }}
         >
           <AddServerModal
-            initialBaseUrl={deepLinkInvite || deepLinkReset ? window.location.origin : undefined}
+            initialBaseUrl={
+              deepLinkInvite || deepLinkReset || deepLinkOidc || deepLinkOidcError
+                ? window.location.origin
+                : undefined
+            }
             initialInviteCode={deepLinkInvite ?? undefined}
             initialResetToken={deepLinkReset ?? undefined}
+            initialOidcCode={deepLinkOidc ?? undefined}
+            initialOidcError={deepLinkOidcError ?? undefined}
             onConnected={handleConnected}
           />
           <div className="modal-actions">

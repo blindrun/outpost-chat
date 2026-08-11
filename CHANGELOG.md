@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.5.0 — 2026-08-11
+
+- **You can sign in with your own identity provider.** Anything that speaks standard OpenID Connect — Authentik, Authelia, Keycloak, Zitadel, Okta, Entra — can now be the login for your instance, and a "Continue with…" button appears above the password form once it's set up. It's off until you configure it, and there's a walkthrough in `deploy/README.md`. Accounts created this way have no password at all, which is the point: there's nothing to guess, phish or reuse. They can still delete their own account, and two-factor set up *here* is still asked for on top of whatever your provider does.
+- **The desktop app signs in through your real browser**, not a window inside the app. You're probably already signed in to your provider there, so it's often a single click, and your password manager works normally. The result comes back to the app automatically.
+- **Turning on a camera in a voice channel.** Faces appear in a strip above whatever else is happening, so a screen share keeps the room to itself; your own preview is mirrored, and everyone else's isn't. Video is off every time you join — a camera that switches itself back on isn't a feature. Pick which camera in User Settings → Voice.
+- **Noise suppression, echo cancellation and automatic gain are now yours to turn off** (User Settings → Voice). They've always been on and stay on, which is right for almost everyone — but noise suppression is tuned for speech and mangles an instrument or shared music, and automatic gain rides a quiet room's background noise up between sentences. The mic meter in settings now reflects whatever you've chosen, so it shows what the voice gate will actually hear.
+- Fixed video failing on Android before it started: the app was declining the camera by name, the same way it once declined the microphone.
+
 ## v0.4.0 — 2026-08-11
 
 - **Direct messages can now be encrypted end-to-end.** Turn it on in User Settings → Security. Both people have to have it on; until then the conversation stays readable and says so rather than pretending otherwise. Your keys are generated on your own device and never sent to the server, so an encrypted DM can't be read by the server, by whoever runs it, or by anyone who gets hold of its database. You get a recovery code when you set up — keep it, because without it a new device can't read your old messages.

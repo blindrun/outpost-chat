@@ -86,6 +86,62 @@ directly for some reason? Tunnel in rather than opening the port:
 `ssh -L 9001:localhost:9001 <this-host>`, then open
 `http://localhost:9001` for the MinIO console.
 
+## Single sign-on (optional)
+
+Outpost can hand login off to any provider that speaks standard OpenID
+Connect discovery — Authentik, Authelia, Keycloak, Zitadel, Okta, Entra.
+It's off unless configured; leave these unset and nothing changes.
+
+In your provider, create an OAuth2/OIDC application:
+
+- **Redirect URI:** `https://chat.example.com/auth/oidc/callback` (your own
+  host). It has to match exactly, trailing slash and all.
+- **Grant type:** authorization code. Outpost uses PKCE and a client secret
+  together, so a *confidential* client is the right kind.
+- **Scopes:** `openid profile email`. The email claim is required — Outpost
+  uses it to create the account, and won't create one without it.
+
+Then in `.env`:
+
+```bash
+OIDC_ISSUER=https://auth.example.com/application/o/outpost
+OIDC_CLIENT_ID=...
+OIDC_CLIENT_SECRET=...
+OIDC_DISPLAY_NAME=Authentik      # button reads "Continue with Authentik"
+# OIDC_SCOPES=openid profile email
+# OIDC_ALLOW_SIGNUP=false        # existing members only; default is true
+# OIDC_REDIRECT_URI=https://...  # only if this server sees a different
+                                 # host than the browser does
+```
+
+`OIDC_ISSUER` is the base URL whose `/.well-known/openid-configuration`
+your provider serves — paste that URL into a browser to check you have the
+right one. It must be `https` (or localhost, for testing).
+
+Worth knowing before you switch it on:
+
+- **The first account can't be created this way.** Claim the instance with
+  the claim code from its console first, then link or add SSO accounts.
+- **Existing accounts are matched by email**, and only if your provider
+  says the address is verified. After that the link is by the provider's
+  own user ID, so changing someone's email at the provider doesn't strand
+  their account.
+- **SSO accounts have no password**, so they can't use the password form or
+  "forgot password" — that's the point. They can still delete their own
+  account, and 2FA configured *here* is still enforced on top of whatever
+  the provider does.
+- **`OIDC_ALLOW_SIGNUP` defaults to true**, so anyone your provider will
+  authenticate gets an account, invite-only setting included. Set it to
+  `false` if your provider is broader than your chat instance should be.
+- **The desktop app signs in through your own browser.** It opens the
+  provider there — so if you already have a session with it, this is
+  usually one click — and the result comes back to the app through an
+  `outpost://` link that the installer registers. Nothing extra to
+  configure, but it does mean the desktop app has to be installed rather
+  than run from an unpacked directory for the handover to work.
+- **The mobile apps don't do SSO yet**; they show a note pointing at your
+  instance's web address, which works normally in a phone browser.
+
 ## Manual install
 
 If you'd rather not run the script:

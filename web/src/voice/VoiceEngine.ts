@@ -37,6 +37,12 @@ export interface VoiceEngineEvents {
   screenShareTrackUnsubscribed: (participantIdentity: string) => void;
   localScreenShareStarted: (element: HTMLVideoElement) => void;
   localScreenShareStopped: () => void;
+  // Camera equivalents. Driven by LiveKit's own publish/unpublish events
+  // rather than set optimistically when the button is clicked, so the
+  // button reflects what is actually being sent -- a camera that's
+  // unplugged mid-call ends the track without anyone clicking anything.
+  localCameraStarted: () => void;
+  localCameraStopped: () => void;
 }
 
 export interface VoiceEngine {
@@ -49,12 +55,24 @@ export interface VoiceEngine {
     // AnalyserNode access, meaningless once the mic no longer flows through
     // a WebView. false on iOS (forces push-to-talk), true everywhere else.
     vad: boolean;
+    // Whether the user's noise-suppression/echo-cancellation/auto-gain
+    // choices reach the capture at all. They're getUserMedia constraints,
+    // so they mean nothing on iOS, where the mic is opened by the native
+    // Swift SDK and never touches the WebView -- the settings screen hides
+    // the controls rather than showing three switches that do nothing.
+    audioProcessing: boolean;
+    // Camera publishing. Nothing platform-level blocks video on iOS the way
+    // ReplayKit does screen share -- but the native plugin's bridge is
+    // audio-only, so it can't publish a camera track until that plugin
+    // grows one. false there, true everywhere else.
+    camera: boolean;
   };
 
   connect(url: string, token: string): Promise<void>;
   disconnect(): void;
 
   setMicrophoneEnabled(enabled: boolean, deviceId?: string): Promise<void>;
+  setCameraEnabled(enabled: boolean, deviceId?: string): Promise<void>;
   // Deafening has no 1:1 native audio-pipeline equivalent (the web engine
   // mutes each attached <audio> element directly) -- each implementation
   // handles this however makes sense for its own transport.

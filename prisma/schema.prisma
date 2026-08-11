@@ -11,7 +11,12 @@ model User {
   id           String   @id @default(uuid())
   username     String   @unique
   email        String   @unique
-  passwordHash String
+  // Null for an account that only ever signs in through an identity
+  // provider (see OidcIdentity). Nullable rather than a random unusable
+  // hash so every password check has to decide what to do about an SSO
+  // account explicitly, instead of silently reporting "wrong password" to
+  // someone who has never had one.
+  passwordHash String?
   avatarUrl    String?
   // Plain text, app-enforced 240-char cap (no DB-level length constraint,
   // same pattern as CustomCommand.response) — shown on a member's profile
@@ -69,6 +74,73 @@ model User {
   friendshipsSent     Friendship[]    @relation("FriendshipRequester")
   friendshipsReceived Friendship[]    @relation("FriendshipAddressee")
   webauthnCredentials WebauthnCredential[]
+  oidcIdentities      OidcIdentity[]
+}
+
+// Links a local account to the subject an identity provider knows it as.
+// The (issuer, subject) pair is the identity, never the email: an email
+// can be reassigned to a different person at the IdP, `sub` is the one
+// claim OIDC guarantees is stable and unique for the life of the account.
+// Kept as its own table rather than columns on User so an instance can
+// later support several providers without a migration per provider.
+model OidcIdentity {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  issuer    String
+  subject   String
+  createdAt DateTime @default(now())
+
+  @@unique([issuer, subject])
+  @@index([userId])
+}
+
+// One in-flight authorization request. Holds the CSRF state, the nonce
+// that ties the eventual ID token back to this request, and the PKCE
+// verifier -- server-side rather than in a cookie because the callback can
+// land on a different origin than the one that started it (the desktop app
+// and a reverse proxy both do this) and a cookie wouldn't be there.
+model OidcAuthRequest {
+  id           String   @id @default(uuid())
+  state        String   @unique
+  nonce        String
+  codeVerifier String
+  // Both recorded at /start rather than recomputed at /callback. The
+  // callback is a top-level navigation, so it arrives with no Origin
+  // header at all -- deriving either of these there would quietly produce
+  // a different value than the one the authorization request used, and the
+  // token endpoint rejects a redirect_uri that doesn't match to the byte.
+  redirectUri  String
+  returnOrigin String
+  // "web" or "native" -- which kind of client started this, and therefore
+  // whether the finished sign-in goes back to a URL or to the desktop app's
+  // outpost:// handler. Deliberately a two-value flag rather than a return
+  // URL supplied by the caller: anything caller-controlled here would be an
+  // open redirect carrying a live credential.
+  returnTarget String   @default("web")
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+
+  @@index([expiresAt])
+}
+
+// A single-use handoff code, swapped by the client for a real session.
+// The alternative -- redirecting with the session JWT in the URL -- would
+// write a never-expiring credential into browser history, the referrer
+// header and any proxy log along the way. Hashed at rest for the same
+// reason PasswordResetToken is: a database read alone shouldn't be a login.
+model OidcExchangeCode {
+  id         String   @id @default(uuid())
+  codeHash   String   @unique
+  userId     String
+  // True when the account has 2FA configured, in which case exchanging
+  // this yields an MFA challenge rather than a session -- an IdP's own
+  // MFA doesn't stand in for a second factor the user chose to add here.
+  mfaPending Boolean  @default(false)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([expiresAt])
 }
 
 // A registered security key / platform authenticator (YubiKey, Touch ID,

@@ -245,6 +245,14 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.status(401).send({ error: "invalid credentials" });
     }
 
+    // An SSO-only account has no password to check. Said plainly rather
+    // than as "invalid credentials", because otherwise someone whose
+    // account was created through their identity provider gets told their
+    // password is wrong for a password they were never given.
+    if (!user.passwordHash) {
+      return reply.status(401).send({ error: "this account signs in through single sign-on" });
+    }
+
     const valid = await bcrypt.compare(body.password, user.passwordHash);
     if (!valid) {
       return reply.status(401).send({ error: "invalid credentials" });
@@ -509,6 +517,15 @@ export async function authRoutes(app: FastifyInstance) {
     const body = updatePasswordSchema.parse(req.body);
 
     const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    // Refused rather than treated as "set your first password". Letting a
+    // session alone mint a password would create a way into an SSO account
+    // that bypasses the identity provider entirely — which is the opposite
+    // of what an instance gains by putting one in front.
+    if (!user.passwordHash) {
+      return reply
+        .status(400)
+        .send({ error: "this account signs in through single sign-on and has no password to change" });
+    }
     const valid = await bcrypt.compare(body.currentPassword, user.passwordHash);
     if (!valid) return reply.status(401).send({ error: "current password is incorrect" });
 
@@ -575,8 +592,16 @@ export async function authRoutes(app: FastifyInstance) {
         });
       }
 
-      const valid = await bcrypt.compare(body.password, user.passwordHash);
-      if (!valid) return reply.status(401).send({ error: "password is incorrect" });
+      // An SSO account has no password to re-prove with. Skipping that
+      // check rather than refusing the whole request: the typed username
+      // and (where configured) the second factor still stand, and the
+      // alternative would leave anyone who signed up through an identity
+      // provider with no way to delete their own account — the exact gap
+      // self-service deletion was added to close.
+      if (user.passwordHash) {
+        const valid = await bcrypt.compare(body.password, user.passwordHash);
+        if (!valid) return reply.status(401).send({ error: "password is incorrect" });
+      }
       if (body.username !== user.username) {
         return reply.status(400).send({ error: "the username you typed doesn't match this account" });
       }

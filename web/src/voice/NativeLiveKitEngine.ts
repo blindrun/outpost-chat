@@ -50,8 +50,16 @@ function toInfo(p: VoiceParticipantData): ParticipantInfo {
 
 type Listener<K extends keyof VoiceEngineEvents> = VoiceEngineEvents[K];
 
+// See WEB_ENGINE_CAPABILITIES for why this is exported.
+export const NATIVE_ENGINE_CAPABILITIES = {
+  screenShare: false,
+  vad: false,
+  audioProcessing: false,
+  camera: false,
+};
+
 export class NativeLiveKitEngine implements VoiceEngine {
-  readonly capabilities = { screenShare: false, vad: false };
+  readonly capabilities = NATIVE_ENGINE_CAPABILITIES;
 
   // Internally untyped for the same reason as WebLiveKitEngine's listeners
   // map -- see that file's comment.
@@ -110,6 +118,13 @@ export class NativeLiveKitEngine implements VoiceEngine {
 
   async setScreenShareEnabled(): Promise<void> {
     throw new Error("Screen share is not supported on iOS yet.");
+  }
+
+  // Same shape as screen share above: unreachable while capabilities.camera
+  // is false (VoicePanel hides the button), and a thrown error rather than a
+  // silent no-op so a future caller that forgets to check finds out.
+  async setCameraEnabled(): Promise<void> {
+    throw new Error("Video is not supported on iOS yet.");
   }
 
   localIdentity(): string {

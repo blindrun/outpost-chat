@@ -1,6 +1,6 @@
 import { MutableRefObject, useCallback, useRef, useState } from "react";
 import { Channel, Gateway, getVoiceToken } from "./api";
-import { AudioSettings, loadAudioSettings } from "./audioSettings";
+import { AudioSettings, audioProcessingOf, loadAudioSettings } from "./audioSettings";
 import { createAdaptiveGate } from "./vadAuto";
 import { createVoiceEngine } from "./voice/createVoiceEngine";
 import { ParticipantInfo, VoiceEngine } from "./voice/VoiceEngine";
@@ -209,6 +209,8 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
   const [mode, setMode] = useState<AudioSettings["mode"] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [screenSharing, setScreenSharing] = useState(false);
+  const [cameraOn, setCameraOn] = useState(false);
+  const [cameraSupported, setCameraSupported] = useState(true);
   // false only for engines that can't do it (the native iOS engine, once it
   // exists) — VoicePanel hides the Share Screen button when this is false
   // rather than showing a control that can never work.
@@ -229,6 +231,11 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
   const deafenedRef = useRef(false);
   const mutedBeforeDeafenRef = useRef(false);
   const screenSharingRef = useRef(false);
+  const cameraOnRef = useRef(false);
+  // Read by toggleCamera, which has no access to join()'s local `settings`
+  // and must not re-read localStorage on every click — the device in use is
+  // whatever was selected when this session started.
+  const videoDeviceIdRef = useRef<string | undefined>(undefined);
 
   const join = useCallback(
     async (channel: Channel) => {
@@ -246,10 +253,18 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
           audioContainerRef.current!,
           videoContainerRef.current!,
           settings.outputDeviceId ?? undefined,
+          audioProcessingOf(settings),
         );
         engineRef.current = engine;
         setActiveChannel(channel);
         setScreenShareSupported(engine.capabilities.screenShare);
+        setCameraSupported(engine.capabilities.camera);
+        videoDeviceIdRef.current = settings.videoDeviceId ?? undefined;
+        // Video never carries across a join. Discord doesn't either, and
+        // the alternative — a camera that switches itself back on when you
+        // enter a channel — is the kind of surprise nobody forgives.
+        cameraOnRef.current = false;
+        setCameraOn(false);
         // Every join path funnels through here — a manual sidebar click,
         // an AFK auto-move, a moderator's voice-kick landing on a
         // different channel (not this app yet) — so this is the one place
@@ -292,6 +307,8 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
           setVadLevel(0);
           screenSharingRef.current = false;
           setScreenSharing(false);
+          cameraOnRef.current = false;
+          setCameraOn(false);
         });
         engine.on("localScreenShareStarted", () => {
           if (!isCurrent()) return;
@@ -302,6 +319,16 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
           if (!isCurrent()) return;
           screenSharingRef.current = false;
           setScreenSharing(false);
+        });
+        engine.on("localCameraStarted", () => {
+          if (!isCurrent()) return;
+          cameraOnRef.current = true;
+          setCameraOn(true);
+        });
+        engine.on("localCameraStopped", () => {
+          if (!isCurrent()) return;
+          cameraOnRef.current = false;
+          setCameraOn(false);
         });
 
         await engine.connect(url, voiceToken);
@@ -368,6 +395,8 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
     setMode(null);
     screenSharingRef.current = false;
     setScreenSharing(false);
+    cameraOnRef.current = false;
+    setCameraOn(false);
   }, [gatewayRef, activeChannel]);
 
   const toggleScreenShare = useCallback(async () => {
@@ -375,6 +404,20 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
     if (!engine) return;
     try {
       await engine.setScreenShareEnabled(!screenSharingRef.current);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }, []);
+
+  // cameraOn is set by the engine's publish/unpublish events, not here, so
+  // the button follows the track rather than the click — the two diverge
+  // when the camera is refused or yanked out mid-call.
+  const toggleCamera = useCallback(async () => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    setError(null);
+    try {
+      await engine.setCameraEnabled(!cameraOnRef.current, videoDeviceIdRef.current);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -434,6 +477,8 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
     error,
     screenSharing,
     screenShareSupported,
+    cameraOn,
+    cameraSupported,
     audioContainerRef,
     videoContainerRef,
     join,
@@ -441,6 +486,7 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
     toggleMute,
     toggleDeafen,
     toggleScreenShare,
+    toggleCamera,
   };
 }
 

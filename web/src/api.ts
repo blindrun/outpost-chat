@@ -384,6 +384,29 @@ export function login(baseUrl: string, login: string, password: string) {
   });
 }
 
+// Whether this instance has an identity provider configured, and what to
+// call the button. Asked before the login form renders; a server that
+// predates SSO simply 404s, which the caller treats as "not enabled".
+export function getOidcConfig(baseUrl: string) {
+  return request<{ enabled: boolean; displayName?: string }>(baseUrl, "/auth/oidc/config", null);
+}
+
+// Swaps the single-use code the provider redirect came back with for a real
+// session — or for an MFA challenge, if the account has a second factor
+// configured here. Same two-shaped response as login().
+export function oidcExchange(baseUrl: string, code: string) {
+  return request<{ token: string; user: User } | MfaChallenge>(baseUrl, "/auth/oidc/exchange", null, {
+    method: "POST",
+    body: JSON.stringify({ code }),
+  });
+}
+
+// A full-page navigation, not a fetch: the provider needs to render its own
+// login page, and it will refuse to be framed or XHR'd.
+export function oidcStartUrl(baseUrl: string): string {
+  return `${baseUrl.replace(/\/+$/, "")}/auth/oidc/start`;
+}
+
 export function mfaVerifyCode(baseUrl: string, mfaToken: string, code: string) {
   return request<{ token: string; user: User }>(baseUrl, "/auth/mfa/verify-code", null, {
     method: "POST",
