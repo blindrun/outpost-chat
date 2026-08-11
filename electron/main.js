@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session, Menu, dialog, shell } = require("electron");
+const { app, BrowserWindow, desktopCapturer, session, Menu, dialog, shell } = require("electron");
 const path = require("node:path");
 const { autoUpdater } = require("electron-updater");
 
@@ -177,6 +177,48 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
     callback(permission === "media");
   });
+
+  // Screen sharing needs its own handler on top of the permission one above.
+  // Electron has required this since v17: with no display-media handler
+  // registered, `getDisplayMedia` is denied outright and rejects with a
+  // NotAllowedError — indistinguishable from the user cancelling a picker.
+  // That's why screen share appeared to be "not supported" in the desktop
+  // app on every platform while working fine in a browser, where the browser
+  // owns the picker.
+  //
+  // `useSystemPicker` is the right answer wherever it's available: on Wayland
+  // it hands off to the desktop's own xdg-desktop-portal picker (the only way
+  // to capture anything on Wayland at all), and on macOS to ScreenCaptureKit.
+  // Where it isn't supported, Electron calls the handler below instead.
+  session.defaultSession.setDisplayMediaRequestHandler(
+    (_request, callback) => {
+      desktopCapturer
+        .getSources({ types: ["screen", "window"] })
+        .then((sources) => {
+          // No in-app source picker yet, so this falls back to the primary
+          // screen. Acceptable because getDisplayMedia only ever runs from an
+          // explicit "share screen" click — but choosing a specific window is
+          // a real gap worth closing separately.
+          const screen = sources.find((s) => s.id.startsWith("screen:")) ?? sources[0];
+          if (!screen) {
+            console.error("[screen-share] no capturable sources returned");
+            // Electron requires the callback either way; an empty object
+            // rejects the request cleanly rather than hanging the promise.
+            callback({});
+            return;
+          }
+          // System-audio capture via "loopback" is Windows-only in Electron;
+          // passing it on Linux/macOS isn't supported, so share video alone
+          // there rather than risk the whole request being refused.
+          callback(process.platform === "win32" ? { video: screen, audio: "loopback" } : { video: screen });
+        })
+        .catch((err) => {
+          console.error("[screen-share] enumerating sources failed:", err);
+          callback({});
+        });
+    },
+    { useSystemPicker: true },
+  );
 
   buildMenu();
   createWindow();

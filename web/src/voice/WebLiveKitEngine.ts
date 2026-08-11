@@ -163,14 +163,26 @@ export class WebLiveKitEngine implements VoiceEngine {
     });
   }
 
-  // getDisplayMedia rejects if the user cancels the browser's share picker
-  // -- that's not a real error, just leave screenSharing false and move on.
+  // getDisplayMedia rejects with NotAllowedError if the user cancels the
+  // share picker -- not a real error, so screenSharing just stays false.
+  //
+  // The catch is deliberately noisy now. Electron denies getDisplayMedia with
+  // that *same* error name when no display-media handler is registered in the
+  // main process, so swallowing it silently hid a real bug: screen share was
+  // broken in the desktop app on every platform, and the button simply did
+  // nothing with no error anywhere. Logging costs nothing and makes the next
+  // occurrence diagnosable instead of invisible.
   async setScreenShareEnabled(enabled: boolean): Promise<void> {
     if (!this.room) return;
     try {
       await this.room.localParticipant.setScreenShareEnabled(enabled);
     } catch (err) {
       if ((err as Error).name !== "NotAllowedError") throw err;
+      console.warn(
+        "[screen-share] getDisplayMedia was denied. Normal if you cancelled the picker; " +
+          "if you didn't, the platform refused the capture request.",
+        err,
+      );
     }
   }
 
