@@ -1242,164 +1242,65 @@ button, input, select {
    currently selected — voice (and now screen share) is a persistent,
    app-wide session, not scoped to one channel's view. Hidden via :empty
    when nothing is being shared. */
+/* The call surface. A real grid item in column 3 -- the same cell the chat
+   pane uses -- rather than a floating overlay, so nothing is painted over
+   anything and nothing is displaced.
+
+   The displacement is worth recording. While this was `position: fixed` it
+   sat outside the grid entirely. Making it static without placing the other
+   children explicitly turned it into an auto-placed item that claimed
+   column 3, pushing the chat pane into the member list's column and
+   wrapping the member list onto a second row -- which also stopped the
+   video filling its height. One change, three symptoms that looked
+   unrelated to each other. */
 .screen-share-overlay {
-  position: fixed;
-  bottom: 1rem;
-  right: 1rem;
-  z-index: 40;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  max-width: min(480px, 40vw);
-}
-.screen-share-overlay:empty { display: none; }
-.screen-share-tile {
-  position: relative;
-  background: #000;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-}
-.screen-share-video { display: block; width: 100%; max-height: 40vh; }
-
-/* Stage mode: any live feed takes the channel pane. The container is a
-   direct child of .app's grid, so dropping position:fixed and claiming
-   column 3 lands it exactly over .chat-pane — no measuring of sidebar
-   widths, and it keeps working when the member list collapses and the grid
-   becomes three columns. Later in DOM order than .chat-pane, so it paints
-   on top without a z-index fight.
-
-   auto-fit rather than a fixed column count: one feed fills the pane, two
-   sit side by side, and a crowd wraps into rows, all without the app
-   counting anything. minmax's floor is what decides when to wrap, so tiles
-   never shrink below something worth looking at. */
-.screen-share-overlay.stage {
-  position: static;
+  display: none;
   grid-column: 3;
   grid-row: 1;
-  max-width: none;
-  padding: 0.6rem;
-  background: var(--bg-primary);
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
-  grid-auto-rows: 1fr;
-  align-content: center;
-  gap: 0.5rem;
-}
-.screen-share-overlay.stage .screen-share-tile,
-.screen-share-overlay.stage .camera-tile {
-  min-height: 0;
-  max-width: none;
-  /* Overrides the camera tile's fixed 4:3 — in the grid a tile takes the
-     cell it's given, and the video letterboxes inside it. */
-  aspect-ratio: auto;
-  box-shadow: none;
-}
-/* contain, not cover: a shared screen is information. Cropping it to fill
-   an odd aspect ratio would cut off exactly what someone is pointing at.
-   Cameras follow suit here rather than keeping their cover crop — at stage
-   size a cropped face loses more than the letterboxing costs. */
-.screen-share-overlay.stage .screen-share-video,
-.screen-share-overlay.stage .camera-video {
-  width: 100%;
-  height: 100%;
-  max-height: none;
-  object-fit: contain;
+  background: #000;
 }
 
-/* Fullscreen: the container becomes the whole screen, so the grid needs to
-   fill it rather than keep the channel pane's padding and background. */
-.screen-share-overlay:fullscreen {
+/* auto-fit rather than a fixed column count: one feed fills the pane, two
+   sit side by side, and a crowd wraps into rows, without the app counting
+   anything. minmax's floor decides when to wrap, so tiles never shrink
+   below something worth looking at. */
+.app.call-view .screen-share-overlay {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
-  grid-auto-rows: 1fr;
-  align-content: center;
+  grid-auto-rows: minmax(0, 1fr);
   gap: 0.5rem;
   padding: 0.5rem;
-  background: #000;
-  max-width: none;
 }
-.screen-share-overlay:fullscreen .screen-share-tile,
-.screen-share-overlay:fullscreen .camera-tile {
-  min-height: 0;
-  max-width: none;
-  aspect-ratio: auto;
-  box-shadow: none;
-}
-.screen-share-overlay:fullscreen .screen-share-video,
-.screen-share-overlay:fullscreen .camera-video {
-  width: 100%;
-  height: 100%;
-  max-height: none;
-  object-fit: contain;
-}
-
-/* The in-window voice controls. Fixed to the top-right so they clear the
-   composer at the bottom and the channel header on the left, and stay put
-   whichever text channel is being read. */
-.voice-bar {
-  position: fixed;
-  top: 0.6rem;
-  right: 1rem;
-  z-index: 41;
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  background: rgba(0, 0, 0, 0.62);
-  backdrop-filter: blur(6px);
-  border-radius: 6px;
-  padding: 0.3rem 0.45rem;
-  max-width: calc(100vw - 2rem);
-  flex-wrap: wrap;
-}
-.voice-bar-channel {
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  max-width: 12rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding-right: 0.2rem;
-}
-.voice-bar button {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f7ecd9;
-  border: none;
-  border-radius: 4px;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.voice-bar button:hover { background: rgba(255, 255, 255, 0.18); }
-.voice-bar .voice-bar-leave { background: rgba(230, 72, 63, 0.75); }
-.voice-bar .voice-bar-leave:hover { background: rgba(230, 72, 63, 0.95); }
-/* Camera tiles in the floating (non-stage) corner view. In stage mode the
-   grid rules further down take over their sizing. */
+.screen-share-tile,
 .camera-tile {
   position: relative;
-  flex: 1 1 160px;
-  max-width: 240px;
-  aspect-ratio: 4 / 3;
+  min-height: 0;
+  min-width: 0;
   background: #000;
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
-/* cover, not contain: a webcam feed is a face, and letterboxing one to
-   preserve every pixel of the ceiling helps nobody. The opposite call from
-   .screen-share-video, for the opposite reason. */
-.camera-video { display: block; width: 100%; height: 100%; object-fit: cover; }
-/* Your own preview only — a mirror is what you expect of yourself and
-   wrong for everyone else, whose lanyards and t-shirts would read backwards. */
+/* contain, not cover: a shared screen is information, and cropping it to
+   fill an odd aspect ratio cuts off exactly what someone is pointing at.
+   Faces follow suit here, where a crop costs more than letterboxing does. */
+.screen-share-video,
+.camera-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+/* Your own preview is mirrored, the way a mirror is -- raising your right
+   hand should move the hand on the right. Remote faces are not: their text
+   would read backwards. */
 .camera-tile.local .camera-video { transform: scaleX(-1); }
 /* A peer who muted their camera rather than unpublishing it: hidden
-   outright, because a paused video element keeps showing its last frame
-   and a frozen face looks exactly like a live one. */
+   outright, because a paused video element keeps showing its last frame and
+   a frozen face looks exactly like a live one. */
 .camera-tile.camera-muted { display: none; }
-
 .screen-share-label {
   position: absolute;
   bottom: 0.4rem;
@@ -1409,6 +1310,78 @@ button, input, select {
   font-size: 0.75rem;
   padding: 0.15rem 0.5rem;
   border-radius: 4px;
+}
+
+/* Shown before anyone turns anything on, so joining a voice channel doesn't
+   present a black rectangle. */
+.call-empty {
+  grid-column: 3;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-muted);
+  background: var(--bg-primary);
+}
+
+/* Call controls, docked under the video as their own grid row rather than
+   floating over the corner of something. */
+.voice-bar {
+  grid-column: 3;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-secondary);
+  box-shadow: 0 -1px 0 var(--border-subtle);
+  flex-wrap: wrap;
+}
+.voice-bar-channel {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin-right: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.voice-bar button {
+  background: var(--bg-input);
+  color: var(--header-primary);
+  border: none;
+  border-radius: 4px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.voice-bar button:hover { background: var(--interactive-hover); }
+.voice-bar .voice-bar-leave { background: rgba(230, 72, 63, 0.85); color: #fff; }
+.voice-bar .voice-bar-leave:hover { background: rgba(230, 72, 63, 1); }
+
+/* Watching the call hides the chat pane and the member list both: the call
+   is what you're looking at, and a member list is a text-channel idea.
+   Clicking any text channel leaves this view and gives chat the whole pane,
+   while voice, video and screen share keep running underneath. */
+.app.call-view {
+  grid-template-columns: 72px 240px 1fr;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.app.call-view .server-rail,
+.app.call-view .sidebar { grid-row: 1 / -1; }
+.app.call-view .chat-pane,
+.app.call-view .member-sidebar { display: none; }
+
+/* Fullscreen keeps the grid but drops the pane's padding and background. */
+.screen-share-overlay:fullscreen {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: #000;
 }
 
 /* ---------- Settings modals (User + Instance) ---------- */

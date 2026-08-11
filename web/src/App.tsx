@@ -249,12 +249,11 @@ function App() {
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [openPicker, setOpenPicker] = useState<"emoji" | "gif" | null>(null);
   const [voiceDetailsOpen, setVoiceDetailsOpen] = useState(false);
-  // Sends the video stage back to a floating corner tile so the channel
-  // underneath is readable again. Deliberately not persisted: it resets
-  // whenever the feeds drop to zero (below), so the next share opens full
-  // size rather than silently staying hidden because of a choice made
-  // about some earlier call.
-  const [videoMinimized, setVideoMinimized] = useState(false);
+  // Whether the call is what's on screen. Clicking the voice channel opens
+  // it; clicking any text channel leaves it and gives chat the whole pane.
+  // Leaving the view never touches the connection -- voice, video and screen
+  // share keep running, and coming back shows them still going.
+  const [callViewOpen, setCallViewOpen] = useState(false);
   // Mirrors the browser's own fullscreen state rather than tracking our own
   // boolean: the user can leave fullscreen with Escape or the browser's
   // chrome without touching our button, and a local flag would then be
@@ -276,6 +275,11 @@ function App() {
   function selectChannel(channelId: string) {
     setSelectedChannelId(channelId);
     setMobileActivePane("chat");
+    // Picking something to read means you want to read it, so the call view
+    // gets out of the way and chat takes the whole pane. The call itself is
+    // untouched -- still connected, still sending video -- and clicking the
+    // voice channel brings the view straight back.
+    setCallViewOpen(false);
   }
   const [textChannelsCollapsed, setTextChannelsCollapsed] = useState(
     () => localStorage.getItem("textChannelsCollapsed") === "true",
@@ -498,12 +502,11 @@ function App() {
       });
   }, [activeInstanceId, activeInstance?.baseUrl]);
 
-  // Once every feed has stopped there is nothing to minimise, and leaving
-  // the flag set would hide the *next* share behind a corner tile for no
-  // reason the user could connect to anything they did.
+  // Nothing to look at once the call ends, and leaving the view open would
+  // strand the user on an empty pane with the sidebar as the only way out.
   useEffect(() => {
-    if (voice.videoFeedCount === 0 && videoMinimized) setVideoMinimized(false);
-  }, [voice.videoFeedCount, videoMinimized]);
+    if (!voice.connected && callViewOpen) setCallViewOpen(false);
+  }, [voice.connected, callViewOpen]);
 
   useEffect(() => {
     const onChange = () => setVideoFullscreen(document.fullscreenElement === voice.videoContainerRef.current);
@@ -526,9 +529,6 @@ function App() {
       document.exitFullscreen().catch(() => {});
       return;
     }
-    // Coming out of minimised first: fullscreening the little corner tile
-    // technically works and looks like a bug.
-    setVideoMinimized(false);
     el.requestFullscreen().catch((err) => console.warn("fullscreen refused:", err));
   }, [voice.videoContainerRef]);
 
@@ -1331,7 +1331,7 @@ function App() {
   );
 
   return (
-    <div className={`app mobile-pane-${mobileActivePane} ${memberListOpen ? "" : "member-list-collapsed"}`}>
+    <div className={`app mobile-pane-${mobileActivePane} ${memberListOpen ? "" : "member-list-collapsed"}${callViewOpen && voice.connected ? " call-view" : ""}`}>
       {connectionState === "reconnecting" && (
         <div className="connection-banner">Reconnecting…</div>
       )}
@@ -1621,12 +1621,14 @@ function App() {
                     // undiscoverable click on the now-active channel —
                     // real user feedback: it wasn't obvious a second click
                     // was needed at all.
+                    // Opens the call view either way: joining shows the
+                    // call, and clicking the channel you're already in is
+                    // how you get back to it after reading a text channel.
                     if (!isMyChannel) {
                       voice.join(channel);
                       setVoiceDetailsOpen(true);
-                    } else {
-                      setVoiceDetailsOpen((v) => !v);
                     }
+                    setCallViewOpen(true);
                   }}
                 >
                   <span className="channel-icon">🔊</span>
@@ -1746,11 +1748,24 @@ function App() {
 
           Minimising drops it back to that floating tile, which is what makes
           a share watchable while you read another channel. */}
+      {/* Always mounted, shown only in the call view. Hiding it with CSS
+          rather than unmounting is what keeps a call running while you read
+          a text channel: the tracks stay subscribed and the <video>
+          elements keep receiving, they just aren't drawn. Unmounting this
+          would take every live stream with it. */}
       <div
         ref={voice.videoContainerRef}
-        className={`screen-share-overlay${voice.videoFeedCount > 0 && !videoMinimized ? " stage" : ""}`}
+        className="screen-share-overlay"
         onDoubleClick={voice.videoFeedCount > 0 ? toggleVideoFullscreen : undefined}
       />
+      {callViewOpen && voice.connected && voice.videoFeedCount === 0 && (
+        <div className="call-empty">
+          <p>
+            You're in 🔊 {voice.activeChannel?.name}. Turn on your camera or share your screen below — anything
+            anyone sends appears here.
+          </p>
+        </div>
+      )}
       {/* Voice controls live here, in the window, rather than only inside
           the sidebar popover you had to open by clicking the channel again.
           Being connected is a state you're in while doing something else, so
@@ -1761,7 +1776,7 @@ function App() {
           Hidden while fullscreen, where it isn't a child of the fullscreen
           element and so can't render anyway — Escape or a double-click on
           the video gets you back. */}
-      {voice.connected && !videoFullscreen && (
+      {callViewOpen && voice.connected && !videoFullscreen && (
         <div className="voice-bar">
           <span className="voice-bar-channel" title={voice.activeChannel?.name}>
             🔊 {voice.activeChannel?.name}
@@ -1783,14 +1798,9 @@ function App() {
             </button>
           )}
           {voice.videoFeedCount > 0 && (
-            <>
-              <button type="button" onClick={() => setVideoMinimized((v) => !v)}>
-                {videoMinimized ? "⤢ Show video" : "✕ Back to chat"}
-              </button>
-              <button type="button" onClick={toggleVideoFullscreen} title="Fullscreen (or double-click the video)">
-                ⛶
-              </button>
-            </>
+            <button type="button" onClick={toggleVideoFullscreen} title="Fullscreen (or double-click the video)">
+              ⛶
+            </button>
           )}
           <button type="button" className="voice-bar-leave" onClick={voice.leave} title="Disconnect">
             Leave
