@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import {
   Channel,
   DMChannel,
+  ApiError,
   CustomEmoji,
   Gateway,
   Gif,
@@ -241,7 +242,7 @@ function App() {
   const [pendingAttachment, setPendingAttachment] = useState<{ url: string; name: string } | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [composerNotice, setComposerNotice] = useState<string | null>(null);
-  const [forceDisconnectReason, setForceDisconnectReason] = useState<"kicked" | "banned" | "account_deleted" | null>(
+  const [forceDisconnectReason, setForceDisconnectReason] = useState<"kicked" | "banned" | "account_deleted" | "session_expired" | null>(
     null,
   );
   const [connectionState, setConnectionState] = useState<"connected" | "reconnecting" | "disconnected">("connected");
@@ -466,9 +467,23 @@ function App() {
         setSession(refreshed);
         saveSession(activeInstanceId, refreshed);
       })
-      .catch(() => {
-        // Stale/expired token — leave the cached session as-is; the next
-        // authenticated request will surface the real error.
+      .catch((err) => {
+        // A 401 here means the stored token is no longer good for this
+        // instance — the account was deleted, the server's JWT_SECRET was
+        // rotated, or the database was restored from before the account
+        // existed. Keeping the session was the old behaviour, on the theory
+        // that "the next authenticated request will surface the real
+        // error". Nothing ever did: every later request failed the same
+        // silent way, leaving the app half-loaded with panels spinning
+        // forever and no route back except clearing site data by hand.
+        //
+        // Only on 401. A network failure throws without a status, and being
+        // offline for a moment must not sign anyone out.
+        if (err instanceof ApiError && err.status === 401) {
+          localStorage.removeItem(`session:${activeInstanceId}`);
+          setSession(null);
+          setForceDisconnectReason("session_expired");
+        }
       });
   }, [activeInstanceId, activeInstance?.baseUrl]);
 
@@ -959,7 +974,9 @@ function App() {
                 ? "You've been banned from this server."
                 : forceDisconnectReason === "account_deleted"
                   ? "Your account on this server has been deleted."
-                  : "You've been disconnected by a moderator. You can log back in."}
+                  : forceDisconnectReason === "session_expired"
+                    ? "This server no longer recognises your sign-in — please log in again."
+                    : "You've been disconnected by a moderator. You can log back in."}
             </p>
           )}
           <AddServerModal

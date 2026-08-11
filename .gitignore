@@ -13,3 +13,7 @@ mobile/android/app/release/
 mobile/android/keystore.properties
 mobile/android/*.jks
 mobile/android/*.keystore
+
+# Local convenience: the server serves the built client from here, which
+# the Docker image populates at build time. A symlink to web/dist locally.
+/web-dist

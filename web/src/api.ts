@@ -330,6 +330,24 @@ export function authedMediaUrl(url: string | null | undefined, baseUrl: string, 
   return `${url}${separator}token=${token}`;
 }
 
+// Carries the HTTP status alongside the message so a caller can tell "this
+// session is no longer valid" (401) apart from "the server didn't answer",
+// which `fetch` reports as a thrown TypeError with no status at all. The
+// difference matters: a rejected session should log you out, and a network
+// blip absolutely should not.
+//
+// Extends Error, so the many callers reading `(err as Error).message` are
+// unaffected.
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 async function request<T>(baseUrl: string, path: string, token: string | null, init?: RequestInit): Promise<T> {
   const res = await fetch(`${baseUrl}${path}`, {
     ...init,
@@ -341,7 +359,7 @@ async function request<T>(baseUrl: string, path: string, token: string | null, i
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(body.error ?? `request failed: ${res.status}`);
+    throw new ApiError(body.error ?? `request failed: ${res.status}`, res.status);
   }
   if (res.status === 204) return undefined as T;
   return res.json();
