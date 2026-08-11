@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Outpost
+GenericName=Chat
+Comment=Self-hosted chat with voice, for one community
+Exec=outpost %U
+Icon=io.github.blindrun.OutpostChat
+Terminal=false
+Categories=Network;InstantMessaging;Chat;
+Keywords=chat;voice;self-hosted;community;
+StartupWMClass=Outpost

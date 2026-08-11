@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.blindrun.OutpostChat</id>
+
+  <name>Outpost</name>
+  <summary>Self-hosted chat with voice, for one community</summary>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <developer id="io.github.blindrun">
+    <name>blindrun</name>
+  </developer>
+
+  <description>
+    <p>
+      Outpost is a self-hosted chat app: text channels, voice channels and
+      direct messages for a single community, running on a server that
+      community controls rather than on someone else's platform.
+    </p>
+    <p>
+      This is the desktop client. It connects to any Outpost server — your
+      own, or one you've been invited to — and you can be signed into
+      several at once.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Text channels with replies, threads, reactions, custom emoji, code blocks, image and video attachments, and link previews</li>
+      <li>Voice channels with push-to-talk, automatic voice sensitivity, and screen sharing</li>
+      <li>Direct messages, with optional end-to-end encryption</li>
+      <li>Roles and permissions, moderation tools, and per-channel permission overrides</li>
+      <li>Two-factor authentication with TOTP or a security key</li>
+      <li>Automatic updates</li>
+    </ul>
+    <p>
+      Running a server is a single Docker Compose file. Nothing in the app
+      reports to a central service — there is no central service.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">io.github.blindrun.OutpostChat.desktop</launchable>
+
+  <!-- Flathub requires screenshots to be reachable over HTTPS at build time.
+       Host these on sonofatech.com alongside the existing wiki assets; the
+       same captures serve the App Store and Play listings. -->
+  <screenshots>
+    <screenshot type="default">
+      <image>https://sonofatech.com/outpost/screenshots/channels.png</image>
+      <caption>A text channel with replies and reactions</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://sonofatech.com/outpost/screenshots/voice.png</image>
+      <caption>A voice channel with several people connected</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://sonofatech.com/outpost/screenshots/dms.png</image>
+      <caption>Direct messages, with end-to-end encryption available</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://sonofatech.com/outpost/screenshots/settings.png</image>
+      <caption>Roles and permissions in server settings</caption>
+    </screenshot>
+  </screenshots>
+
+  <url type="homepage">https://outpost-chat.com</url>
+  <url type="bugtracker">https://github.com/blindrun/outpost-chat/issues</url>
+  <url type="vcs-browser">https://github.com/blindrun/outpost-chat</url>
+
+  <!-- OARS, stated honestly: this is an app for talking to other people, and
+       the operator of whichever server you join sets the rules. Under-rating
+       a chat app is the fastest way to fail review, and it would be
+       dishonest — anything a member types or says can reach you.
+       social-info is "moderate" because an account carries an email address
+       and username, which go to the server you choose to join. -->
+  <content_rating type="oars-1.1">
+    <content_attribute id="social-chat">intense</content_attribute>
+    <content_attribute id="social-audio">intense</content_attribute>
+    <content_attribute id="social-info">moderate</content_attribute>
+  </content_rating>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#e8703a</color>
+    <color type="primary" scheme_preference="dark">#2b2d31</color>
+  </branding>
+
+  <categories>
+    <category>Network</category>
+    <category>InstantMessaging</category>
+    <category>Chat</category>
+  </categories>
+
+  <keywords>
+    <keyword>chat</keyword>
+    <keyword>voice</keyword>
+    <keyword>self-hosted</keyword>
+    <keyword>community</keyword>
+  </keywords>
+
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+
+  <!-- Keep this in sync with each release; Flathub shows it as the
+       what's-new text. The dates are release dates, not build dates. -->
+  <releases>
+    <release version="0.3.15" date="2026-08-10">
+      <description>
+        <p>Voice channels now announce who joined or left.</p>
+      </description>
+    </release>
+  </releases>
+</component>
