@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.4.0 — 2026-08-11
+
+- **Direct messages can now be encrypted end-to-end.** Turn it on in User Settings → Security. Both people have to have it on; until then the conversation stays readable and says so rather than pretending otherwise. Your keys are generated on your own device and never sent to the server, so an encrypted DM can't be read by the server, by whoever runs it, or by anyone who gets hold of its database. You get a recovery code when you set up — keep it, because without it a new device can't read your old messages.
+- **Two behaviour changes come with encryption, and they're deliberate.** Automod no longer applies inside encrypted DMs — the server can't inspect what it can't read. And search inside DMs is switched off rather than left to quietly return nothing, since encrypted messages have no server-readable text to match on.
+- **A marker in the conversation shows where encryption started.** Old readable messages and new encrypted ones no longer look identical in the same scrollback. If a conversation ever drops back to unencrypted, that's marked too, as a warning.
+- **You can report a message or a member.** Pick a reason, add context if you want, and it goes to your server's moderators — not to us. Reporting works inside encrypted DMs too: your own device supplies the text, and moderators are told plainly that it came from the reporter and isn't server-verified.
+- **Moderators get a real reports queue** in Instance Settings, with the reported message captured at the time it was reported so it survives being deleted. Resolving or dismissing a report is recorded in the audit log.
+- **Blocking someone now actually hides them.** It used to only stop DMs and friend requests; a blocked member's messages now disappear from channels, pins, search and live updates, and their text is stripped out of anyone else's replies quoting them. Block also moved onto the profile card, so you can block anyone rather than only people on your friends list.
+- **Fixed screen sharing in the desktop app.** It had never worked in the desktop app on any platform — the button did nothing and reported nothing. It works in a browser, which is why it looked like a platform problem.
+
 ## v0.3.15 — 2026-08-10
 
 - **You now see who joined or left the voice channel you're in.** A sound already played, but it never told you *who* — and it's easy to miss entirely with your volume down. Brief notices now name the person, stacking if several people arrive at once.
