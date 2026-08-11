@@ -504,8 +504,17 @@ function App() {
 
   // Nothing to look at once the call ends, and leaving the view open would
   // strand the user on an empty pane with the sidebar as the only way out.
+  //
+  // Only on the connected -> disconnected transition. Testing `!connected`
+  // alone made the first click on a voice channel do nothing: join() awaits
+  // the voice-token request before it sets the active channel, so there is
+  // a gap after the click where the view has been asked to open but the
+  // call has not connected yet. This effect read that gap as "the call
+  // ended" and closed the view again, which is why it took a second click.
+  const wasConnectedRef = useRef(false);
   useEffect(() => {
-    if (!voice.connected && callViewOpen) setCallViewOpen(false);
+    if (wasConnectedRef.current && !voice.connected && callViewOpen) setCallViewOpen(false);
+    wasConnectedRef.current = voice.connected;
   }, [voice.connected, callViewOpen]);
 
   // Someone started sending something, so show it — to everyone in the
@@ -1345,7 +1354,7 @@ function App() {
   );
 
   return (
-    <div className={`app mobile-pane-${mobileActivePane} ${memberListOpen ? "" : "member-list-collapsed"}${callViewOpen && voice.connected ? " call-view" : ""}`}>
+    <div className={`app mobile-pane-${mobileActivePane} ${memberListOpen ? "" : "member-list-collapsed"}${callViewOpen && (voice.connected || voice.connecting) ? " call-view" : ""}`}>
       {connectionState === "reconnecting" && (
         <div className="connection-banner">Reconnecting…</div>
       )}
@@ -1773,11 +1782,15 @@ function App() {
         className="screen-share-overlay"
         onDoubleClick={voice.videoFeedCount > 0 ? toggleVideoFullscreen : undefined}
       />
-      {callViewOpen && voice.connected && voice.videoFeedCount === 0 && (
+      {callViewOpen && (voice.connected || voice.connecting) && voice.videoFeedCount === 0 && (
         <div className="call-empty">
+          {/* Shown from the click, not from the connection, so pressing a
+              voice channel does something immediately rather than looking
+              ignored for the length of a token request. */}
           <p>
-            You're in 🔊 {voice.activeChannel?.name}. Turn on your camera or share your screen below — anything
-            anyone sends appears here.
+            {voice.connecting
+              ? "Connecting…"
+              : `You're in 🔊 ${voice.activeChannel?.name ?? ""}. Turn on your camera or share your screen below — anything anyone sends appears here.`}
           </p>
         </div>
       )}
