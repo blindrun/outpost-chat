@@ -1358,6 +1358,8 @@ button, input, select {
   white-space: nowrap;
 }
 .voice-bar button:hover { background: var(--interactive-hover); }
+.voice-bar-avatar { width: 26px; height: 26px; font-size: 0.7rem; flex-shrink: 0; }
+.voice-bar .ptt-active { background: var(--green, #3ba55d); color: #fff; }
 .voice-bar .voice-bar-leave { background: rgba(230, 72, 63, 0.85); color: #fff; }
 .voice-bar .voice-bar-leave:hover { background: rgba(230, 72, 63, 1); }
 

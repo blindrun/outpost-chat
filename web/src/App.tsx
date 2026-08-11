@@ -508,6 +508,20 @@ function App() {
     if (!voice.connected && callViewOpen) setCallViewOpen(false);
   }, [voice.connected, callViewOpen]);
 
+  // Someone started sending something, so show it — to everyone in the
+  // channel, without anyone having to click the channel a second time.
+  // Sharing a screen that nobody is shown is the whole failure mode here.
+  //
+  // Only on the first feed. Once video is up, a second person joining in
+  // shouldn't yank the view back from someone who has deliberately gone to
+  // read a text channel.
+  const hadFeedsRef = useRef(false);
+  useEffect(() => {
+    const hasFeeds = voice.videoFeedCount > 0;
+    if (hasFeeds && !hadFeedsRef.current && voice.connected) setCallViewOpen(true);
+    hadFeedsRef.current = hasFeeds;
+  }, [voice.videoFeedCount, voice.connected]);
+
   useEffect(() => {
     const onChange = () => setVideoFullscreen(document.fullscreenElement === voice.videoContainerRef.current);
     document.addEventListener("fullscreenchange", onChange);
@@ -1624,10 +1638,11 @@ function App() {
                     // Opens the call view either way: joining shows the
                     // call, and clicking the channel you're already in is
                     // how you get back to it after reading a text channel.
-                    if (!isMyChannel) {
-                      voice.join(channel);
-                      setVoiceDetailsOpen(true);
-                    }
+                    // No popover any more: the call view is the surface,
+                    // and opening both put the same controls on screen
+                    // twice. Device pickers live in User Settings > Voice,
+                    // reachable from the call bar's gear.
+                    if (!isMyChannel) voice.join(channel);
                     setCallViewOpen(true);
                   }}
                 >
@@ -1778,9 +1793,43 @@ function App() {
           the video gets you back. */}
       {callViewOpen && voice.connected && !videoFullscreen && (
         <div className="voice-bar">
+          {/* Who you are and the voice controls in one place. The sidebar
+              user panel keeps its own copies for when you're not on a call,
+              but while the call is what's on screen the controls belong
+              with it rather than in a corner you have to look away to. */}
+          {session.user.avatarUrl ? (
+            <img
+              className="avatar voice-bar-avatar"
+              src={authedMediaUrl(session.user.avatarUrl, activeInstance.baseUrl, session.token)}
+              alt=""
+            />
+          ) : (
+            <span className="avatar avatar-placeholder voice-bar-avatar">
+              {session.user.username[0]?.toUpperCase()}
+            </span>
+          )}
           <span className="voice-bar-channel" title={voice.activeChannel?.name}>
-            🔊 {voice.activeChannel?.name}
+            {session.user.username} · 🔊 {voice.activeChannel?.name}
           </span>
+          {voice.mode === "ptt" && !voice.muted && !voice.deafened && (
+            // The keyboard binding still works; this is the only way to
+            // transmit on a touch screen, and it was previously reachable
+            // only from the popover this bar replaces.
+            <button
+              type="button"
+              className={voice.pttActive ? "ptt-active" : ""}
+              onMouseDown={() => voice.triggerPtt(true)}
+              onMouseUp={() => voice.triggerPtt(false)}
+              onMouseLeave={() => voice.pttActive && voice.triggerPtt(false)}
+              onTouchStart={(e) => {
+                e.preventDefault();
+                voice.triggerPtt(true);
+              }}
+              onTouchEnd={() => voice.triggerPtt(false)}
+            >
+              {voice.pttActive ? "🎙️ Talking…" : "Hold to Talk"}
+            </button>
+          )}
           <button type="button" onClick={voice.toggleMute} title={voice.muted ? "Unmute" : "Mute"}>
             {voice.muted ? "🔇" : "🎤"}
           </button>
@@ -1802,6 +1851,9 @@ function App() {
               ⛶
             </button>
           )}
+          <button type="button" onClick={() => setUserSettingsOpen(true)} title="User Settings">
+            ⚙️
+          </button>
           <button type="button" className="voice-bar-leave" onClick={voice.leave} title="Disconnect">
             Leave
           </button>
