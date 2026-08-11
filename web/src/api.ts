@@ -855,6 +855,68 @@ export function getModerationAuditLog(baseUrl: string, token: string) {
   return request<ModerationLogEntry[]>(baseUrl, "/moderation/audit-log", token);
 }
 
+// Kept in the same order the report dialog lists them; the values are what
+// the server's own enum accepts (see routes/reports.ts).
+export const REPORT_REASONS = [
+  { value: "spam", label: "Spam or scam" },
+  { value: "harassment", label: "Harassment or bullying" },
+  { value: "hate_speech", label: "Hate speech" },
+  { value: "sexual_content", label: "Unwanted sexual content" },
+  { value: "violence_or_threats", label: "Violence or threats" },
+  { value: "self_harm", label: "Self-harm concern" },
+  { value: "other", label: "Something else" },
+] as const;
+
+export type ReportReason = (typeof REPORT_REASONS)[number]["value"];
+
+export interface Report {
+  id: string;
+  reason: ReportReason;
+  detail: string | null;
+  status: "OPEN" | "RESOLVED" | "DISMISSED";
+  createdAt: string;
+  handledAt: string | null;
+  handledByUsername: string | null;
+  reporterId: string;
+  reporterUsername: string;
+  targetUserId: string;
+  targetUsername: string;
+  targetBanned: boolean;
+  messageId: string | null;
+  channelName: string | null;
+  messageContent: string | null;
+  // The reported text came from the reporter's own client, not the stored
+  // message — only possible for an encrypted DM, and shown as unverified.
+  contentFromReporter: boolean;
+}
+
+// `messageContent` is only read by the server for an encrypted DM message,
+// where it has no plaintext of its own — see Report.contentFromReporter.
+// Returns alreadyReported: true when this is a repeat of an open report
+// rather than a new one.
+export function createReport(
+  baseUrl: string,
+  token: string,
+  body: { messageId?: string; targetUserId?: string; reason: ReportReason; detail?: string; messageContent?: string },
+) {
+  return request<{ id: string; alreadyReported: boolean }>(baseUrl, "/reports", token, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function listReports(baseUrl: string, token: string, status: "OPEN" | "RESOLVED" | "DISMISSED" | "ALL" = "OPEN") {
+  return request<{ openCount: number; reports: Report[] }>(baseUrl, `/reports?status=${status}`, token);
+}
+
+export function resolveReport(baseUrl: string, token: string, reportId: string) {
+  return request<void>(baseUrl, `/reports/${reportId}/resolve`, token, { method: "POST" });
+}
+
+export function dismissReport(baseUrl: string, token: string, reportId: string) {
+  return request<void>(baseUrl, `/reports/${reportId}/dismiss`, token, { method: "POST" });
+}
+
 export function listFriends(baseUrl: string, token: string) {
   return request<FriendsList>(baseUrl, "/friends", token);
 }
@@ -923,6 +985,12 @@ type GatewayEvent =
   | { type: "FRIEND_REQUEST_RECEIVED"; user: FriendUser }
   | { type: "FRIEND_REQUEST_ACCEPTED"; user: FriendUser }
   | { type: "FRIEND_REMOVED"; userId: string }
+  // Only ever delivered to online moderators (see routes/reports.ts) — the
+  // payload is a summary, not the reported content itself.
+  | {
+      type: "REPORT_CREATE";
+      report: { id: string; reason: ReportReason; reporterUsername: string; targetUsername: string; createdAt: string };
+    }
   // Synthesized locally by the Gateway class itself, not sent by the
   // server — "reconnecting" fires on any drop worth retrying (a deploy,
   // a network blip); "disconnected" only for a rejection retrying can't

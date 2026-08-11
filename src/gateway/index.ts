@@ -17,6 +17,7 @@ import { PERMISSIONS, canAccessChannel, filterVisibleChannels, hasPermission } f
 import { broadcastToChannel } from "./channelBroadcast.js";
 import { hydrateAuthors, hydrateReplyPreviews } from "../routes/messages.js";
 import { areFriends } from "../util/friends.js";
+import { getBlockersOf } from "../util/blocks.js";
 import {
   isAutomodBlocked,
   handlePostMessageBotHooks,
@@ -289,9 +290,17 @@ export async function gatewayRoutes(app: FastifyInstance) {
             message: { ...hydrated, authorUsername: username, authorAvatarUrl: author?.avatarUrl ?? null },
           };
           if (dmMembers) {
+            // No block filtering needed on this path: a DM only delivers at
+            // all while the friendship is ACCEPTED, and blocking replaces
+            // that status (checked a few lines above, on every send).
             sendToUsers(dmMembers, outgoing);
           } else {
-            await broadcastToChannel(parsed.channelId, outgoing);
+            // MESSAGE_CREATE is the only message event that needs this. An
+            // edit, delete, pin or reaction targeting a message the blocker
+            // never received is already inert on their client — those
+            // handlers map or filter over messages they already have — so
+            // they don't pay for the extra lookup.
+            await broadcastToChannel(parsed.channelId, outgoing, undefined, await getBlockersOf(userId));
           }
 
           // Fire-and-forget on purpose — commands/leveling/level-up

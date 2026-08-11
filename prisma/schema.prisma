@@ -156,6 +156,53 @@ model ModerationLogEntry {
   createdAt DateTime @default(now())
 }
 
+enum ReportStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+// A member-submitted report of a message or another member. Required by App
+// Store Guideline 1.2 (any app with user-generated content needs a way for
+// users to flag it and for someone to act on the flag), which is also why
+// this is a real reviewable queue rather than a fire-and-forget email.
+//
+// Same no-FK reasoning as ModerationLogEntry above: a report has to outlive
+// the accounts and the message involved, since the most common outcome of a
+// serious report is exactly that the offender's account or message stops
+// existing. messageContent is a snapshot taken at report time for the same
+// reason — a moderator opening the queue an hour later still needs to see
+// what was actually reported, even if the author deleted it in the meantime.
+model Report {
+  id             String       @id @default(uuid())
+  reporterId     String
+  targetUserId   String
+  // Set when reporting a specific message; null when reporting a member's
+  // conduct generally (from their profile card).
+  messageId      String?
+  channelId      String?
+  messageContent String?
+  // True when messageContent came from the reporter's client rather than
+  // from the stored row — the only way to report an end-to-end encrypted DM,
+  // since the server genuinely cannot read one (see Message.encryptedPayload).
+  // Surfaced in the moderator queue as unverified, because it is: a reporter
+  // could type anything here. Never set for an ordinary channel message,
+  // where the server has the real text.
+  contentFromReporter Boolean @default(false)
+  // One of the fixed categories in routes/reports.ts — kept a plain string
+  // rather than an enum so a self-hoster can add their own without a
+  // migration, matching how Warning.source is stored.
+  reason         String
+  detail         String?
+  status         ReportStatus @default(OPEN)
+  handledById    String?
+  handledAt      DateTime?
+  createdAt      DateTime     @default(now())
+
+  // The moderator queue's only real query: open reports, newest first.
+  @@index([status, createdAt])
+}
+
 model InstanceSettings {
   id                      String  @id @default("singleton")
   name                    String  @default("Outpost")

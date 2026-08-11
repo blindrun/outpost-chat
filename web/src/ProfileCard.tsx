@@ -7,6 +7,7 @@ import {
   authedMediaUrl,
   assignRole,
   banMember,
+  blockUser,
   declineFriendRequest,
   getFriendStatus,
   getMemberProfile,
@@ -16,9 +17,11 @@ import {
   sendFriendRequest,
   unassignRole,
   unbanMember,
+  unblockUser,
   unmuteMember,
   warnMember,
 } from "./api";
+import { ReportModal } from "./ReportModal";
 
 export function ProfileCard({
   baseUrl,
@@ -58,6 +61,7 @@ export function ProfileCard({
   const [warnReason, setWarnReason] = useState("");
   const [friendStatus, setFriendStatus] = useState<FriendStatus | null>(null);
   const [friendBusy, setFriendBusy] = useState(false);
+  const [reporting, setReporting] = useState(false);
 
   function refresh() {
     getMemberProfile(baseUrl, token, userId)
@@ -123,6 +127,39 @@ export function ProfileCard({
     try {
       await removeFriend(baseUrl, token, userId);
       refreshFriendStatus();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setFriendBusy(false);
+    }
+  }
+
+  // Blocking is deliberately available from any member's profile, not just
+  // from the friends list where it used to be the only entry point — the
+  // person you need to block is usually someone you're not friends with.
+  // It also hides their messages everywhere, which is enforced server-side
+  // (see util/blocks.ts), so the message list needs a refetch afterwards.
+  async function handleBlock() {
+    setError(null);
+    setFriendBusy(true);
+    try {
+      await blockUser(baseUrl, token, userId);
+      refreshFriendStatus();
+      onMemberChanged();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setFriendBusy(false);
+    }
+  }
+
+  async function handleUnblock() {
+    setError(null);
+    setFriendBusy(true);
+    try {
+      await unblockUser(baseUrl, token, userId);
+      refreshFriendStatus();
+      onMemberChanged();
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -218,6 +255,20 @@ export function ProfileCard({
     }
   }
 
+  // The report dialog is a sibling of the card's own backdrop rather than a
+  // child of it, so it isn't clipped or stacked underneath the popover.
+  if (reporting && profile) {
+    return (
+      <ReportModal
+        baseUrl={baseUrl}
+        token={token}
+        targetUserId={userId}
+        targetUsername={profile.username}
+        onClose={() => setReporting(false)}
+      />
+    );
+  }
+
   return (
     <div className="role-popover-backdrop" onClick={onClose}>
       <div className="role-popover profile-card" onClick={(e) => e.stopPropagation()}>
@@ -277,6 +328,28 @@ export function ProfileCard({
                       Decline
                     </button>
                   </div>
+                )}
+
+                {/* Available against any member regardless of friend status
+                    — these are the two things someone needs when another
+                    member is a problem, and neither depends on moderator
+                    permissions. */}
+                <div className="mod-actions-row">
+                  {friendStatus === "blocked_by_me" ? (
+                    <button type="button" className="btn secondary" onClick={handleUnblock} disabled={friendBusy}>
+                      Unblock
+                    </button>
+                  ) : (
+                    <button type="button" className="btn secondary" onClick={handleBlock} disabled={friendBusy}>
+                      Block
+                    </button>
+                  )}
+                  <button type="button" className="btn secondary danger" onClick={() => setReporting(true)}>
+                    Report
+                  </button>
+                </div>
+                {friendStatus === "blocked_by_me" && (
+                  <p className="invite-meta">Blocked — you won't see their messages anywhere on this server.</p>
                 )}
 
                 {canManageRoles && (

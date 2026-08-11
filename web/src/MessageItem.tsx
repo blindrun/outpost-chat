@@ -224,6 +224,7 @@ export function MessageItem({
   onUnpin,
   onViewProfile,
   onThreadClick,
+  onReport,
 }: {
   baseUrl: string;
   token: string;
@@ -263,6 +264,9 @@ export function MessageItem({
   // opens it either way — same handler covers "start a thread" and
   // "open the existing thread" since the caller (App.tsx) knows which.
   onThreadClick: (message: Message) => void;
+  // Opens the report dialog for this message. App.tsx owns the modal state
+  // so only one is ever mounted, same as the profile card.
+  onReport: (message: Message) => void;
 }) {
   // Desktop reveals the toolbar on :hover (index.css); there's no hover on
   // a touchscreen, so tapping the message body toggles this instead — see
@@ -510,6 +514,14 @@ export function MessageItem({
         {(isOwn || canModerate) && !editing && (
           <button className="toolbar-btn" title="Delete" onClick={() => onDelete(message.id)}>
             🗑️
+          </button>
+        )}
+        {/* Only a real member's message can be reported — a webhook or the
+            built-in bot has no account to action, and reporting yourself is
+            refused server-side anyway. */}
+        {!isOwn && message.authorId && (
+          <button className="toolbar-btn" title="Report" onClick={() => onReport(message)}>
+            🚩
           </button>
         )}
       </div>

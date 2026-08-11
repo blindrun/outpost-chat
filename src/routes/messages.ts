@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../plugins/db.js";
 import { canAccessChannel, filterVisibleChannels } from "../util/permissions.js";
+import { excludeBlockedAuthors, getBlockedByUser, stripBlockedReplyTargets } from "../util/blocks.js";
 
 const historyQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
@@ -197,17 +198,19 @@ export async function messageRoutes(app: FastifyInstance) {
       visibleChannelIds = (await filterVisibleChannels(userId, nonDmChannels)).map((c) => c.id);
     }
 
+    const blockedIds = await getBlockedByUser(userId);
     const messages = await prisma.message.findMany({
       where: {
         content: { contains: query.q, mode: "insensitive" },
         ...(query.channelId ? { channelId: query.channelId } : { channelId: { in: visibleChannelIds } }),
+        ...excludeBlockedAuthors(blockedIds),
       },
       orderBy: { createdAt: "desc" },
       take: query.limit,
       include: { channel: { select: { name: true } }, replyTo: true },
     });
 
-    const hydrated = await hydrateAuthors(messages);
+    const hydrated = await hydrateAuthors(stripBlockedReplyTargets(messages, blockedIds));
     const withReplies = await hydrateReplyPreviews(hydrated);
     return withReplies.map(({ channel, ...m }) => ({ ...m, channelName: channel.name }));
   });
@@ -233,10 +236,16 @@ export async function messageRoutes(app: FastifyInstance) {
       beforeDate = cursor?.createdAt;
     }
 
+    // A blocked author's messages are dropped here rather than in the client
+    // so they're gone from every client at once, including one that's out of
+    // date. Note this can return fewer than `limit` rows — the cursor is
+    // `before`, not a count, so pagination is unaffected.
+    const blockedIds = await getBlockedByUser(userId);
     const messages = await prisma.message.findMany({
       where: {
         channelId,
         ...(beforeDate ? { createdAt: { lt: beforeDate } } : {}),
+        ...excludeBlockedAuthors(blockedIds),
       },
       orderBy: { createdAt: "desc" },
       take: query.limit,
@@ -247,7 +256,7 @@ export async function messageRoutes(app: FastifyInstance) {
       },
     });
 
-    const hydrated = await hydrateAuthors(messages);
+    const hydrated = await hydrateAuthors(stripBlockedReplyTargets(messages, blockedIds));
     const withReplies = await hydrateReplyPreviews(hydrated);
     return withReplies
       .map(({ thread, ...m }) => ({
@@ -274,13 +283,14 @@ export async function messageRoutes(app: FastifyInstance) {
       return reply.status(403).send({ error: "you don't have access to this channel" });
     }
 
+    const blockedIds = await getBlockedByUser(userId);
     const messages = await prisma.message.findMany({
-      where: { channelId, pinned: true },
+      where: { channelId, pinned: true, ...excludeBlockedAuthors(blockedIds) },
       orderBy: { createdAt: "desc" },
       include: { reactions: true, replyTo: true },
     });
 
-    const hydrated = await hydrateAuthors(messages);
+    const hydrated = await hydrateAuthors(stripBlockedReplyTargets(messages, blockedIds));
     return hydrateReplyPreviews(hydrated);
   });
 

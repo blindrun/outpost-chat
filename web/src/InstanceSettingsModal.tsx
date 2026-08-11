@@ -29,6 +29,7 @@ import { ChannelsPanel } from "./ChannelsPanel";
 import { EmojiSettingsPanel } from "./EmojiSettingsPanel";
 import { ApiBotsPanel } from "./ApiBotsPanel";
 import { ImportPanel } from "./ImportPanel";
+import { ReportsPanel } from "./ReportsPanel";
 import { ThemePicker } from "./ThemePicker";
 
 const ALL_PERMISSIONS: Permission[] = [
@@ -43,7 +44,7 @@ const ALL_PERMISSIONS: Permission[] = [
   "UPLOAD_VIDEOS",
 ];
 
-type Tab = "general" | "mail" | "roles" | "members" | "channels" | "invites" | "webhooks" | "bot" | "emoji" | "apiBots" | "auditLog" | "import";
+type Tab = "general" | "mail" | "roles" | "members" | "channels" | "invites" | "webhooks" | "bot" | "emoji" | "apiBots" | "reports" | "auditLog" | "import";
 
 function GeneralTab({
   baseUrl,
@@ -670,6 +671,7 @@ export function InstanceSettingsModal({
   onChannelUpdated,
   customEmoji,
   onCustomEmojiChanged,
+  onViewProfile,
 }: {
   baseUrl: string;
   token: string;
@@ -683,6 +685,9 @@ export function InstanceSettingsModal({
   onChannelUpdated: (channel: Channel) => void;
   customEmoji: CustomEmoji[];
   onCustomEmojiChanged: () => void;
+  // Opens a member's profile card — the Reports tab hands off to it for the
+  // actual warn/mute/ban, rather than restating those actions itself.
+  onViewProfile: (userId: string) => void;
 }) {
   const [tab, setTab] = useState<Tab>("general");
 
@@ -723,6 +728,11 @@ export function InstanceSettingsModal({
           API Bots
         </button>
         {canModerate && (
+          <button className={tab === "reports" ? "active" : ""} onClick={() => setTab("reports")}>
+            Reports
+          </button>
+        )}
+        {canModerate && (
           <button className={tab === "auditLog" ? "active" : ""} onClick={() => setTab("auditLog")}>
             Audit Log
           </button>
@@ -757,6 +767,9 @@ export function InstanceSettingsModal({
         <EmojiSettingsPanel baseUrl={baseUrl} token={token} customEmoji={customEmoji} onChanged={onCustomEmojiChanged} />
       )}
       {tab === "apiBots" && <ApiBotsPanel baseUrl={baseUrl} token={token} />}
+      {tab === "reports" && canModerate && (
+        <ReportsPanel baseUrl={baseUrl} token={token} onViewProfile={onViewProfile} />
+      )}
       {tab === "auditLog" && canModerate && <AuditLogTab baseUrl={baseUrl} token={token} />}
       {tab === "import" && isOwner && <ImportPanel baseUrl={baseUrl} token={token} />}
 

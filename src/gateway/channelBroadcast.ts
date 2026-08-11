@@ -4,22 +4,36 @@ import { canAccessChannel, filterVisibleChannels } from "../util/permissions.js"
 import { allOnlineUserIds, broadcastAll, sendToUsers } from "./rooms.js";
 
 // Same shape as broadcastAll, but scoped to a channel — for an unrestricted
-// channel (the common case) this is just broadcastAll, so it's safe to use
-// everywhere broadcastAll used to be for a non-DM channel event. For a
-// restricted channel it only reaches the online users who can actually see
-// it, checked fresh on every call rather than cached, since role
-// assignments and a channel's restriction can both change between events.
-export async function broadcastToChannel(channelId: string, payload: unknown, exclude?: WebSocket) {
+// channel with nobody excluded (the common case) this is just broadcastAll,
+// so it's safe to use everywhere broadcastAll used to be for a non-DM
+// channel event. For a restricted channel it only reaches the online users
+// who can actually see it, checked fresh on every call rather than cached,
+// since role assignments and a channel's restriction can both change between
+// events.
+//
+// excludeUserIds drops specific recipients regardless of access — used for
+// message events so they never reach someone who has blocked the author (see
+// util/blocks.ts). It's a recipient filter, not a permission one: the
+// author still gets their own message, and everyone else's view is
+// unaffected.
+export async function broadcastToChannel(
+  channelId: string,
+  payload: unknown,
+  exclude?: WebSocket,
+  excludeUserIds: string[] = [],
+) {
   const channel = await prisma.channel.findUnique({ where: { id: channelId }, select: { restrictedToRoleIds: true } });
-  if (!channel || channel.restrictedToRoleIds.length === 0) {
+  const restricted = channel && channel.restrictedToRoleIds.length > 0 ? channel : null;
+  if (!restricted && excludeUserIds.length === 0) {
     broadcastAll(payload, exclude);
     return;
   }
 
-  const onlineIds = allOnlineUserIds();
+  const excluded = new Set(excludeUserIds);
   const allowed: string[] = [];
-  for (const uid of onlineIds) {
-    if (await canAccessChannel(uid, channel)) allowed.push(uid);
+  for (const uid of allOnlineUserIds()) {
+    if (excluded.has(uid)) continue;
+    if (!restricted || (await canAccessChannel(uid, restricted))) allowed.push(uid);
   }
   sendToUsers(allowed, payload, exclude);
 }
