@@ -1262,13 +1262,17 @@ button, input, select {
 }
 .screen-share-video { display: block; width: 100%; max-height: 40vh; }
 
-/* Stage mode: the share fills the channel pane while you're looking at the
-   voice channel it belongs to. The container is a direct child of .app's
-   grid, so dropping position:fixed and claiming column 3 lands it exactly
-   over .chat-pane — no measuring of sidebar widths, and it keeps working
-   when the member list collapses and the grid becomes three columns.
-   Later in DOM order than .chat-pane, so it paints on top without a
-   z-index fight. */
+/* Stage mode: any live feed takes the channel pane. The container is a
+   direct child of .app's grid, so dropping position:fixed and claiming
+   column 3 lands it exactly over .chat-pane — no measuring of sidebar
+   widths, and it keeps working when the member list collapses and the grid
+   becomes three columns. Later in DOM order than .chat-pane, so it paints
+   on top without a z-index fight.
+
+   auto-fit rather than a fixed column count: one feed fills the pane, two
+   sit side by side, and a crowd wraps into rows, all without the app
+   counting anything. minmax's floor is what decides when to wrap, so tiles
+   never shrink below something worth looking at. */
 .screen-share-overlay.stage {
   position: static;
   grid-column: 3;
@@ -1278,31 +1282,56 @@ button, input, select {
   background: var(--bg-primary);
   min-height: 0;
   overflow: hidden;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  grid-auto-rows: 1fr;
+  align-content: center;
+  gap: 0.5rem;
 }
-/* Tiles share the height rather than each taking 40vh — two people sharing
-   at once should halve the space, not overflow the pane. */
-.screen-share-overlay.stage .screen-share-tile {
-  flex: 1 1 0;
+.screen-share-overlay.stage .screen-share-tile,
+.screen-share-overlay.stage .camera-tile {
   min-height: 0;
+  max-width: none;
+  /* Overrides the camera tile's fixed 4:3 — in the grid a tile takes the
+     cell it's given, and the video letterboxes inside it. */
+  aspect-ratio: auto;
   box-shadow: none;
 }
 /* contain, not cover: a shared screen is information. Cropping it to fill
-   an odd aspect ratio would cut off exactly what someone is pointing at. */
-.screen-share-overlay.stage .screen-share-video {
+   an odd aspect ratio would cut off exactly what someone is pointing at.
+   Cameras follow suit here rather than keeping their cover crop — at stage
+   size a cropped face loses more than the letterboxing costs. */
+.screen-share-overlay.stage .screen-share-video,
+.screen-share-overlay.stage .camera-video {
   width: 100%;
   height: 100%;
   max-height: none;
   object-fit: contain;
 }
-/* Cameras are a wrapping row inside the same overlay, so faces sit across
-   the top and a screen share keeps the column below to itself. Tiles are a
-   fixed aspect so a row of them stays even whatever each webcam reports. */
-.camera-strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  flex: 0 0 auto;
+
+/* Sits over the stage's top-right corner, and becomes a small floating
+   button once minimised — the only way back to a share you've dismissed. */
+.video-stage-toggle {
+  position: fixed;
+  top: 0.8rem;
+  right: 1rem;
+  z-index: 41;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+  cursor: pointer;
 }
+.video-stage-toggle:hover { background: rgba(0, 0, 0, 0.75); }
+.video-stage-toggle.minimized {
+  top: auto;
+  bottom: 1rem;
+  right: 1rem;
+}
+/* Camera tiles in the floating (non-stage) corner view. In stage mode the
+   grid rules further down take over their sizing. */
 .camera-tile {
   position: relative;
   flex: 1 1 160px;
@@ -1324,8 +1353,6 @@ button, input, select {
    outright, because a paused video element keeps showing its last frame
    and a frozen face looks exactly like a live one. */
 .camera-tile.camera-muted { display: none; }
-.screen-share-overlay.stage .camera-strip { flex: 0 0 auto; }
-.screen-share-overlay.stage .camera-tile { box-shadow: none; }
 
 .screen-share-label {
   position: absolute;

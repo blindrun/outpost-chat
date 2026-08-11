@@ -211,6 +211,10 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
   const [screenSharing, setScreenSharing] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
   const [cameraSupported, setCameraSupported] = useState(true);
+  // Total video tiles on screen -- cameras and screen shares, mine and
+  // everyone else's. Drives whether the app shows a video stage at all, so
+  // it has to count every kind of feed rather than just my own.
+  const [videoFeedCount, setVideoFeedCount] = useState(0);
   // false only for engines that can't do it (the native iOS engine, once it
   // exists) — VoicePanel hides the Share Screen button when this is false
   // rather than showing a control that can never work.
@@ -309,6 +313,7 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
           setScreenSharing(false);
           cameraOnRef.current = false;
           setCameraOn(false);
+          setVideoFeedCount(0);
         });
         engine.on("localScreenShareStarted", () => {
           if (!isCurrent()) return;
@@ -319,6 +324,9 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
           if (!isCurrent()) return;
           screenSharingRef.current = false;
           setScreenSharing(false);
+        });
+        engine.on("videoFeedsChanged", (count) => {
+          if (isCurrent()) setVideoFeedCount(count);
         });
         engine.on("localCameraStarted", () => {
           if (!isCurrent()) return;
@@ -397,6 +405,7 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
     setScreenSharing(false);
     cameraOnRef.current = false;
     setCameraOn(false);
+    setVideoFeedCount(0);
   }, [gatewayRef, activeChannel]);
 
   const toggleScreenShare = useCallback(async () => {
@@ -479,6 +488,7 @@ export function useVoiceSession(baseUrl: string, token: string, gatewayRef: Muta
     screenShareSupported,
     cameraOn,
     cameraSupported,
+    videoFeedCount,
     audioContainerRef,
     videoContainerRef,
     join,

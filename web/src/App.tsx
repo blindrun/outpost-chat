@@ -249,6 +249,12 @@ function App() {
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [openPicker, setOpenPicker] = useState<"emoji" | "gif" | null>(null);
   const [voiceDetailsOpen, setVoiceDetailsOpen] = useState(false);
+  // Sends the video stage back to a floating corner tile so the channel
+  // underneath is readable again. Deliberately not persisted: it resets
+  // whenever the feeds drop to zero (below), so the next share opens full
+  // size rather than silently staying hidden because of a choice made
+  // about some earlier call.
+  const [videoMinimized, setVideoMinimized] = useState(false);
   const [memberListOpen, setMemberListOpen] = useState(() => localStorage.getItem("memberListOpen") === "true");
   // Which full-screen pane is showing on a mobile-width viewport (desktop
   // shows all of these as grid columns at once, so this is a no-op there —
@@ -486,6 +492,13 @@ function App() {
         }
       });
   }, [activeInstanceId, activeInstance?.baseUrl]);
+
+  // Once every feed has stopped there is nothing to minimise, and leaving
+  // the flag set would hide the *next* share behind a corner tile for no
+  // reason the user could connect to anything they did.
+  useEffect(() => {
+    if (voice.videoFeedCount === 0 && videoMinimized) setVideoMinimized(false);
+  }, [voice.videoFeedCount, videoMinimized]);
 
   // Apply the active instance's theme to the whole document — this runs even
   // before login (from the unauthenticated /instance-info probe) so the
@@ -1689,16 +1702,32 @@ function App() {
           this div in the React tree would unmount it and take the live
           streams with it. Only its class changes.
 
-          Looking at the voice channel you're connected to gives the stream
-          the whole channel pane, Discord-style. Anywhere else it stays the
-          small floating tile, which is what makes a share watchable while
-          you read another channel. */}
+          Any live feed — a screen share or a camera, mine or anyone
+          else's — takes the channel pane, and the tiles grid to fit however
+          many there are.
+
+          This used to key off `selectedChannelId === voice.activeChannel.id`,
+          which in practice was never true: clicking a voice channel joins it
+          without selecting it (see the sidebar's handler, which says so
+          deliberately), so there is no way to have a voice channel "open".
+          The stage was unreachable and every share stayed a corner tile.
+
+          Minimising drops it back to that floating tile, which is what makes
+          a share watchable while you read another channel. */}
       <div
         ref={voice.videoContainerRef}
-        className={`screen-share-overlay${
-          voice.activeChannel && selectedChannelId === voice.activeChannel.id ? " stage" : ""
-        }`}
+        className={`screen-share-overlay${voice.videoFeedCount > 0 && !videoMinimized ? " stage" : ""}`}
       />
+      {voice.videoFeedCount > 0 && (
+        <button
+          type="button"
+          className={`video-stage-toggle${videoMinimized ? " minimized" : ""}`}
+          onClick={() => setVideoMinimized((v) => !v)}
+          title={videoMinimized ? "Show video" : "Back to chat"}
+        >
+          {videoMinimized ? "⤢ Video" : "✕ Back to chat"}
+        </button>
+      )}
 
       {userSettingsOpen && (
         <UserSettingsModal

@@ -43,6 +43,11 @@ export interface VoiceEngineEvents {
   // unplugged mid-call ends the track without anyone clicking anything.
   localCameraStarted: () => void;
   localCameraStopped: () => void;
+  // How many video tiles are on screen right now, cameras and screen shares
+  // together, local and remote. The UI needs the total rather than the
+  // individual events, because "is anyone sending video" is what decides
+  // whether the main pane becomes a video stage.
+  videoFeedsChanged: (count: number) => void;
 }
 
 export interface VoiceEngine {

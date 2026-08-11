@@ -63,32 +63,28 @@ export class WebLiveKitEngine implements VoiceEngine {
     this.listeners[event]?.forEach((cb) => cb(...(args as never[])));
   }
 
-  // Camera tiles live in their own row inside the same container rather
-  // than joining the screen-share column. A webcam and a shared screen want
-  // opposite layouts -- the share is the thing you're reading and should
-  // take the space, faces are a strip alongside it -- and keeping cameras
-  // in a child element means the screen-share column's sizing rules, tuned
-  // in v0.4.0, don't have to account for them at all.
-  private cameraStrip(): HTMLDivElement {
-    const existing = this.videoContainer.querySelector<HTMLDivElement>(".camera-strip");
-    if (existing) return existing;
-    const strip = document.createElement("div");
-    strip.className = "camera-strip";
-    // First child, so faces sit above a share rather than below it.
-    this.videoContainer.prepend(strip);
-    return strip;
+  // Every tile -- camera or screen share, local or remote -- is a direct
+  // child of the one container, so a single grid can lay them all out and
+  // resize as feeds come and go. An earlier version put cameras in their
+  // own row on the theory that a share should keep the full column; in
+  // practice people expect a call to tile evenly however many feeds there
+  // are, and a nested container can't participate in the outer grid.
+  private videoFeedCount(): number {
+    return this.videoContainer.querySelectorAll(".screen-share-tile, .camera-tile").length;
   }
 
-  // Drops wrappers whose media element has been detached, and the strip
-  // itself once it holds nobody -- an empty strip would otherwise keep the
-  // container non-empty, and `.screen-share-overlay:empty` is what hides
-  // the whole surface when nothing is being shared.
+  private announceFeeds() {
+    this.emit("videoFeedsChanged", this.videoFeedCount());
+  }
+
+  // Drops wrappers whose media element has been detached. `:empty` on the
+  // container is what hides the whole surface when nothing is being sent,
+  // so leaving a childless wrapper behind would keep an empty box on screen.
   private pruneEmptyTiles() {
     this.videoContainer.querySelectorAll(".screen-share-tile, .camera-tile").forEach((wrapper) => {
       if (!wrapper.querySelector("video, audio")) wrapper.remove();
     });
-    const strip = this.videoContainer.querySelector(".camera-strip");
-    if (strip && !strip.querySelector(".camera-tile")) strip.remove();
+    this.announceFeeds();
   }
 
   private setCameraTileMuted(identity: string, muted: boolean) {
@@ -112,7 +108,8 @@ export class WebLiveKitEngine implements VoiceEngine {
     caption.textContent = label;
     wrapper.appendChild(el);
     wrapper.appendChild(caption);
-    this.cameraStrip().appendChild(wrapper);
+    this.videoContainer.appendChild(wrapper);
+    this.announceFeeds();
   }
 
   private refreshParticipants() {
@@ -175,6 +172,7 @@ export class WebLiveKitEngine implements VoiceEngine {
           wrapper.appendChild(el);
           wrapper.appendChild(label);
           this.videoContainer.appendChild(wrapper);
+          this.announceFeeds();
           this.emit("screenShareTrackSubscribed", {
             participantIdentity: participant.identity,
             participantName: participant.name || participant.identity,
@@ -225,6 +223,7 @@ export class WebLiveKitEngine implements VoiceEngine {
       wrapper.appendChild(el);
       wrapper.appendChild(label);
       this.videoContainer.appendChild(wrapper);
+      this.announceFeeds();
       this.emit("localScreenShareStarted", el);
     });
     room.on(RoomEvent.LocalTrackUnpublished, (pub) => {
