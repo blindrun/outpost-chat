@@ -1369,6 +1369,54 @@ button, input, select {
 .member-username { font-weight: 600; color: var(--header-primary); font-size: 0.85rem; }
 .member-row select { background: var(--bg-sidebar); border: 1px solid var(--border-subtle); border-radius: 3px; color: var(--text-normal); font-size: 0.8rem; padding: 0.15rem 0.3rem; }
 
+/* Marks where a DM crossed between plaintext and encrypted. Sits in the
+   message flow rather than floating, because its whole job is to say which
+   side of it a given message is on. */
+.crypto-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.9rem 0.4rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.crypto-divider::before,
+.crypto-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+.crypto-divider span { white-space: nowrap; }
+/* The downgrade is the one that changes what's exposed, so it reads as a
+   warning rather than a neutral marker. */
+.crypto-divider.plaintext { color: var(--red); }
+.crypto-divider.plaintext::before,
+.crypto-divider.plaintext::after { background: var(--red); opacity: 0.4; }
+
+/* A report carries more than a member row does (who/why, the reported text,
+   the triage buttons), so it stacks instead of sitting on one line. */
+.report-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
+}
+.report-row .member-username { display: block; }
+.report-detail { font-size: 0.85rem; color: var(--text-normal); margin: 0.3rem 0 0; }
+.report-quote {
+  margin: 0.4rem 0 0;
+  padding: 0.4rem 0.6rem;
+  border-left: 3px solid var(--red);
+  background: var(--bg-sidebar);
+  border-radius: 3px;
+  font-size: 0.85rem;
+  color: var(--text-normal);
+  /* Reported text is arbitrary user input — a long unbroken string can't be
+     allowed to stretch the settings modal. */
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 /* ---------- Member sidebar (main app, not Settings) ---------- */
 
 .member-sidebar {
@@ -1505,6 +1553,17 @@ button, input, select {
   animation: voice-toast-in 140ms ease-out;
 }
 .voice-toast.left { border-left-color: var(--text-muted); }
+/* Unlike the voice toasts, this one is a button — the container above sets
+   pointer-events:none so notices never eat clicks meant for the composer
+   underneath, which has to be undone for the one that's clickable. */
+.report-toast {
+  pointer-events: auto;
+  cursor: pointer;
+  border-left-color: var(--red, #d83c3e);
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+}
 @keyframes voice-toast-in {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }

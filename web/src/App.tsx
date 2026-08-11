@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import {
   Channel,
   DMChannel,
@@ -45,6 +45,7 @@ import { SearchPanel } from "./SearchPanel";
 import { PinnedMessagesPanel } from "./PinnedMessagesPanel";
 import { LeaderboardPanel } from "./LeaderboardPanel";
 import { FriendsPanel } from "./FriendsPanel";
+import { ReportModal } from "./ReportModal";
 import { buildAcceptAttribute, UPLOAD_CATEGORIES, UPLOAD_CATEGORY_KEYS } from "./uploadCategories";
 
 // Matches a trailing "@partial" token in the text up to the cursor — used to
@@ -128,6 +129,10 @@ const PRIMARY_SERVER_URL = "https://outpost.sonofatech.com";
 // notices — several people arriving at once each get their own, stacked.
 const VOICE_TOAST_MS = 4000;
 
+// Longer than a voice toast: this one is asking a moderator to go and do
+// something, not narrating what just happened in a channel they're watching.
+const REPORT_TOAST_MS = 8000;
+
 function App() {
   const [instances, setInstances] = useState<Instance[]>(loadInstances);
   const [activeInstanceId, setActiveInstanceId] = useState<string | null>(
@@ -192,6 +197,14 @@ function App() {
   // join/leave already has direct UI feedback.
   const [voiceToasts, setVoiceToasts] = useState<{ id: number; userId: string; kind: "joined" | "left" }[]>([]);
   const voiceToastSeqRef = useRef(0);
+  // The message the report dialog is open for, if any. Reporting a member
+  // without a specific message goes through their profile card instead,
+  // which owns its own dialog.
+  const [reportTarget, setReportTarget] = useState<Message | null>(null);
+  // Moderators only: a report just came in. Same transient-notice treatment
+  // as the voice toasts above, since the queue itself lives behind two
+  // clicks in Instance Settings and would otherwise go unnoticed.
+  const [reportToasts, setReportToasts] = useState<{ id: number; text: string }[]>([]);
   // Encryption state for the currently open DM, and the plaintext of every
   // encrypted message decrypted so far (null = we hold no key that can read
   // it, which is a permanent state rather than a transient failure).
@@ -717,6 +730,15 @@ function App() {
         // all have side effects on more than one list at once, so a full
         // refetch is simpler and this fires rarely enough that it's cheap.
         setFriendsRefreshKey((k) => k + 1);
+      } else if (event.type === "REPORT_CREATE") {
+        // The server only sends this to moderators, so there's no permission
+        // check to repeat here. Deliberately says who was reported and why
+        // but not what was said — the content lives in the queue, behind the
+        // same permission, rather than on screen wherever this lands.
+        const id = ++voiceToastSeqRef.current;
+        const text = `${event.report.reporterUsername} reported ${event.report.targetUsername}`;
+        setReportToasts((prev) => [...prev, { id, text }]);
+        setTimeout(() => setReportToasts((prev) => prev.filter((t) => t.id !== id)), REPORT_TOAST_MS);
       } else if (event.type === "FORCE_DISCONNECT") {
         // Kick or ban landed on this exact client — drop the stored session
         // for this instance (not the whole bookmark, unlike Leave Server)
@@ -1233,13 +1255,25 @@ function App() {
           z-index:1 on mobile, which makes it a stacking context that would
           bury these under the server rail exactly like the voice popover was
           (see the mobile .voice-details-popover rules). */}
-      {voiceToasts.length > 0 && (
+      {(voiceToasts.length > 0 || reportToasts.length > 0) && (
         <div className="voice-toasts">
           {voiceToasts.map((toast) => (
             <div key={toast.id} className={`voice-toast ${toast.kind}`}>
               <strong>{usernameByUserId.get(toast.userId) ?? "Someone"}</strong>
               {toast.kind === "joined" ? " joined the voice channel" : " left the voice channel"}
             </div>
+          ))}
+          {reportToasts.map((toast) => (
+            <button
+              key={`report-${toast.id}`}
+              className="voice-toast report-toast"
+              onClick={() => {
+                setReportToasts((prev) => prev.filter((t) => t.id !== toast.id));
+                setInstanceSettingsOpen(true);
+              }}
+            >
+              🚩 {toast.text} — open Reports
+            </button>
           ))}
         </div>
       )}
@@ -1670,6 +1704,28 @@ function App() {
           onChannelUpdated={(channel) => setChannels((prev) => prev.map((c) => (c.id === channel.id ? channel : c)))}
           customEmoji={customEmoji}
           onCustomEmojiChanged={refreshCustomEmoji}
+          onViewProfile={(userId) => {
+            setInstanceSettingsOpen(false);
+            setViewingProfileUserId(userId);
+          }}
+        />
+      )}
+      {reportTarget && (
+        <ReportModal
+          baseUrl={activeInstance.baseUrl}
+          token={session.token}
+          messageId={reportTarget.id}
+          targetUsername={reportTarget.authorUsername ?? "this member"}
+          // Only for an encrypted DM, and only once this device has actually
+          // decrypted it — the server has no plaintext of its own to store,
+          // and sending the "can't decrypt" placeholder as evidence would be
+          // worse than sending nothing.
+          encryptedMessageContent={
+            reportTarget.encryptedPayload && typeof decrypted[reportTarget.id] === "string"
+              ? (decrypted[reportTarget.id] as string)
+              : undefined
+          }
+          onClose={() => setReportTarget(null)}
         />
       )}
       {searchOpen && (
@@ -1774,7 +1830,35 @@ function App() {
                   !m.replyTo &&
                   messageIdentityKey(prev) === messageIdentityKey(m) &&
                   new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() < MESSAGE_GROUP_WINDOW_MS;
+                // Where a DM crossed between plaintext and encrypted. Without
+                // this, old readable messages and new unreadable-to-the-server
+                // ones look identical in the same scrollback, and there's no
+                // way to tell which of your messages the server can still
+                // read. The status line above the composer only describes the
+                // conversation's state *now*.
+                //
+                // Both directions are marked, and the downgrade deliberately
+                // reads as a warning: going back to plaintext is the one that
+                // changes what's exposed, and it can happen without any action
+                // by the person reading this (the other party turning
+                // encryption off is enough).
+                const cryptoBoundary =
+                  selectedChannel?.type === "DM" && prev && !!prev.encryptedPayload !== !!m.encryptedPayload
+                    ? m.encryptedPayload
+                      ? "encrypted"
+                      : "plaintext"
+                    : null;
                 return (
+                <Fragment key={`wrap-${m.id}`}>
+                {cryptoBoundary && (
+                  <div className={`crypto-divider ${cryptoBoundary}`}>
+                    <span>
+                      {cryptoBoundary === "encrypted"
+                        ? "🔒 Messages below here are encrypted end-to-end"
+                        : "⚠️ Messages below here are not encrypted — the server can read them"}
+                    </span>
+                  </div>
+                )}
                 <MessageItem
                   key={m.id}
                   baseUrl={activeInstance.baseUrl}
@@ -1802,7 +1886,9 @@ function App() {
                   onUnpin={(id) => gatewayRef.current?.unpinMessage(id)}
                   onViewProfile={setViewingProfileUserId}
                   onThreadClick={handleThreadClick}
+                  onReport={setReportTarget}
                 />
+                </Fragment>
                 );
               })}
             </div>
