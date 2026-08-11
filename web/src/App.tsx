@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import {
   Channel,
   DMChannel,
@@ -255,6 +255,11 @@ function App() {
   // size rather than silently staying hidden because of a choice made
   // about some earlier call.
   const [videoMinimized, setVideoMinimized] = useState(false);
+  // Mirrors the browser's own fullscreen state rather than tracking our own
+  // boolean: the user can leave fullscreen with Escape or the browser's
+  // chrome without touching our button, and a local flag would then be
+  // wrong with no event to correct it.
+  const [videoFullscreen, setVideoFullscreen] = useState(false);
   const [memberListOpen, setMemberListOpen] = useState(() => localStorage.getItem("memberListOpen") === "true");
   // Which full-screen pane is showing on a mobile-width viewport (desktop
   // shows all of these as grid columns at once, so this is a no-op there —
@@ -499,6 +504,33 @@ function App() {
   useEffect(() => {
     if (voice.videoFeedCount === 0 && videoMinimized) setVideoMinimized(false);
   }, [voice.videoFeedCount, videoMinimized]);
+
+  useEffect(() => {
+    const onChange = () => setVideoFullscreen(document.fullscreenElement === voice.videoContainerRef.current);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, [voice.videoContainerRef]);
+
+  // The last feed ending while fullscreen would leave the user staring at a
+  // black screen with no obvious way back, so drop out of it for them.
+  useEffect(() => {
+    if (voice.videoFeedCount === 0 && document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
+  }, [voice.videoFeedCount]);
+
+  const toggleVideoFullscreen = useCallback(() => {
+    const el = voice.videoContainerRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+      return;
+    }
+    // Coming out of minimised first: fullscreening the little corner tile
+    // technically works and looks like a bug.
+    setVideoMinimized(false);
+    el.requestFullscreen().catch((err) => console.warn("fullscreen refused:", err));
+  }, [voice.videoContainerRef]);
 
   // Apply the active instance's theme to the whole document — this runs even
   // before login (from the unauthenticated /instance-info probe) so the
@@ -1717,16 +1749,53 @@ function App() {
       <div
         ref={voice.videoContainerRef}
         className={`screen-share-overlay${voice.videoFeedCount > 0 && !videoMinimized ? " stage" : ""}`}
+        onDoubleClick={voice.videoFeedCount > 0 ? toggleVideoFullscreen : undefined}
       />
-      {voice.videoFeedCount > 0 && (
-        <button
-          type="button"
-          className={`video-stage-toggle${videoMinimized ? " minimized" : ""}`}
-          onClick={() => setVideoMinimized((v) => !v)}
-          title={videoMinimized ? "Show video" : "Back to chat"}
-        >
-          {videoMinimized ? "⤢ Video" : "✕ Back to chat"}
-        </button>
+      {/* Voice controls live here, in the window, rather than only inside
+          the sidebar popover you had to open by clicking the channel again.
+          Being connected is a state you're in while doing something else, so
+          the controls follow you: browsing text channels never interrupts
+          voice, video or a screen share, and you can mute or stop sharing
+          without hunting for the channel you joined from.
+
+          Hidden while fullscreen, where it isn't a child of the fullscreen
+          element and so can't render anyway — Escape or a double-click on
+          the video gets you back. */}
+      {voice.connected && !videoFullscreen && (
+        <div className="voice-bar">
+          <span className="voice-bar-channel" title={voice.activeChannel?.name}>
+            🔊 {voice.activeChannel?.name}
+          </span>
+          <button type="button" onClick={voice.toggleMute} title={voice.muted ? "Unmute" : "Mute"}>
+            {voice.muted ? "🔇" : "🎤"}
+          </button>
+          <button type="button" onClick={voice.toggleDeafen} title={voice.deafened ? "Undeafen" : "Deafen"}>
+            {voice.deafened ? "🔕" : "🎧"}
+          </button>
+          {voice.cameraSupported && (
+            <button type="button" onClick={voice.toggleCamera}>
+              {voice.cameraOn ? "Stop Video" : "Start Video"}
+            </button>
+          )}
+          {voice.screenShareSupported && (
+            <button type="button" onClick={voice.toggleScreenShare}>
+              {voice.screenSharing ? "Stop Sharing" : "Share Screen"}
+            </button>
+          )}
+          {voice.videoFeedCount > 0 && (
+            <>
+              <button type="button" onClick={() => setVideoMinimized((v) => !v)}>
+                {videoMinimized ? "⤢ Show video" : "✕ Back to chat"}
+              </button>
+              <button type="button" onClick={toggleVideoFullscreen} title="Fullscreen (or double-click the video)">
+                ⛶
+              </button>
+            </>
+          )}
+          <button type="button" className="voice-bar-leave" onClick={voice.leave} title="Disconnect">
+            Leave
+          </button>
+        </div>
       )}
 
       {userSettingsOpen && (
