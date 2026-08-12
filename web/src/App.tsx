@@ -28,6 +28,7 @@ import {
   reorderChannels,
   uploadFile,
 } from "./api";
+import { AppearanceSettings, loadAppearance, resolveTheme } from "./appearance";
 import { VoicePanel } from "./VoicePanel";
 import { clearCachedIcon, loadCachedIcon, refreshInstanceIcon } from "./instanceIcons";
 import { DmCryptoState, decryptForDm, encryptForDm, forgetDerivedKeys, resolveDmCrypto } from "./crypto/dm";
@@ -174,6 +175,7 @@ function App() {
     () => !!getInviteCodeFromUrl() || !!getResetTokenFromUrl() || !!getOidcCodeFromUrl() || !!getOidcErrorFromUrl(),
   );
   const [contextMenuInstanceId, setContextMenuInstanceId] = useState<string | null>(null);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
   // Captured at click time and rendered via `position: fixed` — the server
   // rail has `overflow-y: auto`, which per the CSS spec implicitly clips the
   // x-axis too, so a menu positioned `absolute` relative to the icon (inside
@@ -228,6 +230,7 @@ function App() {
   // encrypted message decrypted so far (null = we hold no key that can read
   // it, which is a permanent state rather than a transient failure).
   const [dmCrypto, setDmCrypto] = useState<DmCryptoState>({ active: false });
+  const [appearance, setAppearance] = useState<AppearanceSettings>(() => loadAppearance());
   // Bumped whenever the local key changes. Without it, enabling encryption
   // wrote a key to IndexedDB and the open DM went on saying "you haven't
   // turned encryption on" until the app was restarted — the resolve effect
@@ -561,22 +564,30 @@ function App() {
     el.requestFullscreen().catch((err) => console.warn("fullscreen refused:", err));
   }, [voice.videoContainerRef]);
 
-  // Apply the active instance's theme to the whole document — this runs even
-  // before login (from the unauthenticated /instance-info probe) so the
-  // login/register screen itself reflects the instance's chosen identity.
+  // Fetch the active instance's identity — this runs even before login (from
+  // the unauthenticated /instance-info probe) so the login/register screen
+  // itself reflects the instance's chosen identity.
   useEffect(() => {
     if (!activeInstance) {
-      document.documentElement.removeAttribute("data-theme");
       setInstanceInfo(null);
       return;
     }
-    getInstanceInfo(activeInstance.baseUrl)
-      .then((info) => {
-        setInstanceInfo(info);
-        document.documentElement.dataset.theme = info.theme;
-      })
-      .catch(console.error);
+    getInstanceInfo(activeInstance.baseUrl).then(setInstanceInfo).catch(console.error);
   }, [activeInstance?.baseUrl]);
+
+  // Theme and density are applied in one place, because the theme actually
+  // shown is the instance's choice *unless* this person overrode it. Keeping
+  // the two in separate effects meant whichever ran last won on first paint.
+  useEffect(() => {
+    const theme = resolveTheme(appearance, instanceInfo?.theme);
+    if (theme) document.documentElement.dataset.theme = theme;
+    else document.documentElement.removeAttribute("data-theme");
+
+    // Comfortable is the absence of the attribute rather than a value, so the
+    // default costs no CSS at all.
+    if (appearance.density === "compact") document.documentElement.dataset.density = "compact";
+    else document.documentElement.removeAttribute("data-density");
+  }, [appearance, instanceInfo?.theme, activeInstance?.baseUrl]);
 
   // A replaced identity invalidates every key derived from the old one, so
   // drop the cache before anything re-derives against it.
@@ -1410,64 +1421,6 @@ function App() {
           ))}
         </div>
       )}
-      <nav className="server-rail">
-        {instances.map((instance) => (
-          <div key={instance.id} className={`server-icon-wrapper ${instance.id === activeInstanceId ? "active" : ""}`}>
-            <div className="server-icon-pill" />
-            <button
-              className={`server-icon ${instance.id === activeInstanceId ? "active" : ""}`}
-              title={instance.label}
-              onClick={() => switchInstance(instance.id)}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                const rect = e.currentTarget.getBoundingClientRect();
-                setContextMenuPos({ x: rect.right + 8, y: rect.top });
-                setContextMenuInstanceId(instance.id);
-              }}
-              onTouchStart={(e) => {
-                // Touch has no right-click — long-press opens the same menu.
-                const rect = e.currentTarget.getBoundingClientRect();
-                longPressTimerRef.current = window.setTimeout(() => {
-                  setContextMenuPos({ x: rect.right + 8, y: rect.top });
-                  setContextMenuInstanceId(instance.id);
-                }, 500);
-              }}
-              onTouchEnd={() => {
-                if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
-              }}
-              onTouchMove={() => {
-                if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
-              }}
-            >
-              {instance.id === activeInstanceId && instanceInfo?.iconUrl ? (
-                <img src={authedMediaUrl(instanceInfo.iconUrl, activeInstance.baseUrl, session.token)} alt="" />
-              ) : instanceIcons[instance.id] ? (
-                // Every server other than the active one draws from the local
-                // cache — its icon lives behind that server's own auth, which
-                // this page can't present at paint time. See instanceIcons.ts.
-                <img src={instanceIcons[instance.id]} alt="" />
-              ) : (
-                initials(instance.label)
-              )}
-            </button>
-            {contextMenuInstanceId === instance.id && contextMenuPos && (
-              <>
-                <div className="server-context-backdrop" onClick={() => setContextMenuInstanceId(null)} />
-                <div className="server-context-menu" style={{ left: contextMenuPos.x, top: contextMenuPos.y }}>
-                  <div className="server-context-label">{instance.label}</div>
-                  <button type="button" className="server-context-item danger" onClick={() => leaveInstance(instance.id)}>
-                    Leave Server
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        ))}
-        <div className="rail-divider" />
-        <button className="server-icon action" title="Add a Server" onClick={() => setAddServerOpen(true)}>
-          +
-        </button>
-      </nav>
 
       {addServerOpen && (
         <Modal
@@ -1508,7 +1461,117 @@ function App() {
 
       <aside className="sidebar">
         <div className="sidebar-header">
-          <span>{instanceInfo?.name ?? activeInstance.label}</span>
+          {/* The rail used to carry this. It held one icon for most people,
+              cost 72px on every screen, and said "Discord clone" louder than
+              anything else in the app. Everything it did -- switch, show
+              which is active, leave, add -- fits a menu that costs nothing
+              until it is opened. */}
+          <button
+            type="button"
+            className="instance-switch-btn"
+            title="Switch server"
+            aria-haspopup="menu"
+            aria-expanded={switcherOpen}
+            onClick={() => setSwitcherOpen((v) => !v)}
+          >
+            <span className="instance-crest">
+              {instanceInfo?.iconUrl ? (
+                <img src={authedMediaUrl(instanceInfo.iconUrl, activeInstance.baseUrl, session.token)} alt="" />
+              ) : (
+                initials(instanceInfo?.name ?? activeInstance.label)
+              )}
+            </span>
+            <span className="instance-switch-name">{instanceInfo?.name ?? activeInstance.label}</span>
+            <span className="instance-switch-chevron">▾</span>
+          </button>
+          {switcherOpen && (
+            <>
+              <div className="instance-menu-backdrop" onClick={() => setSwitcherOpen(false)} />
+              <div className="instance-menu" role="menu">
+                {instances.map((instance) => (
+                  <button
+                    key={instance.id}
+                    type="button"
+                    role="menuitem"
+                    className={`instance-row ${instance.id === activeInstanceId ? "active" : ""}`}
+                    onClick={() => {
+                      setSwitcherOpen(false);
+                      if (instance.id !== activeInstanceId) switchInstance(instance.id);
+                    }}
+                    onContextMenu={(e) => {
+                      // Leave lived on a right-click of the rail icon, so it
+                      // stays a right-click here rather than becoming a
+                      // delete button someone can hit by accident.
+                      e.preventDefault();
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setContextMenuPos({ x: rect.left, y: rect.bottom + 4 });
+                      setContextMenuInstanceId(instance.id);
+                    }}
+                    onTouchStart={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      longPressTimerRef.current = window.setTimeout(() => {
+                        setContextMenuPos({ x: rect.left, y: rect.bottom + 4 });
+                        setContextMenuInstanceId(instance.id);
+                      }, 500);
+                    }}
+                    onTouchEnd={() => {
+                      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+                    }}
+                    onTouchMove={() => {
+                      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+                    }}
+                  >
+                    <span className="instance-crest">
+                      {instance.id === activeInstanceId && instanceInfo?.iconUrl ? (
+                        <img src={authedMediaUrl(instanceInfo.iconUrl, activeInstance.baseUrl, session.token)} alt="" />
+                      ) : instanceIcons[instance.id] ? (
+                        <img src={instanceIcons[instance.id]} alt="" />
+                      ) : (
+                        initials(instance.label)
+                      )}
+                    </span>
+                    <span className="instance-row-label">{instance.label}</span>
+                    {instance.id === activeInstanceId && <span className="instance-row-tick">✓</span>}
+                  </button>
+                ))}
+                <hr />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="instance-row"
+                  onClick={() => {
+                    setSwitcherOpen(false);
+                    setAddServerOpen(true);
+                  }}
+                >
+                  <span className="instance-crest">+</span>
+                  <span className="instance-row-label">Add a server</span>
+                </button>
+              </div>
+            </>
+          )}
+          {contextMenuInstanceId && contextMenuPos && (
+            <>
+              <div className="server-context-backdrop" onClick={() => setContextMenuInstanceId(null)} />
+              <div className="server-context-menu" style={{ left: contextMenuPos.x, top: contextMenuPos.y }}>
+                <div className="server-context-label">
+                  {instances.find((i) => i.id === contextMenuInstanceId)?.label}
+                </div>
+                <button
+                  type="button"
+                  className="server-context-item danger"
+                  onClick={() => {
+                    const id = contextMenuInstanceId;
+                    setContextMenuInstanceId(null);
+                    setSwitcherOpen(false);
+                    leaveInstance(id);
+                  }}
+                >
+                  Leave Server
+                </button>
+              </div>
+            </>
+          )}
           {/* Was isOwner-only — silently locked out any non-owner holding
               MANAGE_CHANNELS/MANAGE_ROLES/MODERATE_MEMBERS/MANAGE_SERVER
               too, since there was no way to even open the modal to reach
@@ -1904,6 +1967,9 @@ function App() {
           token={session.token}
           instanceId={activeInstance.id}
           user={session.user}
+          appearance={appearance}
+          onAppearanceChange={setAppearance}
+          instanceTheme={instanceInfo?.theme}
           onClose={() => setUserSettingsOpen(false)}
           onSessionUpdate={handleSessionUpdate}
           onAccountDeleted={() => {
@@ -2052,6 +2118,20 @@ function App() {
                 <span className="channel-icon">{selectedChannel.type === "DM" ? "💬" : "#"}</span>
               )}
               {selectedChannel.name}
+              {/* The same state .dm-crypto-status reports above the composer,
+                  repeated where it cannot scroll out of view. */}
+              {selectedChannel.type === "DM" && dmCrypto.active && (
+                <span
+                  className={`hdr-lock ${dmCrypto.trust === "changed" ? "warn" : ""}`}
+                  title={
+                    dmCrypto.trust === "changed"
+                      ? "This person's security key changed. If that wasn't them setting up a new device, stop and check."
+                      : "Encrypted end-to-end — the server can't read these messages."
+                  }
+                >
+                  {dmCrypto.trust === "changed" ? "⚠️ Key changed" : "🔒 Encrypted"}
+                </span>
+              )}
               {selectedChannel.type !== "DM" && (
                 <>
                   <button type="button" className="chat-header-icon-btn" title="Pinned Messages" onClick={() => setPinsOpen(true)}>

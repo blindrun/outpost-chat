@@ -274,7 +274,7 @@ button, input, select {
 
 .app {
   display: grid;
-  grid-template-columns: 72px 240px 1fr 240px;
+  grid-template-columns: 264px 1fr 240px;
   height: 100vh;
 }
 .connection-banner {
@@ -306,7 +306,7 @@ button, input, select {
 .member-sidebar {
   min-height: 0;
 }
-.app.member-list-collapsed { grid-template-columns: 72px 240px 1fr; }
+.app.member-list-collapsed { grid-template-columns: 264px 1fr; }
 
 /* ---------- Server rail ---------- */
 
@@ -681,14 +681,16 @@ button, input, select {
   cursor: pointer;
 }
 .voice-status-bar:hover { background: var(--interactive-hover); }
-/* Fixed and offset clear of the 72px server rail + 240px channel sidebar
+/* Fixed and offset clear of the 264px channel sidebar
    (see .app's grid-template-columns) rather than absolutely positioned
    within the sidebar column — floating it over the main chat area instead
    of the channel list means opening it never blocks channel navigation,
    which the previous sidebar-relative placement did. */
 .voice-details-popover {
   position: fixed;
-  left: 328px;
+  /* Clears the 264px sidebar + 16px. Was 328px when a 72px rail sat to its
+     left; the rail is gone, so this moved with it. */
+  left: 280px;
   bottom: 16px;
   width: 300px;
   background: var(--bg-primary);
@@ -1425,7 +1427,7 @@ button, input, select {
    Clicking any text channel leaves this view and gives chat the whole pane,
    while voice, video and screen share keep running underneath. */
 .app.call-view {
-  grid-template-columns: 72px 240px 1fr;
+  grid-template-columns: 264px 1fr;
   grid-template-rows: minmax(0, 1fr) auto;
 }
 .app.call-view .server-rail,
@@ -1845,15 +1847,14 @@ button, input, select {
     width: auto;
     height: auto;
   }
-  .server-rail { z-index: 2; width: 72px; right: auto; }
-  .sidebar { z-index: 1; left: calc(72px + env(safe-area-inset-left)); }
+    .sidebar { z-index: 1; left: env(safe-area-inset-left); }
 
   .app:not(.mobile-pane-nav) .server-rail,
   .app:not(.mobile-pane-nav) .sidebar { display: none; }
   .app:not(.mobile-pane-chat) .chat-pane { display: none; }
   .app:not(.mobile-pane-members) .member-sidebar { display: none; }
 
-  /* Desktop's left:328px offset (clearing the two-rail sidebar) would push
+  /* Desktop's left:280px offset (clearing the sidebar) would push
      this off-screen on a single-pane mobile layout — full-width bottom
      sheet instead, still clear of the channel list underneath since panes
      are mutually exclusive full-screen overlays here anyway. */
@@ -1877,7 +1878,7 @@ button, input, select {
      sidesteps the stacking question entirely, and would equally fix it if the
      mechanism were ancestor clipping instead. */
   .voice-details-popover {
-    left: calc(72px + env(safe-area-inset-left) + 0.5rem);
+    left: calc(env(safe-area-inset-left) + 0.5rem);
     right: calc(0.5rem + env(safe-area-inset-right));
     bottom: calc(4.5rem + env(safe-area-inset-bottom));
     width: auto;
@@ -1951,3 +1952,131 @@ button, input, select {
   .screen-share-overlay.stage .screen-share-tile { flex: 0 0 auto; }
   .screen-share-overlay.stage .screen-share-video { height: auto; max-height: 40vh; }
 }
+
+/* ---------- Compact density ---------- */
+
+/* Set on <html> by App, so these are document-level. "Comfortable" is the
+   absence of the attribute, so the default path costs nothing. */
+[data-density="compact"] body { font-size: 14px; }
+[data-density="compact"] .avatar { width: 26px; height: 26px; }
+[data-density="compact"] .avatar-lg { width: 40px; height: 40px; }
+[data-density="compact"] .message-header { margin-top: 0.3rem; }
+[data-density="compact"] .message-content { line-height: 1.36; }
+[data-density="compact"] .channel-btn { padding-top: 0.18rem; padding-bottom: 0.18rem; }
+[data-density="compact"] .member-list-entry { padding-top: 0.15rem; padding-bottom: 0.15rem; }
+[data-density="compact"] .chat-header { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+
+.density-choice { display: flex; gap: 0.4rem; }
+.density-choice button {
+  flex: 1;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text-normal);
+  cursor: pointer;
+}
+.density-choice button.active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ---------- Encryption state in the DM header ---------- */
+
+/* .dm-crypto-status already says this, but it sits above the composer, so it
+   is only on screen when you are scrolled to the bottom. Scroll up through a
+   long thread and the one indicator that matters is gone. The header doesn't
+   scroll, so the state lives here too. */
+.hdr-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: 0.5rem;
+  padding: 0.16rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--green);
+  border: 1px solid var(--green);
+  background: transparent;
+}
+/* A changed key is the case worth interrupting for. */
+.hdr-lock.warn { color: var(--red); border-color: var(--red); }
+
+/* ---------- Instance switcher (replaces the server rail) ---------- */
+
+.instance-switch-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+  padding: 0.25rem 0.35rem;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+.instance-switch-btn:hover { background: var(--bg-modifier-hover); }
+.instance-switch-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.instance-switch-chevron { color: var(--text-muted); font-size: 0.7em; flex-shrink: 0; }
+
+/* A place, so round -- the inverse of .avatar. See .avatar for why. */
+.instance-crest {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--brand);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.instance-crest img { width: 100%; height: 100%; object-fit: cover; }
+
+.instance-menu-backdrop { position: fixed; inset: 0; z-index: 29; }
+.instance-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 8px;
+  right: 8px;
+  z-index: 30;
+  padding: 0.35rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-floating);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.instance-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-normal);
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+.instance-row:hover { background: var(--bg-modifier-hover); }
+.instance-row.active { color: var(--header-primary); font-weight: 600; }
+.instance-row-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.instance-row-tick { margin-left: auto; color: var(--brand); flex-shrink: 0; }
+.instance-menu hr { border: none; border-top: 1px solid var(--border-subtle); margin: 0.35rem 0.2rem; }
+
+/* The header is the switcher's positioning context now. */
+.sidebar-header { position: relative; }

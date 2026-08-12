@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { startRegistration } from "@simplewebauthn/browser";
+import { AppearanceSettings, Density, ThemeChoice, saveAppearance } from "./appearance";
+import { THEMES } from "./ThemePicker";
 import {
   MfaStatus,
   User,
@@ -35,7 +37,7 @@ import { voiceCapabilities } from "./voice/createVoiceEngine";
 import { deriveConversationKey, generateIdentity, importPrivateKey, importPublicKey } from "./crypto/keys";
 import { StoredIdentity, loadIdentity, saveIdentity } from "./crypto/store";
 
-type Tab = "profile" | "password" | "security" | "voice";
+type Tab = "profile" | "password" | "security" | "voice" | "appearance";
 
 function ProfileTab({
   baseUrl,
@@ -1181,6 +1183,9 @@ export function UserSettingsModal({
   token,
   instanceId,
   user,
+  appearance,
+  onAppearanceChange,
+  instanceTheme,
   onClose,
   onSessionUpdate,
   onAccountDeleted,
@@ -1189,6 +1194,9 @@ export function UserSettingsModal({
   token: string;
   instanceId: string;
   user: User;
+  appearance: AppearanceSettings;
+  onAppearanceChange: (next: AppearanceSettings) => void;
+  instanceTheme?: string;
   onClose: () => void;
   onSessionUpdate: (update: { token?: string; user: User }) => void;
   onAccountDeleted: () => void;
@@ -1211,6 +1219,9 @@ export function UserSettingsModal({
         <button className={tab === "voice" ? "active" : ""} onClick={() => setTab("voice")}>
           Voice
         </button>
+        <button className={tab === "appearance" ? "active" : ""} onClick={() => setTab("appearance")}>
+          Appearance
+        </button>
       </div>
 
       {tab === "profile" && (
@@ -1226,6 +1237,13 @@ export function UserSettingsModal({
       {tab === "password" && <PasswordTab baseUrl={baseUrl} token={token} />}
       {tab === "security" && <SecurityTab baseUrl={baseUrl} token={token} instanceId={instanceId} />}
       {tab === "voice" && <VoiceTab />}
+      {tab === "appearance" && (
+        <AppearanceTab
+          appearance={appearance}
+          instanceTheme={instanceTheme}
+          onChange={onAppearanceChange}
+        />
+      )}
 
       {tab !== "profile" && (
         <div className="modal-actions">
@@ -1235,5 +1253,70 @@ export function UserSettingsModal({
         </div>
       )}
     </Modal>
+  );
+}
+
+// Appearance is per-machine and applies immediately — there is no Save
+// button, because a theme you have to commit to before seeing it is a theme
+// you cannot actually choose.
+function AppearanceTab({
+  appearance,
+  instanceTheme,
+  onChange,
+}: {
+  appearance: AppearanceSettings;
+  instanceTheme?: string;
+  onChange: (next: AppearanceSettings) => void;
+}) {
+  function update(patch: Partial<AppearanceSettings>) {
+    const next = { ...appearance, ...patch };
+    saveAppearance(next);
+    onChange(next);
+  }
+
+  const instanceLabel =
+    THEMES.find((t) => t.value === instanceTheme)?.label ?? instanceTheme ?? "the server's choice";
+
+  return (
+    <>
+      <div className="settings-section">
+        <h3>Theme</h3>
+        <p className="settings-hint">
+          The server picks a theme for everyone. Choose your own here and it applies only to you,
+          on this device.
+        </p>
+        <select
+          value={appearance.theme}
+          onChange={(e) => update({ theme: e.target.value as ThemeChoice })}
+        >
+          <option value="instance">Match this server ({instanceLabel})</option>
+          {THEMES.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label} — {t.blurb}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="settings-section">
+        <h3>Density</h3>
+        <p className="settings-hint">
+          Compact tightens the spacing and shrinks avatars, fitting roughly two more messages on
+          screen.
+        </p>
+        <div className="density-choice">
+          {(["comfortable", "compact"] as Density[]).map((d) => (
+            <button
+              key={d}
+              type="button"
+              className={appearance.density === d ? "active" : ""}
+              onClick={() => update({ density: d })}
+            >
+              {d === "comfortable" ? "Comfortable" : "Compact"}
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
   );
 }

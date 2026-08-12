@@ -2,7 +2,11 @@
 
 ## v0.6.0 — 2026-08-12
 
-- **A light theme.** Daylight is the first one. Pick it in Instance settings, next to the other four. The backgrounds are warm rather than grey, so the app still looks like Outpost in a bright room.
+- **The server rail is gone.** Your servers moved into the name at the top of the channel list. Click it to switch, or to add one. Right-click a server there to leave it, the same as before. The rail spent 72 pixels of every screen on a strip that held one icon for most people, and the channel list gets that width back, so long channel names stop truncating.
+- **A light theme.** Daylight is the first one. The backgrounds are warm rather than grey, so the app still looks like Outpost in a bright room.
+- **The theme is yours now, not just the owner's.** The server still picks one, and that stays the default. But you can override it for yourself in User Settings, Appearance. Light or dark is a room and a time of day, and sometimes an accessibility need, so it should not be one person's decision for everyone.
+- **Compact density.** Also in Appearance. Tighter spacing and smaller avatars, worth about two more messages a screen.
+- **Encrypted DMs say so in the header.** The lock used to sit above the message box, so it left the screen as soon as you scrolled up. The header does not scroll. A changed key shows there too, in red.
 - **Avatars are square.** People are square, the server icon stays round. Every Discord-style app does it the other way round. Shape still tells you a person from a place, the pairing is just ours.
 - Fixed the selected channel in the sidebar. It drew white text on its highlight, which was fine on a dark theme and unreadable on a light one.
 
