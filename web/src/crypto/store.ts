@@ -52,8 +52,33 @@ export interface StoredIdentity {
   createdAt: number;
 }
 
-export function saveIdentity(instanceId: string, identity: StoredIdentity): Promise<void> {
-  return run<void>(IDENTITY_STORE, "readwrite", (store) => store.put(identity, instanceId));
+/**
+ * Anything that changes the local identity has to be observable.
+ *
+ * The DM crypto state is resolved in an effect keyed on channels/members, and
+ * enabling encryption changes neither — it just writes a key to IndexedDB,
+ * which React cannot see. So the open conversation went on claiming "you
+ * haven't turned encryption on" until the app was restarted, on every platform.
+ * Notifying from the store rather than from the settings modal means enable,
+ * restore and clear all fix it, and so does anything added later.
+ */
+type IdentityListener = (instanceId: string) => void;
+const identityListeners = new Set<IdentityListener>();
+
+export function onIdentityChange(fn: IdentityListener): () => void {
+  identityListeners.add(fn);
+  return () => {
+    identityListeners.delete(fn);
+  };
+}
+
+function notifyIdentityChanged(instanceId: string) {
+  for (const fn of [...identityListeners]) fn(instanceId);
+}
+
+export async function saveIdentity(instanceId: string, identity: StoredIdentity): Promise<void> {
+  await run<void>(IDENTITY_STORE, "readwrite", (store) => store.put(identity, instanceId));
+  notifyIdentityChanged(instanceId);
 }
 
 export function loadIdentity(instanceId: string): Promise<StoredIdentity | undefined> {

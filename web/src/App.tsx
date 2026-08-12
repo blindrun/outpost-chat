@@ -30,7 +30,8 @@ import {
 } from "./api";
 import { VoicePanel } from "./VoicePanel";
 import { clearCachedIcon, loadCachedIcon, refreshInstanceIcon } from "./instanceIcons";
-import { DmCryptoState, decryptForDm, encryptForDm, resolveDmCrypto } from "./crypto/dm";
+import { DmCryptoState, decryptForDm, encryptForDm, forgetDerivedKeys, resolveDmCrypto } from "./crypto/dm";
+import { onIdentityChange } from "./crypto/store";
 import { useVoiceSession } from "./useVoiceSession";
 import { playVoiceJoinSound, playVoiceLeaveSound } from "./voiceSounds";
 import { MessageItem, messageIdentityKey } from "./MessageItem";
@@ -227,6 +228,11 @@ function App() {
   // encrypted message decrypted so far (null = we hold no key that can read
   // it, which is a permanent state rather than a transient failure).
   const [dmCrypto, setDmCrypto] = useState<DmCryptoState>({ active: false });
+  // Bumped whenever the local key changes. Without it, enabling encryption
+  // wrote a key to IndexedDB and the open DM went on saying "you haven't
+  // turned encryption on" until the app was restarted — the resolve effect
+  // below keys on channels/members, and neither of those moves.
+  const [identityEpoch, setIdentityEpoch] = useState(0);
   const [decrypted, setDecrypted] = useState<Record<string, string | null>>({});
   const [roles, setRoles] = useState<Role[]>([]);
   const [customEmoji, setCustomEmoji] = useState<CustomEmoji[]>([]);
@@ -572,6 +578,17 @@ function App() {
       .catch(console.error);
   }, [activeInstance?.baseUrl]);
 
+  // A replaced identity invalidates every key derived from the old one, so
+  // drop the cache before anything re-derives against it.
+  useEffect(
+    () =>
+      onIdentityChange((instanceId) => {
+        forgetDerivedKeys(instanceId);
+        setIdentityEpoch((n) => n + 1);
+      }),
+    [],
+  );
+
   // Resolve whether the open DM is encrypted. Derived from `channels` rather
   // than the `selectedChannel` const, which is computed further down — after
   // this component's early returns, so anything depending on it can't live in
@@ -591,7 +608,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [channels, selectedChannelId, activeInstanceId, members]);
+  }, [channels, selectedChannelId, activeInstanceId, members, identityEpoch]);
 
   // Decrypt anything encrypted that hasn't been decrypted yet, including the
   // bodies of quoted reply targets. Keyed by message id and kept across
@@ -795,6 +812,14 @@ function App() {
               : m,
           ),
         }));
+      } else if (event.type === "PUBLIC_KEY_UPDATE") {
+        // The peer turned encryption on or off. Their key lives in the member
+        // list, and the DM crypto effect keys on `members`, so updating it
+        // here is what makes the open conversation switch over live instead of
+        // on the next reload.
+        setMembers((prev) =>
+          prev.map((m) => (m.userId === event.userId ? { ...m, publicKey: event.publicKey } : m)),
+        );
       } else if (event.type === "PRESENCE_UPDATE") {
         setOnlineUserIds((prev) => {
           const next = new Set(prev);

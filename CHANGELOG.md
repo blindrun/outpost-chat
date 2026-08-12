@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.5.1 — 2026-08-12
+
+- **Turning on encrypted DMs works straight away.** It used to need an app restart before the conversation actually switched over — it would keep saying you hadn't turned encryption on, on every platform, not just Windows. The open chat now updates the moment you enable it.
+- **You can turn encrypted DMs off again.** Off stops encrypting new messages and lets people message you in the clear, but **keeps your key on the device**, so everything you'd already encrypted stays readable and turning it back on picks up exactly where you left off — same key, same recovery code. Forgetting your key is still a separate, deliberate action, because that one can't be undone.
+- **Both sides now notice immediately.** When someone turns encryption on or off, the person they're talking to sees it right away instead of on their next reload.
+- Fixed conversation keys being reused after restoring a different recovery code, which could leave messages undecryptable with no explanation.
+
 ## v0.5.0 — 2026-08-11
 
 - **You can sign in with your own identity provider.** Anything that speaks standard OpenID Connect — Authentik, Authelia, Keycloak, Zitadel, Okta, Entra — can now be the login for your instance, and a "Continue with…" button appears above the password form once it's set up. It's off until you configure it, and there's a walkthrough in `deploy/README.md`. Accounts created this way have no password at all, which is the point: there's nothing to guess, phish or reuse. They can still delete their own account, and two-factor set up *here* is still asked for on top of whatever your provider does.

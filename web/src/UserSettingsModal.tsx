@@ -11,6 +11,7 @@ import {
   getCurrentUser,
   getMfaStatus,
   publishPublicKey,
+  withdrawPublicKey,
   regenerateBackupCodes,
   setupTotp,
   updatePassword,
@@ -361,6 +362,10 @@ function EncryptedDmsSection({
   instanceId: string;
 }) {
   const [identity, setIdentity] = useState<StoredIdentity | null | undefined>(undefined);
+  // Whether the server currently holds a key for this account. Distinct from
+  // holding one locally: "off" keeps the local key so history stays readable,
+  // it just stops advertising it.
+  const [published, setPublished] = useState<boolean | undefined>(undefined);
   const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
   const [acknowledged, setAcknowledged] = useState(false);
   const [restoreOpen, setRestoreOpen] = useState(false);
@@ -373,10 +378,44 @@ function EncryptedDmsSection({
     loadIdentity(instanceId)
       .then((found) => !cancelled && setIdentity(found ?? null))
       .catch(() => !cancelled && setIdentity(null));
+    getCurrentUser(baseUrl, token)
+      .then((me) => !cancelled && setPublished(Boolean(me.publicKey)))
+      .catch(() => !cancelled && setPublished(false));
     return () => {
       cancelled = true;
     };
-  }, [instanceId]);
+  }, [instanceId, baseUrl, token]);
+
+  // Off = no key published, so contacts send in the clear and so do we. The
+  // local key is deliberately kept: encrypted history stays readable and
+  // turning it back on republishes the same key. Generating a fresh one here
+  // would orphan every message already encrypted to the old one.
+  async function handleDisable() {
+    setError(null);
+    setBusy(true);
+    try {
+      await withdrawPublicKey(baseUrl, token);
+      setPublished(false);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleReEnable() {
+    setError(null);
+    setBusy(true);
+    try {
+      if (!identity) throw new Error("no local key to republish");
+      await publishPublicKey(baseUrl, token, identity.publicKey);
+      setPublished(true);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function handleEnable() {
     setError(null);
@@ -395,6 +434,7 @@ function EncryptedDmsSection({
       };
       await saveIdentity(instanceId, stored);
       setIdentity(stored);
+      setPublished(true);
       setRecoveryCode(generated.recoveryCode);
     } catch (err) {
       setError((err as Error).message);
@@ -420,6 +460,7 @@ function EncryptedDmsSection({
       const stored: StoredIdentity = { privateKey, publicKey: me.publicKey, createdAt: Date.now() };
       await saveIdentity(instanceId, stored);
       setIdentity(stored);
+      setPublished(true);
       setRestoreOpen(false);
       setRestoreCode("");
     } catch {
@@ -429,7 +470,7 @@ function EncryptedDmsSection({
     }
   }
 
-  if (identity === undefined) return null;
+  if (identity === undefined || published === undefined) return null;
 
   if (recoveryCode) {
     return (
@@ -457,7 +498,7 @@ function EncryptedDmsSection({
   return (
     <div className="settings-section">
       <h3>Encrypted Direct Messages</h3>
-      {identity ? (
+      {identity && published ? (
         <>
           <p className="settings-hint">
             <strong>On.</strong> New direct messages are encrypted on your device whenever the other person has
@@ -465,9 +506,30 @@ function EncryptedDmsSection({
             not encrypted, and never have been.
           </p>
           <p className="settings-hint">
-            Lost your recovery code? Turn this off and on again to start over with a new one. You'll keep being
-            able to read messages on this device, but not on any new one.
+            Turning it off stops encrypting new messages and lets contacts message you in the clear again. Your
+            key stays on this device, so <strong>everything already encrypted stays readable</strong> and turning
+            it back on picks up where you left off.
           </p>
+          {error && <p className="error">{error}</p>}
+          <div className="modal-actions">
+            <button type="button" className="btn secondary" onClick={handleDisable} disabled={busy}>
+              {busy ? "Turning off…" : "Turn Off"}
+            </button>
+          </div>
+        </>
+      ) : identity && !published ? (
+        <>
+          <p className="settings-hint">
+            <strong>Off.</strong> New direct messages are sent in plain text. Your encryption key is still on
+            this device, so messages you encrypted before are <strong>still readable</strong> — turning it back
+            on republishes the same key, and your old recovery code still works.
+          </p>
+          {error && <p className="error">{error}</p>}
+          <div className="modal-actions">
+            <button type="button" className="btn" onClick={handleReEnable} disabled={busy}>
+              {busy ? "Turning on…" : "Turn Back On"}
+            </button>
+          </div>
         </>
       ) : (
         <>

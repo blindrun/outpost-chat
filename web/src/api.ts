@@ -643,6 +643,13 @@ export function publishPublicKey(baseUrl: string, token: string, publicKey: stri
   });
 }
 
+// Withdraws the published key: contacts stop encrypting to you and this client
+// stops encrypting outbound. The private key stays on the device, so encrypted
+// history stays readable and re-enabling republishes the same key.
+export function withdrawPublicKey(baseUrl: string, token: string) {
+  return request<void>(baseUrl, "/auth/me/public-key", token, { method: "DELETE" });
+}
+
 // Irreversible. `username` is the typed-confirmation field (verified
 // server-side, not just in the form); `code` is required only when the
 // account has two-factor enabled.
@@ -1016,6 +1023,9 @@ type GatewayEvent =
   | { type: "REACTION_ADD"; messageId: string; channelId: string; userId: string; username: string; emoji: string }
   | { type: "REACTION_REMOVE"; messageId: string; channelId: string; userId: string; emoji: string }
   | { type: "PRESENCE_UPDATE"; userId: string; status: "online" | "offline" }
+  // Someone published or withdrew their DM encryption key. null means they
+  // turned encryption off, and contacts must stop encrypting to them.
+  | { type: "PUBLIC_KEY_UPDATE"; userId: string; publicKey: string | null }
   | { type: "TYPING_START"; channelId: string; userId: string; username: string }
   | { type: "VOICE_STATE_UPDATE"; channelId: string; userIds: string[] }
   | { type: "THREAD_CREATE"; parentMessageId: string; thread: ThreadChannel }

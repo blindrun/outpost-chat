@@ -6,7 +6,7 @@ import type { AuthenticatorTransportFuture } from "@simplewebauthn/server";
 import { generateAuthenticationOptions, verifyAuthenticationResponse } from "@simplewebauthn/server";
 import { prisma } from "../plugins/db.js";
 import { minioClient, BUCKET, PUBLIC_URL } from "../plugins/storage.js";
-import { disconnectUser } from "../gateway/rooms.js";
+import { broadcastAll, disconnectUser } from "../gateway/rooms.js";
 import { EVERYONE_ROLE_NAME, DEFAULT_EVERYONE_PERMISSIONS } from "../util/permissions.js";
 import { isInviteValid } from "../util/invites.js";
 import { postSystemMessage } from "../util/bot.js";
@@ -545,6 +545,25 @@ export async function authRoutes(app: FastifyInstance) {
     const { sub: userId } = req.user as { sub: string };
     const body = publicKeySchema.parse(req.body);
     await prisma.user.update({ where: { id: userId }, data: { publicKey: body.publicKey } });
+    // Contacts cache this key in their member list. Without a push they keep
+    // using a stale one until something else happens to refresh members —
+    // which meant turning encryption on or off only took effect for the other
+    // person on their next reload.
+    broadcastAll({ type: "PUBLIC_KEY_UPDATE", userId, publicKey: body.publicKey });
+    return reply.status(204).send();
+  });
+
+  // Turns encryption off by withdrawing the published key, so contacts stop
+  // encrypting to this account and the client stops encrypting outbound.
+  //
+  // This is NOT the destructive one. The private key stays on the device, so
+  // existing encrypted history remains readable and re-enabling republishes
+  // the same key rather than orphaning it. Forgetting the key is a separate,
+  // local-only action precisely because it cannot be undone.
+  app.delete("/auth/me/public-key", { onRequest: [app.authenticate] }, async (req, reply) => {
+    const { sub: userId } = req.user as { sub: string };
+    await prisma.user.update({ where: { id: userId }, data: { publicKey: null } });
+    broadcastAll({ type: "PUBLIC_KEY_UPDATE", userId, publicKey: null });
     return reply.status(204).send();
   });
 
