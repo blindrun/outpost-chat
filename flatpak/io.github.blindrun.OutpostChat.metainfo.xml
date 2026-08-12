@@ -19,9 +19,9 @@
       community controls rather than on someone else's platform.
     </p>
     <p>
-      This is the desktop client. It connects to any Outpost server — your
-      own, or one you've been invited to — and you can be signed into
-      several at once.
+      This is the desktop client. It connects to any Outpost server. Your
+      own, or one you have been invited to. You can be signed into several
+      at once.
     </p>
     <p>Features:</p>
     <ul>
@@ -34,31 +34,36 @@
     </ul>
     <p>
       Running a server is a single Docker Compose file. Nothing in the app
-      reports to a central service — there is no central service.
+      reports to a central service. There is no central service.
     </p>
   </description>
 
   <launchable type="desktop-id">io.github.blindrun.OutpostChat.desktop</launchable>
 
-  <!-- Flathub requires screenshots to be reachable over HTTPS at build time.
-       Host these on sonofatech.com alongside the existing wiki assets; the
-       same captures serve the App Store and Play listings. -->
+  <!-- Captured from the Flatpak build running on Bazzite, 2026-08-12, and
+       hosted alongside the wiki assets on sonofatech.com. Flathub needs these
+       reachable over HTTPS at build time. The email field in the user-settings
+       capture is covered: it held a real address, and these get scraped. -->
   <screenshots>
     <screenshot type="default">
       <image>https://sonofatech.com/outpost/screenshots/channels.png</image>
-      <caption>A text channel with replies and reactions</caption>
+      <caption>A text channel. The release bot posts patch notes to #Updates.</caption>
     </screenshot>
     <screenshot>
       <image>https://sonofatech.com/outpost/screenshots/voice.png</image>
-      <caption>A voice channel with several people connected</caption>
+      <caption>Sharing a screen into a voice channel.</caption>
     </screenshot>
     <screenshot>
       <image>https://sonofatech.com/outpost/screenshots/dms.png</image>
-      <caption>Direct messages, with end-to-end encryption available</caption>
+      <caption>A direct message. Markers show where encryption starts and stops.</caption>
     </screenshot>
     <screenshot>
       <image>https://sonofatech.com/outpost/screenshots/settings.png</image>
-      <caption>Roles and permissions in server settings</caption>
+      <caption>Instance settings. Name, theme, default channel, registration.</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://sonofatech.com/outpost/screenshots/usersettings.png</image>
+      <caption>User settings. Profile, password, security and voice.</caption>
     </screenshot>
   </screenshots>
 
