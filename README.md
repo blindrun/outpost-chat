@@ -41,11 +41,18 @@ instance with no owner cannot be administered.
 - Accounts, channels (text + voice), roles/permissions, invite-gated or
   open registration
 - Real-time chat: message edit/delete/reactions, typing indicators,
-  presence, file attachments
+  presence, file attachments, custom emoji, threads, search and pinning
 - Voice channels with push-to-talk or voice-activity detection, device
-  selection, mute/deafen
-- Four built-in themes, an instance icon, and a description your instance
-  can set for itself
+  selection, mute/deafen, camera video and screen sharing
+- Direct messages and friends, with optional end-to-end encryption
+- Moderation: reporting with a moderator queue, blocking, kick/ban, an
+  audit log, and a bot/webhook API
+- Two-factor auth (authenticator app or passkey), and optional single
+  sign-on against any OpenID Connect provider
+- Clients for web, desktop (Windows/macOS/Linux, with auto-update),
+  Android and iOS
+- Five built-in themes including a light one, an instance icon, and a
+  description your instance can set for itself
 - One instance = one community. The client (web or desktop) keeps a
   bookmark list of instance addresses instead of a single fixed server —
   add as many self-hosted instances as you want and switch between them
