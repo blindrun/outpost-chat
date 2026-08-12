@@ -14,13 +14,19 @@ WebRTC voice/video, [MinIO](https://min.io) for file storage.
 
 ## Screenshots
 
-Captured from the desktop app on Linux, v0.5.1.
+Captured from the desktop app on Linux, v0.6.1.
 
-![A text channel, with the release bot posting patch notes to #Updates](docs/screenshots/channels.jpg)
+![A text channel](docs/screenshots/channels.jpg)
 
-![Sharing a screen into a voice channel](docs/screenshots/voice.jpg)
+![The same channel in the Daylight light theme](docs/screenshots/channels-light.jpg)
 
-Share a screen into a voice channel. Cameras and shares tile together.
+Daylight, the first light theme. The server picks a default; each person can
+override it for themselves in User Settings -> Appearance.
+
+![A voice channel, joined](docs/screenshots/voice.jpg)
+
+Join a voice channel and the call takes over the pane. Turn on a camera or
+share a screen and they tile together.
 
 ![A direct message, with dividers marking where encryption starts and stops](docs/screenshots/dms.jpg)
 
@@ -31,7 +37,7 @@ plaintext reads as a warning, because that is what changes your exposure.
 
 Your instance, your rules. Roles, invites, webhooks, reports, audit log.
 
-![User settings](docs/screenshots/usersettings.jpg)
+![User settings, on the Appearance tab](docs/screenshots/usersettings.jpg)
 
 Delete your own account whenever you want. The owner cannot, because an
 instance with no owner cannot be administered.

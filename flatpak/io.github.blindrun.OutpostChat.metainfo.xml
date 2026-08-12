@@ -47,15 +47,15 @@
   <screenshots>
     <screenshot type="default">
       <image>https://sonofatech.com/outpost/screenshots/channels.png</image>
-      <caption>A text channel. The release bot posts patch notes to #Updates.</caption>
+      <caption>A text channel, with the community switcher at the top of the channel list.</caption>
     </screenshot>
     <screenshot>
       <image>https://sonofatech.com/outpost/screenshots/voice.png</image>
-      <caption>Sharing a screen into a voice channel.</caption>
+      <caption>A voice channel, joined. Cameras and screen shares tile together.</caption>
     </screenshot>
     <screenshot>
       <image>https://sonofatech.com/outpost/screenshots/dms.png</image>
-      <caption>A direct message. Markers show where encryption starts and stops.</caption>
+      <caption>A direct message. The header shows the encryption state, and markers show where it starts and stops.</caption>
     </screenshot>
     <screenshot>
       <image>https://sonofatech.com/outpost/screenshots/settings.png</image>
@@ -63,7 +63,11 @@
     </screenshot>
     <screenshot>
       <image>https://sonofatech.com/outpost/screenshots/usersettings.png</image>
-      <caption>User settings. Profile, password, security and voice.</caption>
+      <caption>User settings. Pick your own theme and density, overriding the server's default.</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://sonofatech.com/outpost/screenshots/channels-light.png</image>
+      <caption>The Daylight light theme.</caption>
     </screenshot>
   </screenshots>
 
