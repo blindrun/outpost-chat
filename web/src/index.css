@@ -1301,6 +1301,12 @@ button, input, select {
    outright, because a paused video element keeps showing its last frame and
    a frozen face looks exactly like a live one. */
 .camera-tile.camera-muted { display: none; }
+/* The label floats over the video rather than claiming a strip of the tile.
+   At rest it's invisible: with several feeds up, a permanent caption on each
+   one is noise, and it reads as wasted space next to a letterboxed video.
+   Moving the pointer anywhere over the call ghosts them all in at once —
+   enough to find the feed you want — and the tile you're actually on shows
+   its own at full strength. focus-within does the same for keyboard use. */
 .screen-share-label {
   position: absolute;
   bottom: 0.4rem;
@@ -1310,6 +1316,19 @@ button, input, select {
   font-size: 0.75rem;
   padding: 0.15rem 0.5rem;
   border-radius: 4px;
+  opacity: 0;
+  transition: opacity 140ms ease;
+  /* Never eat a click meant for the video underneath it. */
+  pointer-events: none;
+}
+.screen-share-overlay:hover .screen-share-label { opacity: 0.55; }
+.screen-share-tile:hover .screen-share-label,
+.camera-tile:hover .screen-share-label,
+.screen-share-tile:focus-within .screen-share-label,
+.camera-tile:focus-within .screen-share-label { opacity: 1; }
+/* Reduced-motion users get the same states without the crossfade. */
+@media (prefers-reduced-motion: reduce) {
+  .screen-share-label { transition: none; }
 }
 
 /* Shown before anyone turns anything on, so joining a voice channel doesn't
