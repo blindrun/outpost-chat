@@ -1,9 +1,0 @@
-{
-  "name": "announce-release",
-  "version": "1.0.0",
-  "private": true,
-  "type": "commonjs",
-  "dependencies": {
-    "twitter-api-v2": "^1.18.2"
-  }
-}

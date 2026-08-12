@@ -70,9 +70,8 @@ jobs:
 
       # No signing secrets configured yet (see mobile/android/keystore.properties.example
       # and the Play Console prerequisites in the mobile client plan) -- this
-      # step is deliberately a no-op rather than a failure until then, same
-      # pattern desktop.yml's Twitter announce step already uses for secrets
-      # that don't exist yet. Without it, gradlew below produces an unsigned
+      # step is deliberately a no-op rather than a failure until then.
+      # Without it, gradlew below produces an unsigned
       # AAB (fine for a GitHub Release attachment, not uploadable to Play
       # Console until this is wired up for real).
       - name: Write signing keystore
