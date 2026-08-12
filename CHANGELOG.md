@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.6.1 — 2026-08-12
+
+- Fixed the row of tabs in User Settings. Adding Appearance made five where there was room for four, so it dropped onto a second line and stretched across it on its own, looking like a bug rather than a tab.
+
 ## v0.6.0 — 2026-08-12
 
 - **The server rail is gone.** Your servers moved into the name at the top of the channel list. Click it to switch, or to add one. Right-click a server there to leave it, the same as before. The rail spent 72 pixels of every screen on a strip that held one icon for most people, and the channel list gets that width back, so long channel names stop truncating.
