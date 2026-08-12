@@ -93,6 +93,36 @@ export class WebLiveKitEngine implements VoiceEngine {
       .forEach((wrapper) => wrapper.classList.toggle("camera-muted", muted));
   }
 
+
+  /* A pop-out button per feed. Browsers give us exactly one Picture-in-Picture
+     window, so this is a switch rather than a toggle per tile: asking for PiP
+     on a second video moves the existing window to it. That is the browser's
+     behaviour, not ours, and it is the right one -- two floating windows from
+     one call would be worse.
+
+     Firefox has no requestPictureInPicture on HTMLVideoElement, so the button
+     is only added where the API exists rather than rendered and then failing
+     on click. */
+  private addPopoutButton(wrapper: HTMLDivElement, video: HTMLVideoElement) {
+    if (typeof video.requestPictureInPicture !== "function") return;
+    if ((document as Document & { pictureInPictureEnabled?: boolean }).pictureInPictureEnabled === false) return;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tile-popout-btn";
+    btn.title = "Pop out";
+    btn.textContent = "⧉";
+    btn.addEventListener("click", (e) => {
+      // The tile is clickable itself (fullscreen), so this must not bubble.
+      e.stopPropagation();
+      if (document.pictureInPictureElement === video) {
+        document.exitPictureInPicture().catch(() => {});
+      } else {
+        video.requestPictureInPicture().catch((err) => console.warn("pop-out refused:", err));
+      }
+    });
+    wrapper.appendChild(btn);
+  }
+
   private addCameraTile(el: HTMLVideoElement, identity: string, label: string, isLocal: boolean) {
     el.dataset.participant = identity;
     el.className = "camera-video";
@@ -108,6 +138,7 @@ export class WebLiveKitEngine implements VoiceEngine {
     caption.textContent = label;
     wrapper.appendChild(el);
     wrapper.appendChild(caption);
+    this.addPopoutButton(wrapper, el);
     this.videoContainer.appendChild(wrapper);
     this.announceFeeds();
   }
@@ -171,6 +202,7 @@ export class WebLiveKitEngine implements VoiceEngine {
           label.textContent = `${participant.name || participant.identity}'s screen`;
           wrapper.appendChild(el);
           wrapper.appendChild(label);
+          this.addPopoutButton(wrapper, el);
           this.videoContainer.appendChild(wrapper);
           this.announceFeeds();
           this.emit("screenShareTrackSubscribed", {

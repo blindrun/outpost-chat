@@ -8,6 +8,10 @@
 - **Compact density.** Also in Appearance. Tighter spacing and smaller avatars, worth about two more messages a screen.
 - **Encrypted DMs say so in the header.** The lock used to sit above the message box, so it left the screen as soon as you scrolled up. The header does not scroll. A changed key shows there too, in red.
 - **Avatars are square.** People are square, the server icon stays round. Every Discord-style app does it the other way round. Shape still tells you a person from a place, the pairing is just ours.
+- **Pop out any video.** Hover a camera or a screen share and use the button in its corner to float it in its own window, on top of whatever else you are doing. Browsers allow one such window at a time, so popping out a second feed moves the window to it.
+- Fixed screen share labels all piling into one corner instead of sitting on the share they name. The tile they were meant to attach to was never given a position of its own, so they resolved against the whole video area.
+- Fixed the user box at the bottom of the channel list staying dark on a light theme. Its colour was written in directly, from back when every theme was dark.
+- Fixed the voice bar and the call view sitting in the wrong column after the rail was removed, which left them not resizing with the window.
 - Fixed the selected channel in the sidebar. It drew white text on its highlight, which was fine on a dark theme and unreadable on a light one.
 
 ## v0.5.1 — 2026-08-12
