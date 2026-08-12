@@ -97,6 +97,35 @@
   --border-subtle: rgba(255, 107, 0, 0.2);
 }
 
+/* The first light theme. Grounds are warm rather than blue-grey so it still
+   reads as Outpost, and the ember darkens because #ff8a52 does not hold
+   contrast on a light background.
+
+   color-scheme matters here: :root sets `dark`, and a theme that overrides
+   only colours inherits it -- which leaves native scrollbars, dropdowns and
+   date pickers rendering dark on a light page. */
+[data-theme="daylight"] {
+  color-scheme: light;
+  --bg-rail: #ece3db;
+  --bg-sidebar: #f6f1ec;
+  --bg-primary: #fffcf9;
+  --bg-secondary: #f6f1ec;
+  --bg-modifier-hover: rgba(198, 93, 59, 0.1);
+  --bg-input: #ffffff;
+  --bg-floating: #ffffff;
+  --brand: #c65d3b;
+  --brand-hover: #a84a2c;
+  --green: #3f7d3e;
+  --red: #c0392b;
+  --header-primary: #241a14;
+  --text-normal: #3a2b21;
+  --text-muted: #7a6555;
+  --text-faint: #a08d7c;
+  --interactive-hover: #ece3db;
+  --interactive-active: #ded1c5;
+  --border-subtle: rgba(58, 43, 33, 0.14);
+}
+
 * { box-sizing: border-box; }
 
 /* Locks the page itself to exactly the viewport height with no scroll of
@@ -539,7 +568,8 @@ button, input, select {
   width: 28px;
   height: 28px;
   flex-shrink: 0;
-  border-radius: 50%;
+  /* a person, so square -- see .avatar */
+  border-radius: 5px;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -573,7 +603,11 @@ button, input, select {
 .channel-btn:hover { background: var(--interactive-hover); color: var(--text-normal); }
 .channel-btn .dm-avatar { width: 20px; height: 20px; font-size: 0.7rem; flex-shrink: 0; }
 .channel-btn .presence-dot { margin-left: auto; flex-shrink: 0; }
-.channel-btn.active { background: var(--interactive-active); color: #fff; }
+/* --header-primary, not #fff: this sits on --interactive-active, which is a
+   light tone in a light theme, and white on it is unreadable. The other
+   hardcoded #fff in this file all sit on --brand/--green/--red, which stay
+   dark in every theme, so they are fine as they are. */
+.channel-btn.active { background: var(--interactive-active); color: var(--header-primary); }
 
 .add-channel-btn {
   background: none;
@@ -610,7 +644,11 @@ button, input, select {
   align-items: center;
   gap: 0.5rem;
 }
-.avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+/* People are square, places are round -- the inverse of Discord's convention,
+   which every clone copies (circular users, squircle servers). Shape still
+   tells you person from place; the pairing is just ours. .server-icon stays
+   at 50%, so this rule is the whole of it. */
+.avatar { width: 32px; height: 32px; border-radius: 5px; object-fit: cover; flex-shrink: 0; }
 .avatar-placeholder { display: inline-flex; align-items: center; justify-content: center; background: var(--brand); color: #fff; font-weight: 700; }
 .avatar-lg { width: 48px; height: 48px; font-size: 1.2rem; }
 .user-panel-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }

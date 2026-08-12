@@ -27,7 +27,7 @@ const updateInstanceSettingsSchema = z.object({
   name: z.string().min(2).max(64).optional(),
   description: z.string().max(1000).optional(),
   iconUrl: z.string().url().nullable().optional(),
-  theme: z.enum(["business", "cyberpunk", "hacker", "esports"]).optional(),
+  theme: z.enum(["business", "cyberpunk", "hacker", "esports", "daylight"]).optional(),
   requireInviteToRegister: z.boolean().optional(),
   defaultChannelId: z.string().nullable().optional(),
   smtpEnabled: z.boolean().optional(),

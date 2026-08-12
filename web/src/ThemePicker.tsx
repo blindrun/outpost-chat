@@ -5,6 +5,7 @@ const THEMES: { value: Theme; label: string; blurb: string; swatch: string }[] =
   { value: "cyberpunk", label: "Cyberpunk", blurb: "Neon magenta on near-black", swatch: "#ff2079" },
   { value: "hacker", label: "Hacker", blurb: "Matrix green terminal", swatch: "#00ff41" },
   { value: "esports", label: "Esports", blurb: "High-energy orange/black", swatch: "#ff6b00" },
+  { value: "daylight", label: "Daylight", blurb: "Warm light, for daytime rooms", swatch: "#c65d3b" },
 ];
 
 export function ThemePicker({ value, onChange }: { value: Theme; onChange: (theme: Theme) => void }) {

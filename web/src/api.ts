@@ -94,7 +94,7 @@ export interface FriendsList {
   blocked: FriendUser[];
 }
 
-export type Theme = "business" | "cyberpunk" | "hacker" | "esports";
+export type Theme = "business" | "cyberpunk" | "hacker" | "esports" | "daylight";
 
 export interface InstanceInfo {
   name: string;

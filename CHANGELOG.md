@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.6.0 — 2026-08-12
+
+- **A light theme.** Daylight is the first one. Pick it in Instance settings, next to the other four. The backgrounds are warm rather than grey, so the app still looks like Outpost in a bright room.
+- **Avatars are square.** People are square, the server icon stays round. Every Discord-style app does it the other way round. Shape still tells you a person from a place, the pairing is just ours.
+- Fixed the selected channel in the sidebar. It drew white text on its highlight, which was fine on a dark theme and unreadable on a light one.
+
 ## v0.5.1 — 2026-08-12
 
 - **Turning on encrypted DMs works straight away.** It used to need an app restart before the conversation actually switched over — it would keep saying you hadn't turned encryption on, on every platform, not just Windows. The open chat now updates the moment you enable it.
