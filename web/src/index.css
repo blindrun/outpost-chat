@@ -175,7 +175,7 @@ button, input, select {
     env(safe-area-inset-left);
   box-sizing: border-box;
   overflow-y: auto;
-  background: linear-gradient(160deg, #ff8a52 0%, #c65d3b 45%, #1a140f 45%, #1a140f 100%);
+  background: linear-gradient(160deg, var(--brand) 0%, var(--brand-hover) 45%, var(--bg-input) 45%, var(--bg-input) 100%);
 }
 
 .auth-form {
@@ -300,63 +300,12 @@ button, input, select {
    scroll further down (sidebar-scroll, .messages, .member-sidebar). This is
    the actual fix for that: bound every top-level pane to the grid row's
    real height so their internal scroll regions engage instead. */
-.server-rail,
 .sidebar,
 .chat-pane,
 .member-sidebar {
   min-height: 0;
 }
 .app.member-list-collapsed { grid-template-columns: 264px 1fr; }
-
-/* ---------- Server rail ---------- */
-
-.server-rail {
-  background: var(--bg-rail);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.6rem 0;
-  overflow-y: auto;
-}
-
-.server-icon-wrapper { position: relative; width: 48px; display: flex; justify-content: center; }
-.server-icon-pill {
-  position: absolute;
-  left: -0.6rem;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 4px;
-  height: 8px;
-  background: #fff;
-  border-radius: 0 4px 4px 0;
-  transition: height 0.15s ease;
-}
-.server-icon-wrapper.active .server-icon-pill { height: 40px; }
-.server-icon-wrapper:hover:not(.active) .server-icon-pill { height: 20px; }
-
-.server-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: var(--bg-sidebar);
-  color: var(--text-normal);
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 1.1rem;
-  transition: border-radius 0.15s ease, background 0.15s ease;
-  overflow: hidden;
-  padding: 0;
-}
-.server-icon img { width: 100%; height: 100%; object-fit: cover; }
-.server-icon:hover, .server-icon.active { border-radius: 16px; }
-.server-icon.active { background: var(--brand); color: #fff; }
-.server-icon.action { background: var(--bg-sidebar); color: var(--green); font-size: 1.4rem; }
-.server-icon.action:hover { background: var(--green); color: #fff; }
 
 .server-context-backdrop { position: fixed; inset: 0; z-index: 30; }
 .server-context-menu {
@@ -391,8 +340,6 @@ button, input, select {
 .server-context-item:hover { background: var(--interactive-hover); }
 .server-context-item.danger { color: var(--red); }
 .server-context-item.danger:hover { background: rgba(237, 66, 69, 0.1); }
-
-.rail-divider { width: 32px; height: 2px; background: var(--border-subtle); border-radius: 1px; margin: 0.2rem 0; }
 
 /* ---------- Modal ---------- */
 
@@ -648,7 +595,7 @@ button, input, select {
 }
 /* People are square, places are round -- the inverse of Discord's convention,
    which every clone copies (circular users, squircle servers). Shape still
-   tells you person from place; the pairing is just ours. .server-icon stays
+   tells you person from place; the pairing is just ours. .instance-crest stays
    at 50%, so this rule is the whole of it. */
 .avatar { width: 32px; height: 32px; border-radius: 5px; object-fit: cover; flex-shrink: 0; }
 .avatar-placeholder { display: inline-flex; align-items: center; justify-content: center; background: var(--brand); color: #fff; font-weight: 700; }
@@ -957,8 +904,10 @@ button, input, select {
 
 .reactions { display: flex; gap: 0.3rem; margin-top: 0.3rem; flex-wrap: wrap; }
 .reaction-pill {
-  background: rgba(88, 101, 242, 0.08);
-  border: 1px solid rgba(88, 101, 242, 0.3);
+  /* was rgba(88,101,242,..) -- Discord's blurple, left from before
+     the rebrand. The brand token follows whatever theme is active. */
+  background: color-mix(in srgb, var(--brand) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent);
   border-radius: 10px;
   padding: 0.1rem 0.5rem;
   font-size: 0.8rem;
@@ -969,7 +918,7 @@ button, input, select {
   gap: 0.25rem;
 }
 .reaction-pill:hover { border-color: var(--brand); }
-.reaction-pill.mine { border-color: var(--brand); background: rgba(88, 101, 242, 0.22); }
+.reaction-pill.mine { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 24%, transparent); }
 .reaction-emoji-img { width: 14px; height: 14px; object-fit: contain; }
 
 .thread-badge {
@@ -1455,7 +1404,6 @@ button, input, select {
   grid-template-columns: 264px 1fr;
   grid-template-rows: minmax(0, 1fr) auto;
 }
-.app.call-view .server-rail,
 .app.call-view .sidebar { grid-row: 1 / -1; }
 .app.call-view .chat-pane,
 .app.call-view .member-sidebar { display: none; }
@@ -1833,7 +1781,7 @@ button, input, select {
    above — a @media block's position among *other* rules doesn't grant it
    priority, only normal source order does. */
 @media (max-width: 768px) {
-  /* Desktop lays out server-rail/sidebar/chat-pane/member-sidebar as 4
+  /* Desktop lays out sidebar/chat-pane/member-sidebar as 3
      grid columns shown at once. There's no room for that on a phone
      width, so each becomes a full-screen pane and only one shows at a
      time, switched via the mobile-pane-* class App.tsx already drives
@@ -1857,7 +1805,6 @@ button, input, select {
      covered the padding it was supposed to be held back by. The panes are
      the only non-fixed children .app has on mobile, so that padding did
      nothing at all. Zero on browsers/Android, which report no inset. */
-  .server-rail,
   .sidebar,
   .chat-pane,
   .member-sidebar {
@@ -1874,7 +1821,6 @@ button, input, select {
   }
     .sidebar { z-index: 1; left: env(safe-area-inset-left); }
 
-  .app:not(.mobile-pane-nav) .server-rail,
   .app:not(.mobile-pane-nav) .sidebar { display: none; }
   .app:not(.mobile-pane-chat) .chat-pane { display: none; }
   .app:not(.mobile-pane-members) .member-sidebar { display: none; }
@@ -1888,20 +1834,16 @@ button, input, select {
      under/against the home indicator on a real notched iPhone. Added on top
      of, not instead of, the existing clearance.
 
-     `left` clears the server rail rather than spanning the full viewport,
-     which fixes the real-device bug where the popover's left edge was
-     swallowed: its title read "agnostic-test" and its button "eave Voice",
-     while everything inside it stayed centred on the *screen* rather than on
-     the visible panel.
-
-     The cause is stacking, not clipping. `.sidebar` is position:absolute with
-     z-index:1 in this same media block, so it establishes a stacking context;
-     the popover is a descendant, so its z-index:50 only ever competes inside
-     that context, and `.server-rail` at z-index:2 paints over the whole
-     sidebar subtree -- popover included. Raising the popover's z-index can
-     never win that fight from inside. Moving it out from under the rail
-     sidesteps the stacking question entirely, and would equally fix it if the
-     mechanism were ancestor clipping instead. */
+     `left` no longer has to clear a server rail -- there isn't one -- but the
+     offset stays deliberate rather than spanning the full viewport. History,
+     because it explains the shape of this rule: the rail used to paint over
+     the whole sidebar subtree, popover included, swallowing the popover's
+     left edge on a real device (its title read "agnostic-test" and its button
+     "eave Voice"). That was a stacking problem, not clipping: `.sidebar` is
+     position:absolute with z-index:1 in this same media block, so it
+     establishes a stacking context and a descendant's z-index can never win
+     from inside it. Positioning from the viewport sidesteps the question
+     entirely, which is why it is still done this way. */
   .voice-details-popover {
     left: calc(env(safe-area-inset-left) + 0.5rem);
     right: calc(0.5rem + env(safe-area-inset-right));
