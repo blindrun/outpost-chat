@@ -1433,8 +1433,26 @@ button, input, select {
 .gear-btn:hover { color: var(--text-normal); }
 
 .modal h2 ~ .modal-tabs { margin-top: -0.25rem; }
+/* Five tabs, not four. At `flex: 1 1 auto; min-width: 5rem` the fifth wrapped
+   onto its own line and then stretched across the full width on its own, which
+   reads as a layout bug rather than a tab. Equal shares with a smaller floor
+   fit all five on one row, and wrap still catches a genuinely narrow modal. */
 .settings-tabs { flex-wrap: wrap; }
-.settings-tabs button { flex: 1 1 auto; min-width: 5rem; }
+.settings-tabs button {
+  /* min-content, not 0. Every label here is a single word, so there is no
+     break opportunity -- at min-width:0 the box shrinks below the word and
+     the text simply spills out of the tab, which is what nowrap did too.
+     min-content floors each tab at its own word, and the row wraps as a
+     whole if five no longer fit. */
+  /* `0 1 auto`, so a tab that does wrap sits at its own width instead of
+     stretching across the whole row on its own -- which is what made one
+     wrapped tab read as a layout bug rather than a tab. */
+  flex: 0 1 auto;
+  min-width: min-content;
+  padding-left: 0.55rem;
+  padding-right: 0.55rem;
+  font-size: 0.8rem;
+}
 
 .settings-section {
   display: flex;
