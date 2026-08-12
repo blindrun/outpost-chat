@@ -12,6 +12,30 @@ video in one place with this simple a deployment story. Assembled from
 proven pieces rather than reinvented: [LiveKit](https://livekit.io) for
 WebRTC voice/video, [MinIO](https://min.io) for file storage.
 
+## Screenshots
+
+Captured from the desktop app on Linux, v0.5.1.
+
+![A text channel, with the release bot posting patch notes to #Updates](docs/screenshots/channels.jpg)
+
+![Sharing a screen into a voice channel](docs/screenshots/voice.jpg)
+
+Share a screen into a voice channel. Cameras and shares tile together.
+
+![A direct message, with dividers marking where encryption starts and stops](docs/screenshots/dms.jpg)
+
+Direct messages mark where encryption starts and stops. Dropping back to
+plaintext reads as a warning, because that is what changes your exposure.
+
+![Instance settings](docs/screenshots/settings.jpg)
+
+Your instance, your rules. Roles, invites, webhooks, reports, audit log.
+
+![User settings](docs/screenshots/usersettings.jpg)
+
+Delete your own account whenever you want. The owner cannot, because an
+instance with no owner cannot be administered.
+
 ## Features
 
 - Accounts, channels (text + voice), roles/permissions, invite-gated or
