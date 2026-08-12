@@ -51,6 +51,8 @@ instance with no owner cannot be administered.
 - Voice channels with push-to-talk or voice-activity detection, device
   selection, mute/deafen, camera video and screen sharing
 - Direct messages and friends, with optional end-to-end encryption
+  (encrypted in your client, so serve your own client if that matters to
+  you -- see `deploy/README.md`)
 - Moderation: reporting with a moderator queue, blocking, kick/ban, an
   audit log, and a bot/webhook API
 - Two-factor auth (authenticator app or passkey), and optional single

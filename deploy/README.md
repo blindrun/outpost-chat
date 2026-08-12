@@ -142,6 +142,40 @@ Worth knowing before you switch it on:
 - **The mobile apps don't do SSO yet**; they show a note pointing at your
   instance's web address, which works normally in a phone browser.
 
+## Encryption, and where your client comes from
+
+Encrypted direct messages are encrypted and decrypted in the browser or app
+you are using. The keys are generated on your device and never sent to the
+server. That means the code doing the encrypting matters as much as the
+server does: whoever serves your client could, in principle, serve a build
+that keeps a copy of the plaintext.
+
+When you self-host, your client is served by your own instance. You are the
+only one in that position, which is the point.
+
+If you connect through a client someone else hosts, you are trusting them not
+to do that. That is a reasonable trade for convenience, and it is the same
+trade every hosted web client asks you to make. But if end-to-end encryption
+is why you are here, use the client your own server serves, or the desktop
+app, which is signed and runs locally.
+
+Keys live in IndexedDB and are non-extractable by design, which also means
+they cannot follow you between origins. Opening the same account through a
+different client origin is a new device as far as encryption is concerned:
+you will need your recovery code.
+
+## Connecting over plain HTTP
+
+A client served over HTTPS cannot talk to a backend over plain `http://`.
+Browsers block it as mixed content, and there is nothing the app can do about
+that.
+
+This only bites if you run Outpost on a LAN address with no certificate and
+try to reach it from a client hosted somewhere else. Your own instance serving
+its own client over HTTP to itself is fine. If you want both, put a
+certificate on it -- Caddy with an internal CA, or a real one via DNS-01, both
+work on a LAN with no public exposure.
+
 ## Manual install
 
 If you'd rather not run the script:
