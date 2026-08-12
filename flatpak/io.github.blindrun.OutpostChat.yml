@@ -7,15 +7,16 @@
 # submission fails to build on Flathub's infrastructure but works locally.
 #
 # VERSIONS: runtime-version / base-version / the node SDK extension all
-# rotate. Check what Flathub currently ships before submitting rather than
-# trusting the values below — a stale runtime is an automatic review
-# rejection, and these were written from a point-in-time reference.
+# rotate, and a stale runtime is an automatic review rejection. These were
+# verified against `flatpak remote-ls flathub` on 2026-08-12: Platform, Sdk,
+# Electron2.BaseApp and Sdk.Extension.node22 all publish a 25.08 branch.
+# Re-check before submitting if that date is no longer recent.
 app-id: io.github.blindrun.OutpostChat
 runtime: org.freedesktop.Platform
-runtime-version: '24.08'
+runtime-version: '25.08'
 sdk: org.freedesktop.Sdk
 base: org.electronjs.Electron2.BaseApp
-base-version: '24.08'
+base-version: '25.08'
 command: outpost
 separate-locales: false
 
@@ -63,8 +64,24 @@ modules:
         NPM_CONFIG_OFFLINE: 'true'
         NPM_CONFIG_AUDIT: 'false'
         NPM_CONFIG_FUND: 'false'
-        # The BaseApp already ships Electron; don't download another copy.
-        ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        # Without this, offline mode is pointed at npm's DEFAULT cache, which
+        # is empty in the build sandbox, and every package fails ENOTCACHED
+        # even though generated-sources.json laid the real cache down here.
+        # Path is <module build dir>/flatpak-node/npm-cache, and the module
+        # is named `outpost`, hence /run/build/outpost.
+        NPM_CONFIG_CACHE: /run/build/outpost/flatpak-node/npm-cache
+        # node-gyp headers for any package with a native component; the
+        # generator's setup_sdk_node_headers.sh stages them to match.
+        NPM_CONFIG_NODEDIR: /usr/lib/sdk/node22
+        # NOTE: org.electronjs.Electron2.BaseApp does NOT ship an Electron
+        # runtime. It supplies zypak, which is the wrapper that makes
+        # Chromium's sandbox work inside Flatpak, plus a few helpers. The
+        # Electron binary itself still has to come from the npm `electron`
+        # devDependency, whose linux-x64 zip flatpak-node-generator cached
+        # under flatpak-node/cache/electron. So the download must NOT be
+        # skipped -- it just has to resolve offline, which is what pointing
+        # ELECTRON_CACHE at that directory does.
+        ELECTRON_CACHE: /run/build/outpost/flatpak-node/cache/electron
     build-commands:
       # The web client is built first and bundled into the Electron app —
       # same as scripts/build-web.js does for the normal desktop build.
@@ -74,21 +91,59 @@ modules:
       - npm run build-web --prefix electron
 
       # electron-builder is not used here. Flathub wants the app tree laid
-      # out directly, with the runtime's Electron and a launcher wrapper,
-      # rather than a self-contained installer.
-      - install -Dm644 -t /app/lib/outpost electron/main.js
+      # out directly, with a launcher wrapper, rather than a self-contained
+      # installer.
+      - mkdir -p /app/lib/outpost
+
+      # The Electron runtime. npm does not run the electron package's
+      # postinstall in this sandbox -- after `npm ci` there is no dist/ and no
+      # path.txt -- so rather than depend on that hook firing, unzip the
+      # archive flatpak-node-generator already cached. Offline and
+      # deterministic by construction. The glob picks whichever arch's zip was
+      # fetched; the generator guards each one with only-arches, so exactly
+      # one is present per build.
+      - mkdir -p /app/lib/outpost/electron
+      - unzip -q flatpak-node/cache/electron/electron-v*-linux-*.zip -d /app/lib/outpost/electron
+      - chmod +x /app/lib/outpost/electron/electron
+      # chrome-sandbox must be REMOVED, not just stripped of its setuid bit.
+      # Flatpak will not export a setuid binary, but if the helper is merely
+      # present-and-not-setuid Electron finds it, decides it is misconfigured
+      # and aborts outright:
+      #   "The SUID sandbox helper binary was found, but is not configured
+      #    correctly ... I'm aborting now"
+      # zypak provides the sandbox inside Flatpak, so the helper is redundant.
+      - rm -f /app/lib/outpost/electron/chrome-sandbox
+
+      # main.js does `require("electron-updater")` at runtime, so production
+      # dependencies have to ship. Pruning dev dependencies first keeps
+      # electron-builder and the Electron package itself out of the image --
+      # the runtime was already copied out above.
+      - npm prune --omit=dev --prefix electron
+      - cp -r electron/node_modules /app/lib/outpost/node_modules
+
+      # package.json is what makes Electron resolve `main` and pick up the
+      # app name and version; preload.js and build/icon.png are both
+      # referenced by main.js via __dirname and were previously missing, so
+      # the preload IPC bridge (used by desktop SSO) had nothing to load.
+      - install -Dm644 -t /app/lib/outpost electron/main.js electron/preload.js electron/package.json
+      - install -Dm644 electron/build/icon.png /app/lib/outpost/build/icon.png
       - cp -r electron/web-dist /app/lib/outpost/
       - install -Dm755 outpost.sh /app/bin/outpost
       - install -Dm644 io.github.blindrun.OutpostChat.metainfo.xml -t /app/share/metainfo/
       - install -Dm644 io.github.blindrun.OutpostChat.desktop -t /app/share/applications/
-      - install -Dm644 electron/build/icon.png /app/share/icons/hicolor/512x512/apps/io.github.blindrun.OutpostChat.png
+      # The repo ships a single 1024x1024 icon, and flatpak's icon validator
+      # rejects anything above 512x512 at export time. gdk-pixbuf-thumbnailer
+      # is part of the freedesktop SDK, so this needs no extra tooling and no
+      # pre-resized binary checked in beside the manifest.
+      - gdk-pixbuf-thumbnailer -s 512 electron/build/icon.png icon-512.png
+      - install -Dm644 icon-512.png /app/share/icons/hicolor/512x512/apps/io.github.blindrun.OutpostChat.png
     sources:
       - type: git
         url: https://github.com/blindrun/outpost-chat.git
-        tag: v0.3.15
+        tag: v0.5.1
         # Flathub requires a pinned commit alongside the tag, so a moved tag
         # can't silently change what gets built.
-        commit: REPLACE_WITH_COMMIT_SHA_OF_TAG
+        commit: f0b07e5ad3034ea663c9c2099a0293d5c41a1cc9
 
       # Generated by flatpak-node-generator from electron/package-lock.json
       # and web/package-lock.json. Regenerate on every release — a stale
@@ -98,9 +153,20 @@ modules:
       - type: script
         dest-filename: outpost.sh
         commands:
-          # zypak sandboxes Chromium's own sandbox correctly inside Flatpak;
-          # without it Electron either refuses to start or runs unsandboxed.
-          - exec zypak-wrapper /app/lib/outpost/main.js "$@"
+          # zypak makes Chromium's own sandbox work inside Flatpak; without it
+          # Electron either refuses to start or runs unsandboxed. It has to be
+          # handed the Electron BINARY, not a .js file -- and Electron is then
+          # given the app DIRECTORY, so it reads package.json for `main`, the
+          # app name and the version, and resolves node_modules beside it.
+          - exec zypak-wrapper /app/lib/outpost/electron/electron /app/lib/outpost "$@"
 
+      # Both of these are copied in from alongside this manifest rather than
+      # taken from the git checkout. The checkout does contain a flatpak/
+      # directory, but it is whatever was committed at the tag, which goes
+      # stale the moment either file is edited here — and on Flathub these
+      # live in the manifest repo anyway, not in the app repo.
       - type: file
         path: io.github.blindrun.OutpostChat.desktop
+
+      - type: file
+        path: io.github.blindrun.OutpostChat.metainfo.xml

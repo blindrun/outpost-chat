@@ -108,9 +108,19 @@
   <!-- Keep this in sync with each release; Flathub shows it as the
        what's-new text. The dates are release dates, not build dates. -->
   <releases>
-    <release version="0.3.15" date="2026-08-10">
+    <release version="0.5.1" date="2026-08-12">
       <description>
-        <p>Voice channels now announce who joined or left.</p>
+        <p>Turning encrypted direct messages on now applies straight away instead of needing a restart, and can be switched off again without losing your existing key or history.</p>
+      </description>
+    </release>
+    <release version="0.5.0" date="2026-08-11">
+      <description>
+        <p>Sign in with your own OpenID Connect provider. Camera video in voice channels. Noise suppression, echo cancellation and automatic gain can now be turned off individually.</p>
+      </description>
+    </release>
+    <release version="0.4.0" date="2026-08-11">
+      <description>
+        <p>End-to-end encrypted direct messages, with reporting and blocking to go with them. Screen sharing in the desktop app is fixed; it had never worked on any platform.</p>
       </description>
     </release>
   </releases>
