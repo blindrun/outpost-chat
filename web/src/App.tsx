@@ -32,6 +32,7 @@ import { AppearanceSettings, loadAppearance, resolveTheme } from "./appearance";
 import { VoicePanel } from "./VoicePanel";
 import { clearCachedIcon, loadCachedIcon, refreshInstanceIcon } from "./instanceIcons";
 import { DmCryptoState, decryptForDm, encryptForDm, forgetDerivedKeys, resolveDmCrypto } from "./crypto/dm";
+import { planDecrypt } from "./crypto/pending";
 import { onIdentityChange } from "./crypto/store";
 import { useVoiceSession } from "./useVoiceSession";
 import { playVoiceJoinSound, playVoiceLeaveSound } from "./voiceSounds";
@@ -229,7 +230,16 @@ function App() {
   // Encryption state for the currently open DM, and the plaintext of every
   // encrypted message decrypted so far (null = we hold no key that can read
   // it, which is a permanent state rather than a transient failure).
-  const [dmCrypto, setDmCrypto] = useState<DmCryptoState>({ active: false });
+  //
+  // `forChannelId` records which channel the rest of this state was resolved
+  // for. Resolving is async, so without it there is no way to tell "this
+  // device holds no key" from "we haven't looked yet" — and while a switch is
+  // in flight the state still describes the *previous* conversation, whose key
+  // would decrypt this one's messages to a permanent failure.
+  const [dmCrypto, setDmCrypto] = useState<DmCryptoState & { forChannelId: string | null }>({
+    active: false,
+    forChannelId: null,
+  });
   const [appearance, setAppearance] = useState<AppearanceSettings>(() => loadAppearance());
   // Bumped whenever the local key changes. Without it, enabling encryption
   // wrote a key to IndexedDB and the open DM went on saying "you haven't
@@ -591,10 +601,17 @@ function App() {
 
   // A replaced identity invalidates every key derived from the old one, so
   // drop the cache before anything re-derives against it.
+  //
+  // Decrypted bodies go too. They include the permanent failures recorded for
+  // messages this device couldn't read, and restoring a recovery code is
+  // precisely the act that makes those readable — keeping them would leave
+  // someone who had just restored their key staring at "can't decrypt this
+  // message" until they reloaded.
   useEffect(
     () =>
       onIdentityChange((instanceId) => {
         forgetDerivedKeys(instanceId);
+        setDecrypted({});
         setIdentityEpoch((n) => n + 1);
       }),
     [],
@@ -605,17 +622,18 @@ function App() {
   // this component's early returns, so anything depending on it can't live in
   // a hook.
   useEffect(() => {
+    const forChannelId = selectedChannelId ?? null;
     const channel = channels.find((c) => c.id === selectedChannelId);
     const peerId = channel?.type === "DM" ? (channel as DMChannel).otherUserId : null;
     if (!peerId || !activeInstanceId) {
-      setDmCrypto({ active: false });
+      setDmCrypto({ active: false, forChannelId });
       return;
     }
     let cancelled = false;
     const peer = members.find((m) => m.userId === peerId);
     resolveDmCrypto(activeInstanceId, peerId, peer?.publicKey)
-      .then((state) => !cancelled && setDmCrypto(state))
-      .catch(() => !cancelled && setDmCrypto({ active: false }));
+      .then((state) => !cancelled && setDmCrypto({ ...state, forChannelId }))
+      .catch(() => !cancelled && setDmCrypto({ active: false, forChannelId }));
     return () => {
       cancelled = true;
     };
@@ -625,20 +643,32 @@ function App() {
   // bodies of quoted reply targets. Keyed by message id and kept across
   // channel switches so scrolling back doesn't redo the work.
   useEffect(() => {
-    if (!dmCrypto.key || !selectedChannelId) return;
-    const pending = (messages[selectedChannelId] ?? []).flatMap((m) => {
-      const items: { id: string; payload: string }[] = [];
-      if (m.encryptedPayload && decrypted[m.id] === undefined) items.push({ id: m.id, payload: m.encryptedPayload });
-      if (m.replyTo?.encryptedPayload && decrypted[m.replyTo.id] === undefined) {
-        items.push({ id: m.replyTo.id, payload: m.replyTo.encryptedPayload });
-      }
-      return items;
+    const plan = planDecrypt({
+      selectedChannelId,
+      forChannelId: dmCrypto.forChannelId,
+      hasKey: !!dmCrypto.key,
+      reason: dmCrypto.reason,
+      messages: selectedChannelId ? messages[selectedChannelId] ?? [] : [],
+      decrypted,
     });
-    if (pending.length === 0) return;
+    if (plan.kind === "wait" || plan.kind === "idle") return;
+
+    // Settled with no key: record the permanent failure so these render the
+    // string written for exactly this case, instead of sitting on "Decrypting…"
+    // forever — which reads as the app unable to open its own messages rather
+    // than as a device that was never given the key.
+    if (plan.kind === "unreadable") {
+      setDecrypted((prev) => {
+        const next = { ...prev };
+        for (const item of plan.pending) next[item.id] = null;
+        return next;
+      });
+      return;
+    }
 
     let cancelled = false;
     Promise.all(
-      pending.map(async (item) => [item.id, await decryptForDm(dmCrypto.key, item.payload)] as const),
+      plan.pending.map(async (item) => [item.id, await decryptForDm(dmCrypto.key, item.payload)] as const),
     ).then((results) => {
       if (cancelled) return;
       setDecrypted((prev) => {
@@ -650,7 +680,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [messages, selectedChannelId, dmCrypto.key, decrypted]);
+  }, [messages, selectedChannelId, dmCrypto.forChannelId, dmCrypto.key, decrypted]);
 
   // Keep every bookmarked server's cached icon fresh, not just the active
   // one's — the whole point is that the rail can draw a server you aren't

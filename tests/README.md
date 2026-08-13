@@ -18,7 +18,22 @@ real bug would have dropped every webhook and bot message.
 node tests/voice/audio-capture-merge.mjs   # LiveKit capture-option merging
 node tests/oidc/oidc-verify-check.mjs      # ID token signature verification
 node tests/oidc/electron-url-check.mjs     # outpost:// hand-off URL parsing
+
+node --experimental-strip-types tests/dm/decrypt-plan.mjs   # when to decrypt a DM
 ```
+
+`decrypt-plan.mjs` needs the type-stripping flag because it imports
+`web/src/crypto/pending.ts` directly rather than a copy — the decision it
+checks is the one the app actually makes. Node 22.6+.
+
+It covers a class of bug that a typechecker cannot see, because nothing about
+it is a type error: *when* the decision runs. Two pieces of state have to agree
+first — which conversation is open, and which one the key state was resolved
+against — and both ways of getting that wrong are silent. Treating "no key" as
+a settled answer too eagerly writes a permanent failure onto a conversation
+whose peer key simply hadn't loaded yet; treating it as pending forever leaves
+a fresh install spinning on "Decrypting…" with no way out. The suite asserts
+both edges, and the sequences either side of them.
 
 `oidc-verify-check.mjs` needs the backend built first (`npm run build`) — it
 imports the compiled `dist/util/oidc.js` rather than a copy of the logic.
