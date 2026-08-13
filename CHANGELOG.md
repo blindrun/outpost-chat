@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.6.2 — 2026-08-13
+
+- **Encrypted messages no longer sit on "Decrypting…" forever on a new device.** A new device has never been given your key. It cannot read messages encrypted before you set it up, and that is the point of encrypting them. It says so now, instead of waiting on a result that was never coming. Restore your recovery code in User Settings, Security, and they open.
+- Fixed a conversation being marked unreadable when you switched into it from another one. Keys are worked out in the background, and for a moment the app was still holding the key for the conversation you just left.
+- Fixed messages staying unreadable after you restored your recovery code. What the app had already given up on was remembered, including from before the restore, so the new key never got used until a reload.
+
 ## v0.6.1 — 2026-08-12
 
 - Fixed the row of tabs in User Settings. Adding Appearance made five where there was room for four, so it dropped onto a second line and stretched across it on its own, looking like a bug rather than a tab.
