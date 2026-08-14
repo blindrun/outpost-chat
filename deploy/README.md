@@ -219,9 +219,13 @@ Everything that matters lives in two named volumes: `outpost-pgdata`
 (Postgres — accounts, messages, channels, roles) and `outpost-minio`
 (uploaded avatars/attachments). Back up both.
 
-## Known limitation
+## Uploaded files
 
-Uploaded files (avatars, attachments) are stored in a **public-read** MinIO
-bucket — anyone with the URL can view them, there's no per-file access
-control. Fine for avatars/casual attachments; don't rely on this for
-anything sensitive.
+Uploaded files (avatars, attachments) live in a **private** MinIO bucket and
+are served through the app's own authenticated route, so a leaked or guessed
+object URL alone gets nothing. This changed in v0.2.17 — the bucket was
+public-read before that, and an instance created before it gets its policy
+cleared on startup.
+
+Access is per-instance, not per-file: any signed-in member of the instance can
+fetch any object in it. Channel permissions are not re-checked at fetch time.
