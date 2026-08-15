@@ -4,7 +4,7 @@
 // caching the derived key so every message doesn't repeat an ECDH.
 
 import { Envelope, decryptMessage, deriveConversationKey, encryptMessage, importPublicKey } from "./keys";
-import { PeerTrust, checkPeerKey, loadIdentity } from "./store";
+import { IdentityScope, PeerTrust, checkPeerKey, identityScopeKey, loadIdentity } from "./store";
 
 export interface DmCryptoState {
   /** Encrypt outgoing messages in this conversation. */
@@ -20,16 +20,19 @@ export interface DmCryptoState {
   key?: CryptoKey;
 }
 
-// Derived keys, per (instance, peer). An ECDH derivation is cheap but not
-// free, and a busy conversation would otherwise redo it per message — plus
+// Derived keys, per (account-scope, peer). An ECDH derivation is cheap but
+// not free, and a busy conversation would otherwise redo it per message — plus
 // re-deriving on every render would make the key identity unstable for
 // anything memoising on it.
+//
+// Scoped by account rather than by bookmark so that signing in as someone else
+// cannot serve a cached key derived from the previous account's identity.
 const keyCache = new Map<string, CryptoKey>();
 
-function cacheKey(instanceId: string, peerUserId: string, peerPublicKey: string) {
+function cacheKey(scopeKey: string, peerUserId: string, peerPublicKey: string) {
   // The peer's key is part of the identity: if they rotate, the old derived
   // key must not be reused just because the user id matches.
-  return `${instanceId}:${peerUserId}:${peerPublicKey}`;
+  return `${scopeKey}:${peerUserId}:${peerPublicKey}`;
 }
 
 /**
@@ -43,17 +46,17 @@ function cacheKey(instanceId: string, peerUserId: string, peerPublicKey: string)
  * encryption could no longer message anyone.
  */
 export async function resolveDmCrypto(
-  instanceId: string,
+  scope: IdentityScope,
   peerUserId: string,
   peerPublicKey: string | null | undefined,
 ): Promise<DmCryptoState> {
-  const identity = await loadIdentity(instanceId);
+  const identity = await loadIdentity(scope);
   if (!identity) return { active: false, reason: "self" };
   if (!peerPublicKey) return { active: false, reason: "peer" };
 
-  const trust = await checkPeerKey(instanceId, peerUserId, peerPublicKey);
+  const trust = await checkPeerKey(scope, peerUserId, peerPublicKey);
 
-  const id = cacheKey(instanceId, peerUserId, peerPublicKey);
+  const id = cacheKey(identityScopeKey(scope), peerUserId, peerPublicKey);
   let key = keyCache.get(id);
   if (!key) {
     key = await deriveConversationKey(identity.privateKey, await importPublicKey(peerPublicKey));
@@ -83,9 +86,9 @@ export async function decryptForDm(key: CryptoKey | undefined, payload: string):
   }
 }
 
-/** Drops cached keys for an instance — used when an identity is replaced. */
-export function forgetDerivedKeys(instanceId: string) {
+/** Drops cached keys for one account — used when an identity is replaced. */
+export function forgetDerivedKeys(scopeKey: string) {
   for (const id of keyCache.keys()) {
-    if (id.startsWith(`${instanceId}:`)) keyCache.delete(id);
+    if (id.startsWith(`${scopeKey}:`)) keyCache.delete(id);
   }
 }

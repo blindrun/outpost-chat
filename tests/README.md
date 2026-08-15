@@ -19,8 +19,20 @@ node tests/voice/audio-capture-merge.mjs   # LiveKit capture-option merging
 node tests/oidc/oidc-verify-check.mjs      # ID token signature verification
 node tests/oidc/electron-url-check.mjs     # outpost:// hand-off URL parsing
 
-node --experimental-strip-types tests/dm/decrypt-plan.mjs   # when to decrypt a DM
+node --experimental-strip-types tests/dm/decrypt-plan.mjs     # when to decrypt a DM
+node --experimental-strip-types tests/dm/identity-scope.mjs  # where a DM key is filed
 ```
+
+`identity-scope.mjs` covers which stranded, pre-scope key a migration is
+allowed to adopt. Identities used to be filed under the instance id, a
+per-bookmark uuid, so leaving a server and re-adding it stranded the key, and
+signing in as a second account on the same bookmark overwrote the first
+account's private key in place. Both silent, both unrecoverable.
+
+Its negative cases carry the weight: adopting too eagerly would hand one
+account another account's private key, which is worse than the bug being
+fixed. Deleting the public-key match in `pickLegacyIdentity` fails two checks,
+which was verified by actually doing it rather than assumed.
 
 `decrypt-plan.mjs` needs the type-stripping flag because it imports
 `web/src/crypto/pending.ts` directly rather than a copy — the decision it

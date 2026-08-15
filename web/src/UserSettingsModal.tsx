@@ -35,7 +35,7 @@ import {
 import { createAdaptiveGate } from "./vadAuto";
 import { voiceCapabilities } from "./voice/createVoiceEngine";
 import { deriveConversationKey, generateIdentity, importPrivateKey, importPublicKey } from "./crypto/keys";
-import { StoredIdentity, loadIdentity, saveIdentity } from "./crypto/store";
+import { IdentityScope, StoredIdentity, loadIdentity, migrateLegacyIdentity, saveIdentity } from "./crypto/store";
 
 type Tab = "profile" | "password" | "security" | "voice" | "appearance";
 
@@ -354,15 +354,11 @@ function BackupCodesReveal({ codes, onDismiss }: { codes: string[]; onDismiss: (
 // from the password and no amount of server-side help can change that. Making
 // it a choice means nobody loses history they never chose to encrypt, and the
 // warning lands at the moment of choosing rather than months later.
-function EncryptedDmsSection({
-  baseUrl,
-  token,
-  instanceId,
-}: {
-  baseUrl: string;
-  token: string;
-  instanceId: string;
-}) {
+function EncryptedDmsSection({ baseUrl, token }: { baseUrl: string; token: string }) {
+  // The scope is (server origin, account), not the bookmark id, so it has to
+  // come from whoever is actually signed in. `getCurrentUser` is already
+  // fetched here for `published`, so this costs no extra request.
+  const [scope, setScope] = useState<IdentityScope | null>(null);
   const [identity, setIdentity] = useState<StoredIdentity | null | undefined>(undefined);
   // Whether the server currently holds a key for this account. Distinct from
   // holding one locally: "off" keeps the local key so history stays readable,
@@ -377,16 +373,28 @@ function EncryptedDmsSection({
 
   useEffect(() => {
     let cancelled = false;
-    loadIdentity(instanceId)
-      .then((found) => !cancelled && setIdentity(found ?? null))
-      .catch(() => !cancelled && setIdentity(null));
     getCurrentUser(baseUrl, token)
-      .then((me) => !cancelled && setPublished(Boolean(me.publicKey)))
-      .catch(() => !cancelled && setPublished(false));
+      .then(async (me) => {
+        if (cancelled) return;
+        const next: IdentityScope = { baseUrl, userId: me.id };
+        setScope(next);
+        setPublished(Boolean(me.publicKey));
+        // Adopt a stranded pre-scope record before reporting "no local key",
+        // or this panel would offer to generate a new one over the top of an
+        // identity that is sitting right there.
+        if (me.publicKey) await migrateLegacyIdentity(next, me.publicKey).catch(() => false);
+        const found = await loadIdentity(next).catch(() => undefined);
+        if (!cancelled) setIdentity(found ?? null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPublished(false);
+        setIdentity(null);
+      });
     return () => {
       cancelled = true;
     };
-  }, [instanceId, baseUrl, token]);
+  }, [baseUrl, token]);
 
   // Off = no key published, so contacts send in the clear and so do we. The
   // local key is deliberately kept: encrypted history stays readable and
@@ -423,6 +431,11 @@ function EncryptedDmsSection({
     setError(null);
     setBusy(true);
     try {
+      // Checked before generating, not after. Publishing happens first (see
+      // below), so discovering there is nowhere to save would leave the
+      // account advertising a key this device cannot use — contacts encrypt
+      // to you and nothing can read it.
+      if (!scope) throw new Error("could not identify this account, reload and try again");
       const generated = await generateIdentity();
       // Published before it's stored locally on purpose: if publishing fails
       // there is nothing to clean up, whereas a key saved locally but never
@@ -434,7 +447,7 @@ function EncryptedDmsSection({
         publicKey: generated.publicKey,
         createdAt: Date.now(),
       };
-      await saveIdentity(instanceId, stored);
+      await saveIdentity(scope, stored);
       setIdentity(stored);
       setPublished(true);
       setRecoveryCode(generated.recoveryCode);
@@ -450,6 +463,7 @@ function EncryptedDmsSection({
     setError(null);
     setBusy(true);
     try {
+      if (!scope) throw new Error("could not identify this account, reload and try again");
       const privateKey = await importPrivateKey(restoreCode.trim());
       // The public half isn't in the recovery code, so it's taken from the
       // account's published key. If that doesn't actually match this private
@@ -460,7 +474,7 @@ function EncryptedDmsSection({
       const check = await deriveConversationKey(privateKey, await importPublicKey(me.publicKey));
       if (!check) throw new Error("recovery code did not produce a usable key");
       const stored: StoredIdentity = { privateKey, publicKey: me.publicKey, createdAt: Date.now() };
-      await saveIdentity(instanceId, stored);
+      await saveIdentity(scope, stored);
       setIdentity(stored);
       setPublished(true);
       setRestoreOpen(false);
@@ -722,7 +736,7 @@ function SecurityTab({
     <div className="settings-section">
       {error && <p className="error">{error}</p>}
 
-      <EncryptedDmsSection baseUrl={baseUrl} token={token} instanceId={instanceId} />
+      <EncryptedDmsSection baseUrl={baseUrl} token={token} />
 
       <h3>Authenticator App</h3>
       {!status ? (

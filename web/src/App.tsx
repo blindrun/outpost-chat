@@ -33,7 +33,7 @@ import { VoicePanel } from "./VoicePanel";
 import { clearCachedIcon, loadCachedIcon, refreshInstanceIcon } from "./instanceIcons";
 import { DmCryptoState, decryptForDm, encryptForDm, forgetDerivedKeys, resolveDmCrypto } from "./crypto/dm";
 import { planDecrypt } from "./crypto/pending";
-import { onIdentityChange } from "./crypto/store";
+import { migrateLegacyIdentity, onIdentityChange } from "./crypto/store";
 import { useVoiceSession } from "./useVoiceSession";
 import { playVoiceJoinSound, playVoiceLeaveSound } from "./voiceSounds";
 import { MessageItem, messageIdentityKey } from "./MessageItem";
@@ -609,13 +609,36 @@ function App() {
   // message" until they reloaded.
   useEffect(
     () =>
-      onIdentityChange((instanceId) => {
-        forgetDerivedKeys(instanceId);
+      onIdentityChange((scopeKey) => {
+        forgetDerivedKeys(scopeKey);
         setDecrypted({});
         setIdentityEpoch((n) => n + 1);
       }),
     [],
   );
+
+  // Identities used to be filed under the instance id, which is a per-bookmark
+  // uuid, so leaving and re-adding a server stranded the key under an id
+  // nothing looks up any more. Adopt one if it is sitting there, matched on the
+  // public half against what this account publishes — see crypto/store.ts.
+  //
+  // Runs on every sign-in rather than once behind a flag: the stranded record
+  // can be on any device, and a flag would have to be right on all of them.
+  // It is a no-op after the first success.
+  useEffect(() => {
+    if (!activeInstance || !session?.user.publicKey) return;
+    let cancelled = false;
+    migrateLegacyIdentity({ baseUrl: activeInstance.baseUrl, userId: session.user.id }, session.user.publicKey)
+      .then((adopted) => {
+        if (adopted && !cancelled) setIdentityEpoch((n) => n + 1);
+      })
+      .catch(() => {
+        /* Leaves the legacy record untouched, so this is safe to retry later. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeInstance?.baseUrl, session?.user.id, session?.user.publicKey]);
 
   // Resolve whether the open DM is encrypted. Derived from `channels` rather
   // than the `selectedChannel` const, which is computed further down — after
@@ -625,19 +648,21 @@ function App() {
     const forChannelId = selectedChannelId ?? null;
     const channel = channels.find((c) => c.id === selectedChannelId);
     const peerId = channel?.type === "DM" ? (channel as DMChannel).otherUserId : null;
-    if (!peerId || !activeInstanceId) {
+    // `activeInstance` and `session` are what the scope is built from, so an
+    // id alone is no longer a sufficient guard.
+    if (!peerId || !activeInstance || !session) {
       setDmCrypto({ active: false, forChannelId });
       return;
     }
     let cancelled = false;
     const peer = members.find((m) => m.userId === peerId);
-    resolveDmCrypto(activeInstanceId, peerId, peer?.publicKey)
+    resolveDmCrypto({ baseUrl: activeInstance!.baseUrl, userId: session!.user.id }, peerId, peer?.publicKey)
       .then((state) => !cancelled && setDmCrypto({ ...state, forChannelId }))
       .catch(() => !cancelled && setDmCrypto({ active: false, forChannelId }));
     return () => {
       cancelled = true;
     };
-  }, [channels, selectedChannelId, activeInstanceId, members, identityEpoch]);
+  }, [channels, selectedChannelId, activeInstance?.baseUrl, session?.user.id, members, identityEpoch]);
 
   // Decrypt anything encrypted that hasn't been decrypted yet, including the
   // bodies of quoted reply targets. Keyed by message id and kept across
