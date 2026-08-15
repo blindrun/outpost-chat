@@ -8,7 +8,12 @@ name: Android client
 on:
   push:
     tags: ["v*"]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "versionName to stamp, without the leading v (e.g. 0.6.2). Leave blank for a plain dev build."
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -80,11 +85,17 @@ jobs:
       # Deriving it from the tag means it cannot drift. Non-tag runs keep
       # whatever build.gradle says, which is correct for a local or dispatch
       # build that has no release identity.
+      # The dispatch input exists because a workflow_dispatch run uses the
+      # workflow file *at the selected ref*, so re-running an old tag would
+      # use the old file and reintroduce the bug this step fixes. Dispatching
+      # from main with a version instead rebuilds any release correctly.
       - name: Set version name from the tag
-        if: startsWith(github.ref, 'refs/tags/')
+        if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.version != '' }}
         working-directory: mobile/android/app
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${INPUT_VERSION:-${GITHUB_REF_NAME#v}}"
           sed -i "s/versionName \"[^\"]*\"/versionName \"$VERSION\"/" build.gradle
           grep -n 'versionCode\|versionName' build.gradle
 
