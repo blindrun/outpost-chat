@@ -22,11 +22,14 @@ android {
         // workflow's "Set version code from the run number" step), not
         // hand-bumped here. The value below is just the local-build/CI-doc
         // fallback and gets overwritten by sed before every real CI build.
-        // versionName is kept in step with the other 4 package.json files
-        // bumped together each release (no automation for this across any
-        // of the 5 today — see the mobile client plan).
+        // versionName is now derived from the release tag by the same
+        // workflow ("Set version name from the tag"). It used to be
+        // hand-maintained here, and a comment claimed it was kept in step
+        // with each release -- it was not. It sat at 0.3.6 from 2026-08-07
+        // onward, so every build up to v0.6.2 reported itself as 0.3.6.
+        // The value below is only the fallback for a local or non-tag build.
         versionCode 3
-        versionName "0.3.6"
+        versionName "0.0.0-dev"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

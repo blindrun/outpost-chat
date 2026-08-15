@@ -68,6 +68,26 @@ jobs:
         working-directory: mobile/android/app
         run: sed -i "s/versionCode [0-9]*/versionCode $GITHUB_RUN_NUMBER/" build.gradle
 
+      # versionName had the same problem versionCode did, and it went
+      # unnoticed for longer because nothing rejects it. build.gradle carried a
+      # hardcoded "0.3.6" with a comment claiming it was kept in step with the
+      # release -- it was not, and had not moved since 2026-08-07, so every
+      # Android build from v0.3.7 to v0.6.2 reported itself as 0.3.6 while
+      # containing much newer code. Play showed the v0.6.2 upload as
+      # "38 (0.3.6)". Same shape as electron/package.json silently freezing,
+      # which broke desktop auto-update for eleven releases.
+      #
+      # Deriving it from the tag means it cannot drift. Non-tag runs keep
+      # whatever build.gradle says, which is correct for a local or dispatch
+      # build that has no release identity.
+      - name: Set version name from the tag
+        if: startsWith(github.ref, 'refs/tags/')
+        working-directory: mobile/android/app
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed -i "s/versionName \"[^\"]*\"/versionName \"$VERSION\"/" build.gradle
+          grep -n 'versionCode\|versionName' build.gradle
+
       # No signing secrets configured yet (see mobile/android/keystore.properties.example
       # and the Play Console prerequisites in the mobile client plan) -- this
       # step is deliberately a no-op rather than a failure until then.
@@ -151,6 +171,16 @@ jobs:
       # see the mobile client plan) and a service account key is added as
       # ANDROID_PLAY_SERVICE_ACCOUNT_JSON. Safe to sit merged and unused
       # until then, same as the keystore step above.
+      # Track is `alpha`, which is the API name for the "Closed testing -
+      # Alpha" track. It was `internal` and that was wrong in a way nothing
+      # would have reported: the internal track is Inactive with no release
+      # and no testers, so a successful publish would have shipped to nobody
+      # while reporting green. Every real tester is on the closed track.
+      #
+      # Needs ANDROID_PLAY_SERVICE_ACCOUNT_JSON, which does not exist yet, so
+      # this step still skips. Until it does, uploads are manual through the
+      # Console. Google only forbids API publishing for an app's *first*
+      # release, and that was done on 2026-08-06, so nothing else blocks it.
       - name: Publish to Play Console
         if: ${{ startsWith(github.ref, 'refs/tags/') && env.HAS_PLAY_CREDENTIALS == 'true' }}
         uses: r0adkll/upload-google-play@v1
@@ -158,4 +188,4 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.ANDROID_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.outpostchat.mobile
           releaseFiles: mobile/android/app/build/outputs/bundle/release/app-release.aab
-          track: internal
+          track: alpha
