@@ -112,6 +112,29 @@ apply — without one, an update can be detected but not installed
 automatically, so a new version there still means downloading the
 installer again from the Releases page.
 
+### Linux, via Flatpak
+
+Outpost has its own signed Flatpak repository. Adding the remote also puts
+it in Bazaar, GNOME Software and KDE Discover:
+
+```bash
+flatpak remote-add --if-not-exists --user outpost https://flatpak.outpost-chat.com/outpost.flatpakrepo
+flatpak install --user outpost io.github.blindrun.OutpostChat
+```
+
+Updates then arrive through Flatpak like any other app, and the build runs
+sandboxed. Outpost is not on Flathub and will not be, because their policy
+excludes applications written with AI assistance.
+
+## Web client, without installing anything
+
+[app.outpost-chat.com](https://app.outpost-chat.com) runs the same client
+in a browser. You type your own instance address and it talks to that
+instance directly, so nothing you send passes through us. Encrypted direct
+messages are encrypted by the client, which means serving you that client
+puts us in the trust path. If that matters to you, use the desktop app or
+serve the client from your own instance.
+
 ## Building from source
 
 ```
