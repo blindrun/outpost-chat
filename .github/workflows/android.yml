@@ -69,9 +69,14 @@ jobs:
       # forever, regardless of versionName -- github.run_number is
       # monotonically increasing across every workflow run, removing this
       # failure mode for good instead of relying on remembering to bump it.
+      # Anchored to the real declaration. The previous pattern was
+      # `versionCode [0-9]*`, and `*` matches ZERO digits, so it also rewrote
+      # the word "versionCode" inside the comment above the declaration --
+      # CI logs showed `// versionCode 39is Play Store's own monotonic...`.
+      # Harmless in a comment, actively misleading in a log.
       - name: Set version code from the run number
         working-directory: mobile/android/app
-        run: sed -i "s/versionCode [0-9]*/versionCode $GITHUB_RUN_NUMBER/" build.gradle
+        run: sed -i -E "s/^([[:space:]]*)versionCode [0-9]+/\1versionCode $GITHUB_RUN_NUMBER/" build.gradle
 
       # versionName had the same problem versionCode did, and it went
       # unnoticed for longer because nothing rejects it. build.gradle carried a
