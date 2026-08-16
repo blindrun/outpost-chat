@@ -176,6 +176,21 @@ npm run dist   # produces an installer for your current platform
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
+## Who builds this
+
+Outpost is built by [Son of a Tech](https://sonofatech.com).
+
+The same homelab runs the reverse proxy, WireGuard tunnels, Proxmox backups and
+monitoring that this project was developed against. Every problem worth writing
+down from that work ends up in the
+[wiki](https://sonofatech.com/wiki/), including several found while building
+Outpost itself:
+
+- [Electron screen share is denied silently](https://sonofatech.com/wiki/electron-screen-share-silently-denied.html)
+- [A backgrounded WKWebView kills your audio after 27 seconds](https://sonofatech.com/wiki/webview-audio-suspends-in-background.html)
+- [Desktop SSO through the system browser and a custom URL scheme](https://sonofatech.com/wiki/desktop-app-sso-custom-url-scheme.html)
+- [NOT IN drops every row with a NULL](https://sonofatech.com/wiki/not-in-null-drops-rows.html)
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
