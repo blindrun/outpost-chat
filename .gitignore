@@ -17,3 +17,10 @@ mobile/android/*.keystore
 # Local convenience: the server serves the built client from here, which
 # the Docker image populates at build time. A symlink to web/dist locally.
 /web-dist
+
+# App Store review demo credentials. This repo is public, so the reviewer
+# account's username and password must never be committed. Create these two
+# files locally right before running `fastlane deliver`, or supply them from
+# CI secrets. Everything else under fastlane/metadata is safe to publish.
+mobile/ios/fastlane/metadata/review_information/demo_user.txt
+mobile/ios/fastlane/metadata/review_information/demo_password.txt

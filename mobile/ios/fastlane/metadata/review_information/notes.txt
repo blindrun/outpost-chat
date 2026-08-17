@@ -1,0 +1,7 @@
+Outpost is self-hosted, so this app needs a server address before you can sign in.
+
+Use the reference instance at outpost.sonofatech.com. It is prefilled on the sign in screen.
+
+Sign in with the review account supplied in the demo account fields, then open any channel under TEXT CHANNELS to see messaging, or a channel under VOICE CHANNELS to test voice and video. Voice needs microphone permission.
+
+Source for this build is public at github.com/blindrun/outpost-chat

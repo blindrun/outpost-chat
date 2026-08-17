@@ -1,0 +1,1 @@
+Encrypted direct message keys now follow your account rather than the server bookmark. Leaving a server and adding it back no longer loses your key, and signing in as a second account no longer overwrites the first one.

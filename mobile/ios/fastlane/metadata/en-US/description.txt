@@ -1,0 +1,30 @@
+Outpost is free, open source, self-hosted chat and voice. It is built for communities who want their own server rather than a platform.
+
+This app connects to any Outpost server. Run your own, or join one you have been invited to.
+
+WHAT IT DOES
+
+Real time text channels with reactions, threads, replies, pinned messages and full message search.
+Voice and video channels, including camera video and screen share, powered by self-hosted LiveKit.
+Direct messages with optional end to end encryption, so the server operator cannot read them.
+Custom server emoji, GIF search and rich link previews.
+Roles, channel level permission overrides and an auditable moderation log.
+Reporting and blocking, so members have a route when something goes wrong.
+Invite links, member management and a bot and webhook API for integrations.
+Two factor authentication with TOTP and security keys, plus single sign on where your server offers it.
+Light and dark themes, picked per person rather than for everyone.
+Private, access controlled file uploads.
+
+HOW IT WORKS
+
+Outpost is one community per server. Think of it as running your own Discord, on hardware you control.
+
+Point the app at your server address and sign in. There is no Outpost account, no central directory and no company in the middle.
+
+WHY SELF HOSTED
+
+No ads. No data mining. Nobody else deciding what happens to your community.
+
+The full source is open on GitHub under the MIT license. Read it, run it, or change it.
+
+Outpost is a personal open source project, not a company. Self hosting instructions, the changelog and support all live at outpost-chat.com.
