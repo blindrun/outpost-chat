@@ -208,6 +208,29 @@ jobs:
       # proven only that the build compiles. The `publish` input makes it
       # testable on demand while keeping the default a build check, because
       # every publish reaches real testers and re-enters review.
+      # Play release notes were never wired up, so every Play release from the
+      # first one onward shipped with none and testers saw an update with no
+      # indication of what changed. `release-notes.md` above looks like it
+      # covers this and does not -- it only ever fed the GitHub release, and
+      # Play needs a different shape anyway (500-char cap, plain text, one
+      # file per locale in a directory).
+      - name: Build Play release notes
+        if: ${{ (startsWith(github.ref, 'refs/tags/') || inputs.publish) && env.HAS_PLAY_CREDENTIALS == 'true' }}
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          VERSION="${INPUT_VERSION:-${GITHUB_REF_NAME#v}}"
+          # A dispatch run with a blank version resolves to the branch name,
+          # which has no changelog section. Refuse rather than publish an
+          # unlabelled build to real testers.
+          case "$VERSION" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "refusing to publish without a real version (got '$VERSION'); pass -f version=X.Y.Z" >&2; exit 1 ;;
+          esac
+          bash .github/scripts/play-whatsnew.sh "$VERSION" distribution/whatsnew
+          echo "--- what testers will see ---"
+          cat distribution/whatsnew/whatsnew-en-US
+
       - name: Publish to Play Console
         if: ${{ (startsWith(github.ref, 'refs/tags/') || inputs.publish) && env.HAS_PLAY_CREDENTIALS == 'true' }}
         uses: r0adkll/upload-google-play@v1
@@ -216,3 +239,4 @@ jobs:
           packageName: com.outpostchat.mobile
           releaseFiles: mobile/android/app/build/outputs/bundle/release/app-release.aab
           track: alpha
+          whatsNewDirectory: distribution/whatsnew
