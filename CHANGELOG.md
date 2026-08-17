@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.6.3 — 2026-08-17
+
+- **Your encrypted DM key is filed under your account now, not under the server bookmark.** It used to be stored against an id that got created fresh every time you added a server, so leaving a server and adding it back stranded the key and those conversations stopped opening. The same id said nothing about who was signed in, so signing in as a second account on a server you had already set up encryption on overwrote the first account's key in place. Both were silent. Keys stored the old way are picked up when you sign in, but only where the public half matches what your account publishes, because adopting more eagerly than that could hand one account another account's key.
+- The Android app reports the version you actually have. It had said 0.3.6 on every build since v0.3.7.
+
 ## v0.6.2 — 2026-08-13
 
 - **Encrypted messages no longer sit on "Decrypting…" forever on a new device.** A new device has never been given your key. It cannot read messages encrypted before you set it up, and that is the point of encrypting them. It says so now, instead of waiting on a result that was never coming. Restore your recovery code in User Settings, Security, and they open.
