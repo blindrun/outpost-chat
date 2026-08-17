@@ -54,6 +54,24 @@ jobs:
         run: |
           sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9]*;/CURRENT_PROJECT_VERSION = $GITHUB_RUN_NUMBER;/g" App.xcodeproj/project.pbxproj
 
+      # MARKETING_VERSION is the version a human sees, in TestFlight and on the
+      # App Store listing. It was left hardcoded at 1.0 and last touched at
+      # v0.3.4, so every build from v0.3.5 to v0.6.3 uploaded itself as "1.0"
+      # while containing much newer code.
+      #
+      # This is the third time this exact bug has shipped here:
+      # electron/package.json froze and broke desktop auto-update for eleven
+      # releases, and Android's versionName froze for nine. All three were a
+      # hand-maintained copy of a number that exists elsewhere. Derive it, so
+      # there is nothing to remember.
+      - name: Set marketing version from the tag
+        if: startsWith(github.ref, 'refs/tags/')
+        working-directory: mobile/ios/App
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed -i '' "s/MARKETING_VERSION = [^;]*;/MARKETING_VERSION = $VERSION;/g" App.xcodeproj/project.pbxproj
+          grep -n 'MARKETING_VERSION\|CURRENT_PROJECT_VERSION' App.xcodeproj/project.pbxproj
+
       - name: Install web client deps
         working-directory: web
         run: npm ci
