@@ -117,6 +117,11 @@
   <!-- Keep this in sync with each release; Flathub shows it as the
        what's-new text. The dates are release dates, not build dates. -->
   <releases>
+    <release version="0.6.4" date="2026-08-18">
+      <description>
+        <p>Mobile release. The iPhone app now ships its real icon instead of the default placeholder, and no longer claims to run on iPad. Nothing changed in the desktop app.</p>
+      </description>
+    </release>
     <release version="0.6.3" date="2026-08-17">
       <description>
         <p>Your encrypted direct message key is filed under your account now, rather than under the server bookmark. Leaving a server and adding it back no longer strands the key, and signing in as a second account no longer overwrites the first account's key.</p>
