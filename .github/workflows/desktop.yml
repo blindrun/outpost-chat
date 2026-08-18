@@ -17,6 +17,12 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    # `secrets` is not a resolvable named-value inside a step's own `if:` --
+    # GitHub's parser rejects it at validation time, not just at runtime.
+    # Job-level env is, so route it through here, same as ios.yml and
+    # android.yml already do.
+    env:
+      HAS_MACOS_CERT: ${{ secrets.MACOS_CERT_P12_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -32,16 +38,41 @@ jobs:
         working-directory: electron
         run: npm ci
 
+      # Inert until MACOS_CERT_P12_BASE64 exists, same pattern as the Android
+      # keystore and the Apple signing steps in ios.yml. Writes the Developer
+      # ID Application certificate to a file electron-builder picks up through
+      # CSC_LINK.
+      #
+      # Notarisation needs no new credential: it reuses the App Store Connect
+      # API key already used by ios.yml. API keys do not expire and need no
+      # 2FA, which is why Apple recommends them over an app-specific password
+      # for CI.
+      - name: Write macOS signing certificate
+        if: runner.os == 'macOS' && env.HAS_MACOS_CERT == 'true'
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          APPLE_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8_BASE64 }}
+        run: |
+          echo "$MACOS_CERT_P12_BASE64" | base64 -d > "$RUNNER_TEMP/developer-id.p12"
+          echo "$APPLE_KEY_P8" | base64 -d > "$RUNNER_TEMP/asc-key.p8"
+
       - name: Build
         working-directory: electron
         run: npm run dist
         env:
-          # No code-signing certs configured — installers are unsigned.
-          # Windows SmartScreen / macOS Gatekeeper will warn on first run;
-          # that's a real limitation of not paying for a signing cert, not
-          # a build error. CSC_IDENTITY_AUTO_DISCOVERY=false stops
-          # electron-builder from failing when it can't find one.
-          CSC_IDENTITY_AUTO_DISCOVERY: false
+          # macOS signing. When the cert secret is absent these are empty and
+          # CSC_IDENTITY_AUTO_DISCOVERY=false keeps electron-builder from
+          # failing on a missing identity, so unsigned builds still work.
+          CSC_LINK: ${{ secrets.MACOS_CERT_P12_BASE64 != '' && format('{0}/developer-id.p12', runner.temp) || '' }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.MACOS_CERT_P12_BASE64 != '' }}
+          # Notarisation, reusing the iOS App Store Connect key.
+          APPLE_API_KEY: ${{ secrets.MACOS_CERT_P12_BASE64 != '' && format('{0}/asc-key.p8', runner.temp) || '' }}
+          APPLE_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          # Windows is NOT unblocked by the Apple membership. It needs its own
+          # paid code-signing certificate from a separate vendor, so Windows
+          # installers stay unsigned and SmartScreen will still warn.
 
       - name: Extract this version's changelog section
         shell: bash
