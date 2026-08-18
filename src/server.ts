@@ -63,7 +63,22 @@ app.register(fastifyCors, {
   origin: corsOrigin,
   methods: ["GET", "HEAD", "POST", "PATCH", "PUT", "DELETE"],
 });
-app.register(fastifyJwt, { secret: process.env.JWT_SECRET ?? "insecure-dev-secret" });
+// Falling back to a hardcoded secret is fine for `npm run dev` and a
+// catastrophe anywhere else: the fallback is in the public repo, so anyone can
+// mint a valid token for any account on an instance that booted without
+// JWT_SECRET set. Deployments get a hard failure at startup instead of a
+// quietly forgeable instance. NODE_ENV must say development explicitly, so an
+// unset NODE_ENV in production fails closed rather than open.
+const jwtSecret = process.env.JWT_SECRET;
+if (!jwtSecret && process.env.NODE_ENV !== "development") {
+  console.error(
+    "JWT_SECRET is not set. Refusing to start with the built-in development " +
+      "secret, which is public in the source and would let anyone forge a " +
+      "session for any account. Set JWT_SECRET (deploy/install.sh generates one).",
+  );
+  process.exit(1);
+}
+app.register(fastifyJwt, { secret: jwtSecret ?? "insecure-dev-secret" });
 await app.register(fastifyWebsocket);
 await app.register(fastifyMultipart);
 // global: false — this only throttles the specific brute-force-relevant

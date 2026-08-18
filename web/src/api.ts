@@ -325,7 +325,20 @@ export function toWsUrl(baseUrl: string): string {
 // appended to it, so this is a no-op for anything not under `baseUrl`.
 export function authedMediaUrl(url: string | null | undefined, baseUrl: string, token: string): string {
   if (!url) return "";
-  if (!url.startsWith(baseUrl)) return url;
+  // This appends the session token, so the "is it ours" test decides who
+  // receives that token. `url.startsWith(baseUrl)` was not that test: baseUrl
+  // is a bare origin, so `https://example.com.attacker.test/x` starts with
+  // `https://example.com` and would have been handed the token.
+  //
+  // Compare parsed origins instead. Anything not ours is returned untouched,
+  // which is the same no-op behaviour as before for third-party URLs.
+  let sameOrigin = false;
+  try {
+    sameOrigin = new URL(url, baseUrl).origin === new URL(baseUrl).origin;
+  } catch {
+    return url;
+  }
+  if (!sameOrigin) return url;
   const separator = url.includes("?") ? "&" : "?";
   return `${url}${separator}token=${token}`;
 }

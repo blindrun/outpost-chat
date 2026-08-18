@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
-import { minioClient, BUCKET, PUBLIC_URL } from "../plugins/storage.js";
+import { minioClient, BUCKET, PUBLIC_URL, isOwnUploadUrl } from "../plugins/storage.js";
 import { prisma } from "../plugins/db.js";
 import { toPublicUser } from "./auth.js";
 import { categoryForFilename, permissionForCategory } from "../util/uploadCategories.js";
@@ -53,7 +53,7 @@ export async function uploadRoutes(app: FastifyInstance) {
   app.patch("/auth/me/avatar", async (req, reply) => {
     const { sub: userId } = req.user as { sub: string };
     const { avatarUrl } = req.body as { avatarUrl?: string };
-    if (!avatarUrl || !avatarUrl.startsWith(PUBLIC_URL)) {
+    if (!avatarUrl || !isOwnUploadUrl(avatarUrl)) {
       return reply.status(400).send({ error: "avatarUrl must be a URL returned from /uploads" });
     }
     const user = await prisma.user.update({ where: { id: userId }, data: { avatarUrl } });

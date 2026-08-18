@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../plugins/db.js";
 import { PERMISSIONS, hasPermission } from "../util/permissions.js";
-import { PUBLIC_URL } from "../plugins/storage.js";
+import { PUBLIC_URL, isOwnUploadUrl } from "../plugins/storage.js";
 
 // Shortcode rules match the :name: pattern MessageItem.tsx's renderInline
 // looks for — keep these in sync if either side changes.
@@ -31,7 +31,7 @@ export async function customEmojiRoutes(app: FastifyInstance) {
       return reply.status(403).send({ error: "missing MANAGE_CHANNELS permission" });
     }
     const body = createEmojiSchema.parse(req.body);
-    if (!body.imageUrl.startsWith(PUBLIC_URL)) {
+    if (!isOwnUploadUrl(body.imageUrl)) {
       return reply.status(400).send({ error: "imageUrl must be a URL returned from /uploads" });
     }
 

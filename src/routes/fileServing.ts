@@ -34,7 +34,14 @@ export async function fileServingRoutes(app: FastifyInstance) {
     }
 
     const user = await prisma.user.findUnique({ where: { id: userId }, select: { banned: true } });
-    if (user?.banned) return reply.status(403).send({ error: "banned" });
+    // `user?.banned` alone let a deleted account through: optional chaining on
+    // a missing row yields undefined, which is falsy, so the request carried
+    // on and served the object. Tokens never expire, so a token minted before
+    // the account was deleted kept fetching private uploads indefinitely.
+    // This is the same defect already fixed in app.authenticate (server.ts)
+    // after v0.3.12; this route predates that fix and never received it.
+    if (!user) return reply.status(401).send({ error: "unauthorized" });
+    if (user.banned) return reply.status(403).send({ error: "banned" });
 
     const key = (req.params as { "*": string })["*"];
 

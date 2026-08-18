@@ -21,6 +21,7 @@ node tests/oidc/electron-url-check.mjs     # outpost:// hand-off URL parsing
 
 node --experimental-strip-types tests/dm/decrypt-plan.mjs     # when to decrypt a DM
 node --experimental-strip-types tests/dm/identity-scope.mjs  # where a DM key is filed
+node --experimental-strip-types tests/security/upload-url-scope.mjs  # who may receive a session token
 ```
 
 `identity-scope.mjs` covers which stranded, pre-scope key a migration is
@@ -116,3 +117,15 @@ stays the provider's subject even after the email changes.
 keeps the port, the new one fails to bind silently, and the suite then
 asserts against the wrong provider's claims — which looks exactly like a
 real regression.
+
+`upload-url-scope.mjs` covers the check that decides whether a URL is ours,
+which is the same check that decides whether the viewer's session token gets
+appended to it. It imports the real `isOwnUploadUrl`, not a copy.
+
+Its negative cases carry the weight, and they were confirmed by reverting the
+implementation to the old `startsWith` and watching three of them fail:
+a sibling bucket sharing the prefix, a path that merely looks like the bucket,
+and a lookalike subdomain when `MINIO_PUBLIC_URL` is a bare origin. That last
+one is the reason prefix matching was dangerous rather than just untidy: with
+no path component to anchor on, `https://cdn.example.com.attacker.test/x`
+starts with `https://cdn.example.com`.

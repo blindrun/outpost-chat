@@ -196,6 +196,10 @@ model DMParticipant {
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([channelId, userId])
+  // The primary key indexes channelId first, so "which DM channels is this
+  // user in" -- which is the lookup the DM list actually makes -- could not
+  // use it and scanned instead.
+  @@index([userId])
 }
 
 // One row per warning (automod-triggered or a moderator's manual !-style
@@ -464,6 +468,12 @@ model Message {
   thread Channel? @relation("MessageThread")
 
   reactions Reaction[]
+
+  // Every channel view is "this channel's messages, newest first", and
+  // there was no index for it at all -- Postgres scanned the whole table
+  // and sorted. Composite and in this order so the same index serves both
+  // the filter and the ordering.
+  @@index([channelId, createdAt])
 }
 
 model Reaction {

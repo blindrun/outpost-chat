@@ -10,6 +10,7 @@ import {
 import { createUniqueInviteCode, isInviteValid } from "../util/invites.js";
 import { broadcastChannelsUpdate } from "../gateway/channelBroadcast.js";
 import { mailConfigured } from "../util/mail.js";
+import { isOwnUploadUrl } from "../plugins/storage.js";
 
 // Read once at module load rather than per-request — package.json doesn't
 // change at runtime, and the production image's CWD (/app) is where it's
@@ -212,6 +213,15 @@ export async function instanceRoutes(app: FastifyInstance) {
       if (!channel || channel.type !== "VOICE") {
         return reply.status(400).send({ error: "afkChannelId must be an existing voice channel" });
       }
+    }
+
+    // iconUrl was the one media field with no ownership check. Every other
+    // one (avatars, custom emoji) is validated against our own upload URL,
+    // and this was validated only as "is a URL". It matters because the
+    // client appends the viewer's session token when fetching instance
+    // icons, so an icon pointing somewhere else hands that token over.
+    if (body.iconUrl !== undefined && body.iconUrl !== null && !isOwnUploadUrl(body.iconUrl)) {
+      return reply.status(400).send({ error: "iconUrl must be a URL returned from /uploads" });
     }
 
     const updated = await prisma.instanceSettings.upsert({
