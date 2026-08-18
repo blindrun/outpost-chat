@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+Held deliberately: v0.6.4 is in App Store review and production is what the
+reviewer signs into, so this ships once that clears. Nothing here is
+emergency-grade.
+
+- **A deleted account could still fetch private uploads.** Sessions never
+  expire, so a token minted before an account was deleted kept working against
+  the file-serving route indefinitely. The check tested whether the user was
+  banned, and a missing user is not a banned user. The rest of the API already
+  handled this and this one route had been missed.
+- **Tightened how the app decides a media URL is its own.** It compared the
+  start of the string, which is not the same question as "is this the same
+  server". Nothing was reachable on this instance, but the check is what
+  decides whether your session token gets attached when loading an image, so
+  it now compares the actual origin. A server icon could also be pointed
+  anywhere at all, unlike avatars and emoji, which were already checked.
+- The server refuses to start without `JWT_SECRET` outside development, rather
+  than falling back to a placeholder that is published in the source. An
+  instance that booted without it had forgeable logins for every account.
+- Faster message history and DM lists on instances with a lot of history. Two
+  common lookups had no index behind them and were scanning.
+
 ## v0.6.4 — 2026-08-18
 
 - **The iPhone app has its real icon.** Every build until now shipped the default placeholder the project scaffolding came with, a blue cross on a grid, so that is what testers have had on their home screen since the first TestFlight upload.
