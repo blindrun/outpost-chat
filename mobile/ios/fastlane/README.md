@@ -49,3 +49,21 @@ instance and contain another person's email address in plain text, several real
 members' names and profile photos, and a copyrighted image posted in a channel.
 Any of those is a problem in a public store listing. Shoot new ones against a
 seeded demo community with invented names.
+
+## Status, 2026-08-17
+
+Uploaded to App Store Connect and saved. Verified by reloading the page, not by
+trusting the Save button.
+
+- 4 screenshots on the iPhone 6.5 inch slot. Apple reuses that slot for every
+  other iPhone size, so it is the only one that needs filling.
+- Promotional text, description, keywords, support URL, marketing URL,
+  copyright.
+- App Review notes.
+- **Build 32 attached**, version 1.0.
+
+Screenshots came from `~/immich-inbox` phone captures, resized 2556x1179 to
+2778x1284 with Lanczos. Two of the six were **excluded deliberately**:
+`IMG_7325` shows real members' display names and profile photographs, and
+`IMG_7328` shows the owner's own email address in User Settings. Neither belongs
+in a public listing.
