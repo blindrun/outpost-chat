@@ -22,6 +22,10 @@ emergency-grade.
   instance that booted without it had forgeable logins for every account.
 - Faster message history and DM lists on instances with a lot of history. Two
   common lookups had no index behind them and were scanning.
+- **A green dot on the Friends button when someone has sent you a friend
+  request.** There was no sign of one unless you happened to open the panel.
+  It shows the count of requests still waiting, so it clears when you accept or
+  decline rather than when you glance at it.
 
 ## v0.6.4 — 2026-08-18
 

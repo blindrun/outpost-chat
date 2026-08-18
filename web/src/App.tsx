@@ -20,6 +20,7 @@ import {
   getThread,
   kickFromVoice,
   listCustomEmoji,
+  listFriends,
   listMembers,
   listMessages,
   listRoles,
@@ -383,6 +384,12 @@ function App() {
   const [instanceSettingsOpen, setInstanceSettingsOpen] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [friendsRefreshKey, setFriendsRefreshKey] = useState(0);
+  // Pending incoming friend requests, so the Friends button can show a dot
+  // while the panel is shut. Deliberately the live count of unanswered
+  // requests rather than "new since you last looked": there is nothing to
+  // persist, nothing to get out of step across devices, and the dot goes away
+  // exactly when the request does.
+  const [incomingRequestCount, setIncomingRequestCount] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [pinsOpen, setPinsOpen] = useState(false);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
@@ -751,6 +758,27 @@ function App() {
         // settings flow, nothing further to do here.
       });
   }, [session]);
+
+  // Pending incoming friend requests. FriendsPanel refetches for itself while
+  // it is open; this is the same fetch for when it is shut, which is the only
+  // time the dot on the button matters. friendsRefreshKey bumps on every live
+  // FRIEND_* gateway event, so a request arriving while you are elsewhere
+  // lights the dot without a reload.
+  useEffect(() => {
+    if (!session || !activeInstance) return;
+    let cancelled = false;
+    listFriends(activeInstance.baseUrl, session.token)
+      .then((list) => {
+        if (!cancelled) setIncomingRequestCount(list.incoming.length);
+      })
+      .catch(() => {
+        // Leave the previous count alone. Blanking a dot because one poll
+        // failed would hide a request that is still sitting there.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session, activeInstance, friendsRefreshKey]);
 
   // Connect to the gateway once authenticated against the active instance.
   useEffect(() => {
@@ -1889,8 +1917,22 @@ function App() {
           >
             {voice.deafened ? "🔕" : "🎧"}
           </button>
-          <button className="icon-btn" title="Friends" onClick={() => setFriendsOpen(true)}>
+          <button
+            className="icon-btn friends-btn"
+            title={
+              incomingRequestCount > 0
+                ? `Friends (${incomingRequestCount} pending request${incomingRequestCount === 1 ? "" : "s"})`
+                : "Friends"
+            }
+            onClick={() => setFriendsOpen(true)}
+          >
             👤
+            {incomingRequestCount > 0 && (
+              <span
+                className="presence-dot online friends-dot"
+                aria-label={`${incomingRequestCount} pending friend request${incomingRequestCount === 1 ? "" : "s"}`}
+              />
+            )}
           </button>
           <button className="gear-btn" title="User Settings" onClick={() => setUserSettingsOpen(true)}>
             ⚙️
@@ -2137,6 +2179,7 @@ function App() {
           token={session.token}
           refreshKey={friendsRefreshKey}
           unreadFriendUserIds={unreadFriendUserIds}
+          onListLoaded={(list) => setIncomingRequestCount(list.incoming.length)}
           onMessage={handleOpenDM}
           onClose={() => setFriendsOpen(false)}
         />

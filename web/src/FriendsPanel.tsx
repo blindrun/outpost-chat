@@ -47,6 +47,7 @@ export function FriendsPanel({
   baseUrl,
   token,
   refreshKey,
+  onListLoaded,
   unreadFriendUserIds,
   onMessage,
   onClose,
@@ -54,6 +55,10 @@ export function FriendsPanel({
   baseUrl: string;
   token: string;
   refreshKey: number;
+  // Lets the button outside this panel drop its dot the instant a request is
+  // accepted or declined. The gateway event for those goes to the *other*
+  // party, so waiting on one would leave a stale dot on this client.
+  onListLoaded: (list: FriendsList) => void;
   unreadFriendUserIds: Set<string>;
   onMessage: (userId: string) => void;
   onClose: () => void;
@@ -65,7 +70,10 @@ export function FriendsPanel({
 
   function refresh() {
     listFriends(baseUrl, token)
-      .then(setList)
+      .then((l) => {
+        setList(l);
+        onListLoaded(l);
+      })
       .catch((err) => setError(err.message));
   }
 

@@ -617,6 +617,22 @@ button, input, select {
 .icon-btn:hover { background: var(--interactive-hover); color: var(--text-normal); }
 .icon-btn.active { color: var(--red); }
 
+/* The Friends button carries a dot when there are unanswered incoming friend
+   requests. Same green presence-dot as an unread DM, so one colour keeps
+   meaning "something is waiting for you" rather than inventing a second
+   vocabulary. Positioned rather than inline so the emoji does not shift when
+   it appears. */
+.friends-btn { position: relative; }
+.friends-dot {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  /* A ring in the bar's own colour, so the dot reads as separate from the
+     glyph underneath instead of merging into it. */
+  box-shadow: 0 0 0 2px var(--bg-secondary);
+  pointer-events: none;
+}
+
 .voice-status-bar-wrap { position: relative; }
 .voice-status-bar {
   display: flex;
