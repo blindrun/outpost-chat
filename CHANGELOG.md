@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.6.4 — 2026-08-18
+
+- **The iPhone app has its real icon.** Every build until now shipped the default placeholder the project scaffolding came with, a blue cross on a grid, so that is what testers have had on their home screen since the first TestFlight upload.
+- The iPhone app no longer claims to run on iPad. It never had a layout anyone had checked on one, and saying so was the honest fix rather than shipping a screen nobody had looked at. iPad can come back once it has been tried on a real one.
+- Android releases now carry release notes on the Play listing. They never have, on any release, so testers got an update with nothing telling them what changed.
+
+Nothing changed in the server, the web client or the desktop app. This release exists to get the corrected iPhone build out.
+
 ## v0.6.3 — 2026-08-17
 
 - **Your encrypted DM key is filed under your account now, not under the server bookmark.** It used to be stored against an id that got created fresh every time you added a server, so leaving a server and adding it back stranded the key and those conversations stopped opening. The same id said nothing about who was signed in, so signing in as a second account on a server you had already set up encryption on overwrote the first account's key in place. Both were silent. Keys stored the old way are picked up when you sign in, but only where the public half matches what your account publishes, because adopting more eagerly than that could hand one account another account's key.

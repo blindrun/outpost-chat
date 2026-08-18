@@ -43,8 +43,8 @@ makes the encryption exempt, and therefore what makes
 `ITSAppUsesNonExemptEncryption = false` an honest answer rather than a
 leftover.
 
-**The notification has not been sent.** Until it is, the exemption being relied
-on is not in place. It is one email.
+**Sent 2026-08-17.** The exemption relied on below is now in place. Keep the
+sent copy, it is the evidence behind the declaration.
 
 Useful detail: because the code is posted at a URL rather than mailed as a
 copy, you only re-notify if **the location changes**. Ordinary updates to the
