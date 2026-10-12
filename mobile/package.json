@@ -16,7 +16,7 @@
   "dependencies": {
     "@capacitor/android": "^8.5.0",
     "@capacitor/core": "^8.5.0",
-    "@capacitor/ios": "^8.5.0",
+    "@capacitor/ios": "^8.5.1",
     "outpost-livekit-voice": "file:plugins/livekit-voice"
   },
   "devDependencies": {
