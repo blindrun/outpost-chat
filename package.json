@@ -27,7 +27,7 @@
     "nodemailer": "^9.0.5",
     "otplib": "^13.4.1",
     "qrcode": "^1.5.4",
-    "undici": "6.28.0",
+    "undici": "6.29.1",
     "zod": "^3.23.8"
   },
   "devDependencies": {
